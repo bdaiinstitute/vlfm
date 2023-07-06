@@ -1,5 +1,5 @@
-#!/bin/bash
-
+#!/usr/bin/env bash
+# Copyright [2023] Boston Dynamics AI Institute, Inc.
 
 # Ensure you have 'export LLM_OS_PYTHON=<PATH_TO_PYTHON>' in your .bashrc, where
 # <PATH_TO_PYTHON> is the path to the python executable for your conda env

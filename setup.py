@@ -1,11 +1,5 @@
-import setuptools
+# Copyright [2023] Boston Dynamics AI Institute, Inc.
 
-setuptools.setup(
-    name="zsos",
-    version="0.1",
-    author="Naoki Yokoyama",
-    author_email="naokiyokoyama@github",
-    description="Zero-shot object search",
-    url="",
-    packages=setuptools.find_packages(),
-)
+from setuptools import setup
+
+setup()

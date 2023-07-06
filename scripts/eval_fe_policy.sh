@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+# Copyright [2023] Boston Dynamics AI Institute, Inc.
+
 python -um zsos.run \
   --config-name=objectnav/ddppo_objectnav_hm3d.yaml \
   habitat_baselines.evaluate=True \

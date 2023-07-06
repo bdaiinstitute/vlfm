@@ -1,0 +1,108 @@
+# Copyright [2023] Boston Dynamics AI Institute, Inc.
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zsos"
+version = "0.1"
+description = "Zero shot object search"
+authors = [
+    {name = "Naoki Yokoyama", email = "naokiyokoyama@github"},
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch >= 1.13.1",
+    # "habitat @ git+https://github.com/facebookresearch/habitat-sim.git",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit>=3.1.1",
+    "pytest>=7.2.1",
+    "pytest-cov>=4.0.0",
+]
+
+[project.urls]
+"Homepage" = "theaiinstitute.com"
+"GitHub" = "https://github.com/bdaiinstitute/llm-object-search"
+
+[tool.ruff]
+# Enable pycodestyle (`E`), Pyflakes (`F`), and import sorting (`I`)
+select = ["E", "F", "I"]
+ignore = []
+
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = ["A", "B", "C", "D", "E", "F", "G", "I", "N", "Q", "S", "T", "W", "ANN", "ARG", "BLE", "COM", "DJ", "DTZ", "EM", "ERA", "EXE", "FBT", "ICN", "INP", "ISC", "NPY", "PD", "PGH", "PIE", "PL", "PT", "PTH", "PYI", "RET", "RSE", "RUF", "SIM", "SLF", "TCH", "TID", "TRY", "UP", "YTT"]
+unfixable = []
+
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    "docker/ros",
+]
+
+# Same as Black.
+line-length = 120
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+# Assume Python 3.10.
+target-version = "py310"
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.ruff.mccabe]
+# Unlike Flake8, default to a complexity level of 10.
+max-complexity = 10
+
+[tool.black]
+line-length = 120
+target-version = ['py310']
+include = '\.pyi?$'
+# `extend-exclude` is not honored when `black` is passed a file path explicitly,
+# as is typical when `black` is invoked via `pre-commit`.
+force-exclude = '''
+/(
+  docker/ros/.*
+)/
+'''
+
+preview = true
+
+# mypy configuration
+[tool.mypy]
+python_version = "3.10"
+disallow_untyped_defs = true
+ignore_missing_imports = true
+explicit_package_bases = true
+check_untyped_defs = true
+strict_equality = true
+warn_unreachable = true
+warn_redundant_casts = true
+no_implicit_optional = true
+files = ['projects', 'src', 'ws']
+exclude = '^(docker|.*external|.*thirdparty|.*install|.*build|.*_experimental)/'
