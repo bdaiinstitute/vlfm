@@ -1,7 +1,8 @@
 import hydra
+from habitat.config import read_write
 from habitat.config.default import patch_config
 from habitat_baselines.run import execute_exp
-from habitat.config import read_write
+from omegaconf import DictConfig
 
 
 @hydra.main(
@@ -9,7 +10,7 @@ from habitat.config import read_write
     config_path="../habitat-lab/habitat-baselines/habitat_baselines/config",
     config_name="pointnav/ppo_pointnav_example",
 )
-def main(cfg: "DictConfig"):
+def main(cfg: DictConfig):
     cfg = patch_config(cfg)
     print(cfg.habitat.simulator.agents.main_agent.sim_sensors)
     with read_write(cfg):

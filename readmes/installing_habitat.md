@@ -48,4 +48,3 @@ mkdir -p $DATA_DIR/datasets/pointnav/hm3d  &&
 mv pointnav_hm3d_v1 $DATA_DIR/datasets/pointnav/hm3d/v1 &&
 rm pointnav_hm3d_v1.zip
 ```
-

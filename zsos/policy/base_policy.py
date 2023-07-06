@@ -4,6 +4,7 @@ from habitat import get_config
 from habitat_baselines.common.baseline_registry import baseline_registry
 from habitat_baselines.rl.ppo import Policy
 from habitat_baselines.rl.ppo.policy import PolicyActionData
+from omegaconf import DictConfig
 
 
 @baseline_registry.register_policy
@@ -18,7 +19,7 @@ class BasePolicy(Policy):
     @classmethod
     def from_config(
         cls,
-        config: "DictConfig",
+        config: DictConfig,
         observation_space: spaces.Dict,
         action_space,
         **kwargs,
@@ -35,9 +36,7 @@ class BasePolicy(Policy):
     ):
         num_envs = observations["rgb"].shape[0]
         action = torch.ones(num_envs, 1, dtype=torch.long)
-        return PolicyActionData(
-            actions=action, rnn_hidden_states=rnn_hidden_states
-        )
+        return PolicyActionData(actions=action, rnn_hidden_states=rnn_hidden_states)
 
     # used in ppo_trainer.py eval:
 
@@ -53,10 +52,7 @@ class BasePolicy(Policy):
 
 if __name__ == "__main__":
     # Save a dummy state_dict using torch.save
-    config = get_config(
-        "habitat-lab/habitat-baselines/habitat_baselines/"
-        "config/pointnav/ppo_pointnav_example.yaml"
-    )
+    config = get_config("habitat-lab/habitat-baselines/habitat_baselines/config/pointnav/ppo_pointnav_example.yaml")
     dummy_dict = {
         "config": config,
         "extra_state": {"step": 0},

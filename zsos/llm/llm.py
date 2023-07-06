@@ -1,5 +1,3 @@
-from typing import List
-
 import requests
 
 
@@ -21,10 +19,7 @@ class ClientLLM(BaseLLM):
             return self._extract_answer_from_response(resp.json())
         else:
             # Request failed, print the status code and error message
-            print(
-                "Request failed with status code "
-                f"{resp.status_code}: {resp.text}"
-            )
+            print(f"Request failed with status code {resp.status_code}: {resp.text}")
             return ""
 
     def _extract_answer_from_response(self, resp: dict) -> str:

@@ -1,4 +1,3 @@
-import string
 from typing import Dict, List
 
 import torch
@@ -33,9 +32,7 @@ class LLMPolicy(FrontierExplorationPolicy):
         self.target_object = ""
         self.current_best_object = ""
 
-    def act(
-        self, observations, rnn_hidden_states, prev_actions, masks, deterministic=False
-    ) -> PolicyActionData:
+    def act(self, observations, rnn_hidden_states, prev_actions, masks, deterministic=False) -> PolicyActionData:
         if masks[0] == 0:
             self._reset()
 
@@ -51,9 +48,7 @@ class LLMPolicy(FrontierExplorationPolicy):
         detections = self._get_object_detections(observations)
         llm_responses = self._get_llm_responses()
 
-        action_data.policy_info = self._get_policy_info(
-            observations, detections, llm_responses
-        )
+        action_data.policy_info = self._get_policy_info(observations, detections, llm_responses)
 
         return action_data
 
@@ -84,24 +79,14 @@ class LLMPolicy(FrontierExplorationPolicy):
 
         return policy_info
 
-    def _get_object_detections(
-        self, observations: TensorDict
-    ) -> List[ObjectDetections]:
+    def _get_object_detections(self, observations: TensorDict) -> List[ObjectDetections]:
         # observations["rgb"] is shape (N, H, W, 3); we want (N, 3, H, W)
         rgb = observations["rgb"].permute(0, 3, 1, 2)
         rgb = rgb.float() / 255.0  # normalize to [0, 1]
 
-        detections = [
-            self.object_detector.predict(rgb[i], visualize=self.visualize)
-            for i in range(rgb.shape[0])
-        ]
+        detections = [self.object_detector.predict(rgb[i], visualize=self.visualize) for i in range(rgb.shape[0])]
 
-        objects = [
-            phrase
-            for det in detections
-            for phrase in det.phrases
-            if phrase in self.object_detector.classes
-        ]
+        objects = [phrase for det in detections for phrase in det.phrases if phrase in self.object_detector.classes]
         self.seen_objects.update(objects)
 
         return detections
