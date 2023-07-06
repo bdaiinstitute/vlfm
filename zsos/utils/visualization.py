@@ -1,4 +1,4 @@
-from typing import List, Tuple, Union
+from typing import List
 
 import cv2
 import numpy as np
