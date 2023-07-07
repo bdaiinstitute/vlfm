@@ -12,9 +12,11 @@ from omegaconf import DictConfig
 )
 def main(cfg: DictConfig):
     cfg = patch_config(cfg)
-    print(cfg.habitat.simulator.agents.main_agent.sim_sensors)
     with read_write(cfg):
-        cfg.habitat.simulator.agents.main_agent.sim_sensors.pop("semantic_sensor")
+        try:
+            cfg.habitat.simulator.agents.main_agent.sim_sensors.pop("semantic_sensor")
+        except KeyError:
+            pass
     execute_exp(cfg, "eval" if cfg.habitat_baselines.evaluate else "train")
 
 
