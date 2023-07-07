@@ -25,7 +25,9 @@ class ObjectDetections:
         self.logits = logits
         self.phrases = phrases
         if visualize:
-            self.annotated_frame = annotate(image_source=image_source, boxes=boxes, logits=logits, phrases=phrases)
+            self.annotated_frame = annotate(
+                image_source=image_source, boxes=boxes, logits=logits, phrases=phrases
+            )
         else:
             self.annotated_frame = None
 
@@ -40,19 +42,25 @@ class GroundingDINO:
         text_threshold: float = 0.25,
         device: torch.device = torch.device("cuda"),
     ):
-        self.model = load_model(model_config_path=config_path, model_checkpoint_path=weights_path).to(device)
+        self.model = load_model(
+            model_config_path=config_path, model_checkpoint_path=weights_path
+        ).to(device)
         self.classes = classes
         self.box_threshold = box_threshold
         self.text_threshold = text_threshold
 
-    def predict(self, image_tensor: torch.Tensor, visualize: bool = False) -> ObjectDetections:
+    def predict(
+        self, image_tensor: torch.Tensor, visualize: bool = False
+    ) -> ObjectDetections:
         """
         :param image_tensor: an RGB tensor of shape (3, H, W) with values in [0, 1]
         :param visualize: whether to return an annotated image within the
             ObjectDetections object
         :return: ObjectDetections
         """
-        image_transformed = F.normalize(image_tensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        image_transformed = F.normalize(
+            image_tensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+        )
         boxes, logits, phrases = predict(
             model=self.model,
             image=image_transformed,
@@ -60,7 +68,9 @@ class GroundingDINO:
             box_threshold=self.box_threshold,
             text_threshold=self.text_threshold,
         )
-        image_numpy = np.asarray(image_tensor.mul(255).permute(1, 2, 0).byte().cpu(), dtype=np.uint8)[:, :, ::-1]
+        image_numpy = np.asarray(
+            image_tensor.mul(255).permute(1, 2, 0).byte().cpu(), dtype=np.uint8
+        )[:, :, ::-1]
         det = ObjectDetections(image_numpy, boxes, logits, phrases, visualize=visualize)
         return det
 
