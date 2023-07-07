@@ -24,6 +24,6 @@ tmux select-pane -t llm_server:0.2
 tmux send-keys -t llm_server:0.2 "${LLM_OS_PYTHON} -m fastchat.serve.controller ; sleep 30" C-m
 
 # Attach to the tmux session to view the windows
-echo "Created tmux session 'llm_server'. You must wait up to 90 seconds for the model weights to be loaded correctly."
+echo "Created tmux session 'llm_server'. You must wait up to 90 seconds for the model weights to finish being loaded."
 echo "Run the following to monitor all the server commands:"
 echo "tmux attach-session -t llm_server"
