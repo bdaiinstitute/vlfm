@@ -10,7 +10,7 @@ class ClientLLM(BaseLLM):
     url: str = None
     headers: dict = {"Content-Type": "application/json"}
 
-    def _parse_response(self, json_payload: dict) -> str:
+    def _send_request(self, json_payload: dict) -> str:
         resp = requests.post(self.url, headers=self.headers, json=json_payload)
 
         # Check if the request was successful (status code 200)
@@ -40,7 +40,7 @@ class ClientFastChat(ClientLLM):
             "temperature": self.temperature,
         }
 
-        return self._parse_response(json_payload)
+        return self._send_request(json_payload)
 
     def _extract_answer_from_response(self, resp: dict) -> str:
         return resp["choices"][0]["text"]
@@ -62,7 +62,7 @@ class ClientVLLM(ClientLLM):
             "max_tokens": 32,
         }
 
-        return self._parse_response(json_payload)
+        return self._send_request(json_payload)
 
     def _extract_answer_from_response(self, resp: dict) -> str:
         return resp["text"][0]
