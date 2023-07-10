@@ -1,9 +1,11 @@
 import os
+from typing import List
 
 import numpy as np
 import torch
 import torchvision.transforms.functional as F
 from PIL import Image
+from torchvision.ops import box_convert
 
 from groundingdino.util.inference import annotate, load_model, predict
 
@@ -19,9 +21,17 @@ else:
 
 
 class ObjectDetections:
-    def __init__(self, image_source, boxes, logits, phrases, visualize: bool = False):
+    def __init__(
+        self,
+        image_source: np.ndarray,
+        boxes: torch.Tensor,
+        logits: torch.Tensor,
+        phrases: List[str],
+        visualize: bool = False,
+        fmt: str = "cxcywh",
+    ):
         self.image_source = image_source
-        self.boxes = boxes
+        self.boxes = box_convert(boxes=boxes, in_fmt=fmt, out_fmt="xyxy")
         self.logits = logits
         self.phrases = phrases
         if visualize:
