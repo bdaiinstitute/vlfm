@@ -1,14 +1,23 @@
-from typing import Dict, List
+import os
+from typing import Dict, List, Tuple
 
+import numpy as np
 import torch
 from habitat.tasks.nav.object_nav_task import ObjectGoalSensor
 from habitat_baselines.common.baseline_registry import baseline_registry
 from habitat_baselines.common.tensor_dict import TensorDict
 from habitat_baselines.rl.ppo.policy import PolicyActionData
+from torch import Tensor
 
 from frontier_exploration.policy import FrontierExplorationPolicy
 from zsos.detector.grounding_dino import GroundingDINO, ObjectDetections
 from zsos.llm.llm import BaseLLM, ClientFastChat
+from zsos.mapping.object_map import ObjectMap
+from zsos.obs_transformers.resize import image_resize
+from zsos.policy.utils.pointnav_policy import (
+    WrappedPointNavResNetPolicy,
+    rho_theta_from_gps_compass_goal,
+)
 
 ID_TO_NAME = ["chair", "bed", "potted_plant", "toilet", "tv", "couch"]
 
@@ -16,6 +25,12 @@ ID_TO_NAME = ["chair", "bed", "potted_plant", "toilet", "tv", "couch"]
 @baseline_registry.register_policy
 class LLMPolicy(FrontierExplorationPolicy):
     llm: BaseLLM = None
+    seen_objects = set()
+    visualize: bool = True
+    target_object: str = ""
+    current_best_object: str = ""
+    depth_image_shape: Tuple[int, int] = (244, 224)
+    camera_height: float = 0.88
 
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -24,18 +39,32 @@ class LLMPolicy(FrontierExplorationPolicy):
             text_threshold=0.25,
             device=torch.device("cuda"),
         )
-        # self.llm = ClientVLLM()
+        self.object_map: ObjectMap = ObjectMap(
+            min_depth=0.5, max_depth=5.0, hfov=79.0, image_width=640, image_height=480
+        )
         self.llm = ClientFastChat()
+        self.pointnav_policy = WrappedPointNavResNetPolicy(
+            os.environ["POINTNAV_POLICY_PATH"]
+        )
 
-        self.seen_objects = set()
-        self.visualize = True
-        self.target_object = ""
-        self.current_best_object = ""
+    def act(
+        self, observations, rnn_hidden_states, prev_actions, masks, deterministic=False
+    ) -> PolicyActionData:
+        """
+        Moves the robot towards one of the following goals:
+        1. The target object, if it was spotted
+        2. The object that the LLM thinks is the best
+        3. The frontier that is closest to the robot
 
-    def act(self, observations, rnn_hidden_states, prev_actions, masks, deterministic=False) -> PolicyActionData:
+        For now, (3) will not invoke the PointNav policy
+
+        """
+
+        assert masks.shape[1] == 1, "Currently only supporting one env at a time"
         if masks[0] == 0:
             self._reset()
 
+        # Get action_data from FrontierExplorationPolicy
         action_data = super().act(
             observations,
             rnn_hidden_states,
@@ -43,60 +72,90 @@ class LLMPolicy(FrontierExplorationPolicy):
             masks,
             deterministic=deterministic,
         )
+
         self.target_object = ID_TO_NAME[observations[ObjectGoalSensor.cls_uuid][0]]
 
         detections = self._get_object_detections(observations)
+        self._update_object_map(observations, detections)
         llm_responses = self._get_llm_responses()
 
-        action_data.policy_info = self._get_policy_info(observations, detections, llm_responses)
+        goal = np.array([5.3908, 6.7018])  # TODO: don't hard code this
+        pointnav_action = self._pointnav(
+            observations, masks, goal, deterministic=deterministic
+        )
+        action_data.actions = pointnav_action
+
+        action_data.policy_info = self._get_policy_info(
+            observations, detections, llm_responses
+        )
 
         return action_data
 
     def _get_policy_info(
         self,
         observations: TensorDict,
-        detections: List[ObjectDetections],
-        llm_responses: List[str],
+        detections: ObjectDetections,
+        llm_responses: str,
     ) -> List[Dict]:
         policy_info = []
         num_envs = observations["rgb"].shape[0]
         seen_objects_str = ", ".join(self.seen_objects)
         for env_idx in range(num_envs):
-            policy_info.append(
-                {
-                    "target_object": "target: " + self.target_object,
-                    "visualized_detections": detections[env_idx].annotated_frame,
-                    "llm_response": "best: " + llm_responses[env_idx],
-                    "seen_objects": seen_objects_str,
-                    # don't render these on to the egocentric images when making videos:
-                    "render_below_images": [
-                        "llm_response",
-                        "seen_objects",
-                        "target_object",
-                    ],
-                }
-            )
+            curr_info = {
+                "target_object": "target: " + self.target_object,
+                "llm_response": "best: " + llm_responses,
+                "visualized_detections": detections.annotated_frame,
+                "seen_objects": seen_objects_str,
+                "gps": str(observations["gps"][0].cpu().numpy()),
+                "yaw": np.rad2deg(observations["compass"][0].item()),
+                # don't render these on egocentric images when making videos:
+                "render_below_images": [
+                    "target_object",
+                    "llm_response",
+                    "seen_objects",
+                ],
+            }
+            if "DEBUG_INFO" in os.environ:
+                curr_info["render_below_images"].append("debug")
+                curr_info["debug"] = "debug: " + os.environ["DEBUG_INFO"]
+            policy_info.append(curr_info)
 
         return policy_info
 
-    def _get_object_detections(self, observations: TensorDict) -> List[ObjectDetections]:
+    def _get_object_detections(self, observations: TensorDict) -> ObjectDetections:
         # observations["rgb"] is shape (N, H, W, 3); we want (N, 3, H, W)
         rgb = observations["rgb"].permute(0, 3, 1, 2)
         rgb = rgb.float() / 255.0  # normalize to [0, 1]
 
-        detections = [self.object_detector.predict(rgb[i], visualize=self.visualize) for i in range(rgb.shape[0])]
+        detections = self.object_detector.predict(rgb[0], visualize=self.visualize)
 
-        objects = [phrase for det in detections for phrase in det.phrases if phrase in self.object_detector.classes]
+        objects = self._extract_detected_names(detections)
+
         self.seen_objects.update(objects)
 
         return detections
 
-    def _get_llm_responses(self) -> List[str]:
+    def _extract_detected_names(self, detections: ObjectDetections) -> List[str]:
+        # Filter out detections that are not verbatim in the classes.txt file
+        objects = [
+            phrase
+            for phrase in detections.phrases
+            if phrase in self.object_detector.classes
+        ]
+        return objects
+
+    def _get_llm_responses(self) -> str:
+        """
+        Asks LLM which object to go to next, conditioned on the target object.
+
+        Returns:
+            List[str]: A list containing the responses generated by the LLM.
+        """
         if len(self.seen_objects) == 0:
-            return [""]
+            return ""
 
         if self.target_object in self.seen_objects:
-            return [self.target_object]
+            return self.target_object
 
         choices = list(self.seen_objects)
         choices_str = ""
@@ -112,22 +171,86 @@ class LLMPolicy(FrontierExplorationPolicy):
         )
 
         llm_resp = self.llm.ask(prompt)
-        self.current_best_object = choices[extract_integer(llm_resp)]
+        obj_idx = extract_integer(llm_resp)
+        if obj_idx != -1:
+            self.current_best_object = choices[obj_idx]
 
-        return [self.current_best_object]
+        return self.current_best_object
+
+    def _pointnav(
+        self,
+        observations: TensorDict,
+        masks: Tensor,
+        goal: np.ndarray,
+        deterministic=False,
+    ) -> Tensor:
+        rho_theta = rho_theta_from_gps_compass_goal(observations, goal)
+        obs_pointnav = {
+            "depth": image_resize(
+                observations["depth"],
+                self.depth_image_shape,
+                channels_last=True,
+                interpolation_mode="area",
+            ),
+            "pointgoal_with_gps_compass": rho_theta.unsqueeze(0),
+        }
+        action = self.pointnav_policy.get_actions(
+            obs_pointnav, masks, deterministic=deterministic
+        )
+        return action
+
+    def _update_object_map(
+        self, observations: TensorDict, detections: ObjectDetections
+    ) -> None:
+        """
+        Updates the object map with the detections from the current timestep.
+
+        Args:
+            observations (TensorDict): The observations from the current timestep.
+            detections (ObjectDetections): The detections from the current
+                timestep.
+        """
+        depth = observations["depth"][0].cpu().numpy()
+        camera_coordinates = np.array(
+            [*observations["gps"][0].cpu().numpy(), self.camera_height]
+        )
+        yaw = observations["compass"][0].item()
+        for object_name, bbox in zip(detections.phrases, detections.boxes):
+            self.object_map.update_map(
+                object_name, bbox, depth, camera_coordinates, yaw
+            )
 
     def _reset(self):
         self.seen_objects = set()
         self.target_object = ""
         self.current_best_object = ""
+        self.pointnav_policy.reset()
+        self.object_map.reset()
 
 
 def extract_integer(llm_resp: str) -> int:
-    """Extracts the first integer from the given string."""
+    """
+    Extracts the first integer from the given string.
+
+    Args:
+        llm_resp (str): The input string from which the integer is to be extracted.
+
+    Returns:
+        int: The first integer found in the input string.
+
+    Raises:
+        ValueError: If no integer is found in the input string.
+
+    Examples:
+        >>> extract_integer("abc123def456")
+        123
+    """
     digits = []
     for c in llm_resp:
         if c.isdigit():
             digits.append(c)
         elif len(digits) > 0:
             break
+    if not digits:
+        return -1
     return int("".join(digits))
