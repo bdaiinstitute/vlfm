@@ -10,7 +10,6 @@ from habitat_baselines.rl.ppo.policy import PolicyActionData
 from torch import Tensor
 
 from frontier_exploration.policy import FrontierExplorationPolicy
-from zsos.detector.grounding_dino import GroundingDINO, ObjectDetections
 from zsos.llm.llm import BaseLLM, ClientFastChat
 from zsos.mapping.object_map import ObjectMap
 from zsos.obs_transformers.resize import image_resize
@@ -18,6 +17,7 @@ from zsos.policy.utils.pointnav_policy import (
     WrappedPointNavResNetPolicy,
     rho_theta_from_gps_compass_goal,
 )
+from zsos.vlm.grounding_dino import GroundingDINO, ObjectDetections
 
 ID_TO_NAME = ["chair", "bed", "potted_plant", "toilet", "tv", "couch"]
 

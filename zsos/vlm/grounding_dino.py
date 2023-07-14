@@ -1,13 +1,14 @@
 import os
-from typing import List
+from typing import Optional
 
+import cv2
 import numpy as np
 import torch
 import torchvision.transforms.functional as F
 from PIL import Image
-from torchvision.ops import box_convert
 
-from groundingdino.util.inference import annotate, load_model, predict
+from groundingdino.util.inference import load_model, predict
+from zsos.vlm.detections import ObjectDetections
 
 GROUNDING_DINO_CONFIG = os.environ["GROUNDING_DINO_CONFIG"]
 GROUNDING_DINO_WEIGHTS = os.environ["GROUNDING_DINO_WEIGHTS"]
@@ -18,28 +19,6 @@ if "CLASSES_PATH" in os.environ:
 else:
     print("[grounding_dino.py] WARNING: $CLASSES_PATH not set, using default classes")
     CLASSES = "chair . person . dog ."  # default classes
-
-
-class ObjectDetections:
-    def __init__(
-        self,
-        image_source: np.ndarray,
-        boxes: torch.Tensor,
-        logits: torch.Tensor,
-        phrases: List[str],
-        visualize: bool = False,
-        fmt: str = "cxcywh",
-    ):
-        self.image_source = image_source
-        self.boxes = box_convert(boxes=boxes, in_fmt=fmt, out_fmt="xyxy")
-        self.logits = logits
-        self.phrases = phrases
-        if visualize:
-            self.annotated_frame = annotate(
-                image_source=image_source, boxes=boxes, logits=logits, phrases=phrases
-            )
-        else:
-            self.annotated_frame = None
 
 
 class GroundingDINO:
@@ -60,17 +39,29 @@ class GroundingDINO:
         self.text_threshold = text_threshold
 
     def predict(
-        self, image_tensor: torch.Tensor, visualize: bool = False
+        self,
+        image_tensor: torch.Tensor,
+        image_numpy: Optional[np.ndarray] = None,
+        visualize: bool = False,
     ) -> ObjectDetections:
-        """
-        :param image_tensor: an RGB tensor of shape (3, H, W) with values in [0, 1]
-        :param visualize: whether to return an annotated image within the
-            ObjectDetections object
-        :return: ObjectDetections
-        """
         image_transformed = F.normalize(
             image_tensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
         )
+        """
+        This function makes predictions on an input image tensor or numpy array using a
+        pretrained model.
+
+        Arguments:
+            image_tensor (torch.Tensor): The input image in the form of a tensor.
+            image_numpy (Optional[np.ndarray]): Optionally provide the numpy version to
+                use for the visualization.
+            visualize (bool, optional): A flag indicating whether to visualize the
+                output data. Defaults to False.
+
+        Returns:
+            ObjectDetections: An instance of the ObjectDetections class containing the
+                object detections.
+        """
         boxes, logits, phrases = predict(
             model=self.model,
             image=image_transformed,
@@ -78,9 +69,11 @@ class GroundingDINO:
             box_threshold=self.box_threshold,
             text_threshold=self.text_threshold,
         )
-        image_numpy = np.asarray(
-            image_tensor.mul(255).permute(1, 2, 0).byte().cpu(), dtype=np.uint8
-        )[:, :, ::-1]
+        if image_numpy is None:
+            image_numpy = np.clip(
+                image_tensor.permute(1, 2, 0).cpu().numpy() * 255, 0, 255
+            )
+            image_numpy = cv2.convertScaleAbs(image_numpy)
         det = ObjectDetections(image_numpy, boxes, logits, phrases, visualize=visualize)
         return det
 
