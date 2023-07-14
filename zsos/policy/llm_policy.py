@@ -35,8 +35,8 @@ class LLMPolicy(FrontierExplorationPolicy):
     def __init__(self, *args, **kwargs):
         super().__init__()
         self.object_detector = GroundingDINO(
-            box_threshold=0.35,
-            text_threshold=0.25,
+            box_threshold=0.65,
+            text_threshold=0.65,
             device=torch.device("cuda"),
         )
         self.object_map: ObjectMap = ObjectMap(
@@ -46,6 +46,7 @@ class LLMPolicy(FrontierExplorationPolicy):
         self.pointnav_policy = WrappedPointNavResNetPolicy(
             os.environ["POINTNAV_POLICY_PATH"]
         )
+        self.last_goal = np.zeros(2)
 
     def act(
         self, observations, rnn_hidden_states, prev_actions, masks, deterministic=False
@@ -79,10 +80,16 @@ class LLMPolicy(FrontierExplorationPolicy):
         self._update_object_map(observations, detections)
         llm_responses = self._get_llm_responses()
 
-        goal = np.array([5.3908, 6.7018])  # TODO: don't hard code this
-        pointnav_action = self._pointnav(
-            observations, masks, goal, deterministic=deterministic
-        )
+        if self._should_explore():
+            pointnav_action = action_data.actions
+        else:
+            goal = self.object_map.get_closest_object(
+                observations["gps"][0].cpu().numpy(), self.target_object
+            )
+            # PointNav only cares about x, y
+            pointnav_action = self._pointnav(
+                observations, masks, goal[:2], deterministic=deterministic
+            )
         action_data.actions = pointnav_action
 
         action_data.policy_info = self._get_policy_info(
@@ -184,6 +191,9 @@ class LLMPolicy(FrontierExplorationPolicy):
         goal: np.ndarray,
         deterministic=False,
     ) -> Tensor:
+        if not np.array_equal(goal, self.last_goal):
+            self.last_goal = goal
+            self.pointnav_policy.reset()
         rho_theta = rho_theta_from_gps_compass_goal(observations, goal)
         obs_pointnav = {
             "depth": image_resize(
@@ -220,12 +230,16 @@ class LLMPolicy(FrontierExplorationPolicy):
                 object_name, bbox, depth, camera_coordinates, yaw
             )
 
+    def _should_explore(self) -> bool:
+        return self.target_object not in self.seen_objects
+
     def _reset(self):
         self.seen_objects = set()
         self.target_object = ""
         self.current_best_object = ""
         self.pointnav_policy.reset()
         self.object_map.reset()
+        self.last_goal = np.zeros(2)
 
 
 def extract_integer(llm_resp: str) -> int:
@@ -236,10 +250,8 @@ def extract_integer(llm_resp: str) -> int:
         llm_resp (str): The input string from which the integer is to be extracted.
 
     Returns:
-        int: The first integer found in the input string.
-
-    Raises:
-        ValueError: If no integer is found in the input string.
+        int: The first integer found in the input string. If no integer is found,
+            returns -1.
 
     Examples:
         >>> extract_integer("abc123def456")

@@ -50,6 +50,35 @@ class ObjectMap:
         )
         self._add_object(object_name, location)
 
+    def get_closest_object(self, agent_position: np.ndarray, object: str) -> np.ndarray:
+        """
+        Returns the closest object to the agent that matches the given object name.
+
+        Args:
+            agent_position (np.ndarray): The current position of the agent [x, y, z].
+            object (str): The name of the object to search for.
+
+        Returns:
+            np.ndarray: The location of the closest object to the agent that matches the
+                given object name [x, y, z].
+        """
+        names = [name for name, _ in self.map if name == object]
+        assert object in names, f"Object {object} not in map!"
+
+        # Get the locations of all objects with the given name
+        locations = [location for name, location in self.map if name == object]
+
+        # Add 0.88 to the end of the agent position to account for the height of the
+        # agent
+        agent_position = np.append(agent_position, 0.88)
+        distances = np.linalg.norm(locations - agent_position, axis=1)
+
+        # Get the index of the closest object
+        closest_object_index = np.argmin(distances)
+
+        # Return the location of the closest object
+        return locations[closest_object_index]
+
     def _estimate_object_location(
         self,
         bounding_box: np.ndarray,
