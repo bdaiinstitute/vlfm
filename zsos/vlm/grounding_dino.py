@@ -5,7 +5,6 @@ import cv2
 import numpy as np
 import torch
 import torchvision.transforms.functional as F
-from PIL import Image
 
 from groundingdino.util.inference import load_model, predict
 from zsos.vlm.detections import ObjectDetections
@@ -74,31 +73,29 @@ class GroundingDINO:
                 image_tensor.permute(1, 2, 0).cpu().numpy() * 255, 0, 255
             )
             image_numpy = cv2.convertScaleAbs(image_numpy)
-        det = ObjectDetections(image_numpy, boxes, logits, phrases, visualize=visualize)
+        det = ObjectDetections(
+            boxes, logits, phrases, image_source=image_numpy, visualize=visualize
+        )
         return det
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="GroundingDINO Demo")
-    parser.add_argument("image_path", type=str, help="Path to the input image")
+    from server_wrapper import ServerMixin, host_model, str_to_image
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, default=9040)
     args = parser.parse_args()
 
-    model = GroundingDINO()
+    print("Loading model...")
 
-    image = Image.open(args.image_path).convert("RGB")
-    image_tensor = F.to_tensor(image)
-    detections = model.predict(image_tensor, visualize=True)
+    class GroundingDINOServer(ServerMixin, GroundingDINO):
+        def process_payload(self, payload: dict) -> dict:
+            image = str_to_image(payload["image"])
+            return {"response": self.predict(image, payload["phrase"]).to_json()}
 
-    # Do something with the detections or annotated image
-    print("detections.boxes")
-    print(detections.boxes)
-    print("detections.logits")
-    print(detections.logits)
-    print("detections.phrases")
-    print(detections.phrases)
-
-    # Save the annotated image
-    Image.fromarray(detections.annotated_frame).save("annotated_image.jpg")
-    print("Saved annotated image to annotated_image.jpg")
+    gdino = GroundingDINOServer()
+    print("Model loaded!")
+    print(f"Hosting on port {args.port}...")
+    host_model(gdino, name="gdino", port=args.port)

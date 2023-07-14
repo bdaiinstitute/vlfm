@@ -4,7 +4,7 @@
 SESSION_NAME="blip2_server"
 
 # Command to run in the tmux session
-COMMAND="python zsos/vlm/blip2.py"
+COMMAND="${OS_PYTHON} zsos/vlm/blip2.py"
 
 # Check if the tmux session already exists
 if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then

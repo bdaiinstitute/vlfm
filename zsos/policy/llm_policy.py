@@ -130,11 +130,14 @@ class LLMPolicy(FrontierExplorationPolicy):
         return policy_info
 
     def _get_object_detections(self, observations: TensorDict) -> ObjectDetections:
+        image_numpy = observations["rgb"][0].cpu().numpy()
         # observations["rgb"] is shape (N, H, W, 3); we want (N, 3, H, W)
         rgb = observations["rgb"].permute(0, 3, 1, 2)
         rgb = rgb.float() / 255.0  # normalize to [0, 1]
 
-        detections = self.object_detector.predict(rgb[0], visualize=self.visualize)
+        detections = self.object_detector.predict(
+            rgb[0], image_numpy=image_numpy, visualize=self.visualize
+        )
 
         objects = self._extract_detected_names(detections)
 

@@ -1,9 +1,4 @@
-import base64
-
-import cv2
-import numpy as np
 import torch
-from flask import Flask, jsonify, request
 from lavis.models import load_model_and_preprocess
 from PIL import Image
 
@@ -44,50 +39,23 @@ class BLIP2:
         return out
 
 
-app = Flask(__name__)
-# blip = BLIP2(name="blip2_t5", model_type="pretrain_flant5xxl")
-blip = BLIP2(name="blip2_opt", model_type="pretrain_opt2.7b")
-
-
-@app.route("/blip2", methods=["POST"])
-def blip2():
-    # Get the JSON payload from the request
-    payload = request.json
-
-    # Extract the image and prompt from the payload
-    image = payload.get("image")
-    prompt = payload.get("prompt")
-
-    # Convert the image to numpy format
-    image = str_to_image(image)
-
-    # Perform the task using the "blip" object
-    result = blip.ask(image, prompt)
-
-    # Return the response as JSON
-    return jsonify({"result": result})
-
-
-def image_to_str(img_np, quality=90):
-    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
-    retval, buffer = cv2.imencode(".jpg", img_np, encode_param)
-    img_str = base64.b64encode(buffer).decode("utf-8")
-    return img_str
-
-
-def str_to_image(img_str):
-    img_bytes = base64.b64decode(img_str)
-    img_arr = np.frombuffer(img_bytes, dtype=np.uint8)
-    img_np = cv2.imdecode(img_arr, cv2.IMREAD_ANYCOLOR)
-    return img_np
-
-
 if __name__ == "__main__":
     import argparse
+
+    from server_wrapper import ServerMixin, host_model, str_to_image
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8070)
     args = parser.parse_args()
 
-    print("Starting server...")
-    app.run(host="localhost", port=args.port)
+    print("Loading model...")
+
+    class BLIP2Server(ServerMixin, BLIP2):
+        def process_payload(self, payload: dict) -> dict:
+            image = str_to_image(payload["image"])
+            return {"response": self.ask(image, payload.get("prompt"))[0]}
+
+    blip = BLIP2Server(name="blip2_opt", model_type="pretrain_opt2.7b")
+    print("Model loaded!")
+    print(f"Hosting on port {args.port}...")
+    host_model(blip, name="blip2", port=args.port)

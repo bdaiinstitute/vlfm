@@ -2,13 +2,17 @@ import numpy as np
 import torch
 from maskrcnn_benchmark.config import cfg
 from maskrcnn_benchmark.engine.predictor_FIBER import GLIPDemo
-from PIL import Image
 
 from zsos.vlm.detections import ObjectDetections
 
+DEFAULT_CONFIG = "FIBER/fine_grained/configs/refcocog.yaml"
+DEFAULT_WEIGHTS = "FIBER/fine_grained/models/fiber_refcocog.pth"
 
-class Fiber:
-    def __init__(self, config_file: str, weights: str):
+
+class FIBER:
+    def __init__(
+        self, config_file: str = DEFAULT_CONFIG, weights: str = DEFAULT_WEIGHTS
+    ):
         cfg.merge_from_file(config_file)
         cfg.num_gpus = 1
         cfg.SOLVER.IMS_PER_BATCH = 1
@@ -27,6 +31,26 @@ class Fiber:
     def detect(
         self, image: np.ndarray, phrase: str, visualize: bool = False
     ) -> ObjectDetections:
+        """
+        Given an image and a phrase, this function detects the presence of the most
+        suitable object described by the phrase in the image. The output object's
+        bounding boxes are normalized between 0 and 1.
+
+        The coordinates are provided in "xyxy" format (top-left = x0, y0 and
+        bottom-right = x1, y1).
+
+        Arguments:
+            image (np.ndarray): The input image in which to detect objects.
+            phrase (str): The phrase describing the object(s) to detect.
+            visualize (bool, optional): If True, visualizes the detections on the image.
+                Defaults to False.
+
+        Returns:
+            ObjectDetections: A data structure containing the detection results,
+                including the source image, the normalized bounding boxes of detected
+                objects, the prediction scores (logits), the phrase used for the
+                detection, and flag indicating if visualization is enabled.
+        """
         result = self.fiber.inference(image, phrase)
         # Normalize result.bbox to be between 0 and 1
         normalized_bbox = result.bbox / torch.tensor(
@@ -48,16 +72,20 @@ class Fiber:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Testing FIBER phrase grounding model")
-    parser.add_argument("config_file", metavar="FILE", help="path to config file")
-    parser.add_argument("weights_file", metavar="FILE", help="path to weights file")
-    parser.add_argument("image_path", metavar="FILE", help="path to image file")
-    parser.add_argument("phrase", metavar="FILE", help="phrase to ground")
+    from server_wrapper import ServerMixin, host_model, str_to_image
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, default=9080)
     args = parser.parse_args()
 
-    fiber = Fiber(args.config_file, args.weights_file)
-    image = np.array(Image.open(args.image_path))
-    dets = fiber.detect(image, args.phrase, visualize=True)
+    print("Loading model...")
 
-    # Save the image from dets
-    Image.fromarray(dets.annotated_frame).save("test.png")
+    class FIBERServer(ServerMixin, FIBER):
+        def process_payload(self, payload: dict) -> dict:
+            image = str_to_image(payload["image"])
+            return {"response": self.detect(image, payload["phrase"]).to_json()}
+
+    fiber = FIBERServer()
+    print("Model loaded!")
+    print(f"Hosting on port {args.port}...")
+    host_model(fiber, name="fiber", port=args.port)
