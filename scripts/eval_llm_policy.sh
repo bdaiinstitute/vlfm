@@ -10,6 +10,8 @@ python -um zsos.run \
   habitat_baselines.rl.policy.name=LLMPolicy \
   habitat_baselines.rl.ddppo.reset_critic=False \
   habitat.simulator.habitat_sim_v0.allow_sliding=True \
-  `# Uncomment (only) one of the next two lines to enable/disable video generation` \
-  habitat_baselines.num_environments=1 habitat_baselines.eval.video_option='["disk"]'
-#  habitat_baselines.num_environments=1
+  habitat.task.lab_sensors.base_explorer.turn_angle=30 \
+  habitat_baselines.num_environments=1 \
+  habitat_baselines.eval.video_option='["disk"]'
+#  habitat_baselines.eval.video_option='[]'
+#  habitat.environment.max_episode_steps=20 \  # Useful for debugging
