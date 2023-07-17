@@ -1,6 +1,11 @@
+from typing import Optional
+
+import numpy as np
 import torch
 from lavis.models import load_model_and_preprocess
 from PIL import Image
+
+from .server_wrapper import ServerMixin, host_model, send_request, str_to_image
 
 
 class BLIP2:
@@ -30,7 +35,7 @@ class BLIP2:
         import time
 
         st = time.time()
-        if prompt is None:
+        if prompt is None or prompt == "":
             out = self.model.generate({"image": processed_image})
         else:
             out = self.model.generate({"image": processed_image, "prompt": prompt})
@@ -39,10 +44,20 @@ class BLIP2:
         return out
 
 
+class BLIP2Client:
+    def __init__(self, url: str = "http://localhost:8070/blip2"):
+        self.url = url
+
+    def ask(self, image: np.ndarray, prompt: Optional[str] = None) -> str:
+        if prompt is None:
+            prompt = ""
+        response = send_request(self.url, image=image, prompt=prompt)
+
+        return response["response"]
+
+
 if __name__ == "__main__":
     import argparse
-
-    from server_wrapper import ServerMixin, host_model, str_to_image
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8070)

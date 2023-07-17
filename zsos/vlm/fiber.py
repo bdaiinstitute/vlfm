@@ -5,6 +5,8 @@ from maskrcnn_benchmark.engine.predictor_FIBER import GLIPDemo
 
 from zsos.vlm.detections import ObjectDetections
 
+from .server_wrapper import ServerMixin, host_model, send_request, str_to_image
+
 DEFAULT_CONFIG = "FIBER/fine_grained/configs/refcocog.yaml"
 DEFAULT_WEIGHTS = "FIBER/fine_grained/models/fiber_refcocog.pth"
 
@@ -69,10 +71,23 @@ class FIBER:
         return dets
 
 
+class FIBERClient:
+    def __init__(self, url: str = "http://localhost:9080/fiber"):
+        self.url = url
+
+    def detect(
+        self, image: np.ndarray, phrase: str, visualize: bool = False
+    ) -> ObjectDetections:
+        response = send_request(self.url, image=image, phrase=phrase)["response"]
+        detections = ObjectDetections.from_json(
+            response, image_source=image, visualize=visualize
+        )
+
+        return detections
+
+
 if __name__ == "__main__":
     import argparse
-
-    from server_wrapper import ServerMixin, host_model, str_to_image
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=9080)

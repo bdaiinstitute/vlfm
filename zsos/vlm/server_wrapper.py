@@ -43,7 +43,7 @@ def str_to_image(img_str):
     return img_np
 
 
-def send_request(url, **kwargs):
+def send_request(url, **kwargs) -> dict:
     # Create a payload dict which is a clone of kwargs but all np.array values are
     # converted to strings
     payload = {}

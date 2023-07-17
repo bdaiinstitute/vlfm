@@ -2,7 +2,6 @@ import os
 from typing import Dict, List, Tuple
 
 import numpy as np
-import torch
 from habitat.tasks.nav.object_nav_task import ObjectGoalSensor
 from habitat_baselines.common.baseline_registry import baseline_registry
 from habitat_baselines.common.tensor_dict import TensorDict
@@ -17,7 +16,9 @@ from zsos.policy.utils.pointnav_policy import (
     WrappedPointNavResNetPolicy,
     rho_theta_from_gps_compass_goal,
 )
-from zsos.vlm.grounding_dino import GroundingDINO, ObjectDetections
+from zsos.vlm.blip2 import BLIP2Client
+from zsos.vlm.fiber import FIBERClient
+from zsos.vlm.grounding_dino import GroundingDINOClient, ObjectDetections
 
 ID_TO_NAME = ["chair", "bed", "potted_plant", "toilet", "tv", "couch"]
 
@@ -34,11 +35,11 @@ class LLMPolicy(FrontierExplorationPolicy):
 
     def __init__(self, *args, **kwargs):
         super().__init__()
-        self.object_detector = GroundingDINO(
-            box_threshold=0.65,
-            text_threshold=0.65,
-            device=torch.device("cuda"),
-        )
+        # VL models
+        self.object_detector = GroundingDINOClient()
+        self.vlm = BLIP2Client()
+        self.grounding_model = FIBERClient()
+
         self.object_map: ObjectMap = ObjectMap(
             min_depth=0.5, max_depth=5.0, hfov=79.0, image_width=640, image_height=480
         )

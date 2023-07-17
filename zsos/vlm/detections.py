@@ -49,7 +49,12 @@ class ObjectDetections:
         }
 
     @classmethod
-    def from_json(cls, json_dict: dict, image_source: Optional[np.ndarray] = None):
+    def from_json(
+        cls,
+        json_dict: dict,
+        image_source: Optional[np.ndarray] = None,
+        visualize: bool = False,
+    ):
         """
         Converts the object detections from a JSON serializable format.
 
@@ -57,12 +62,15 @@ class ObjectDetections:
             json_dict (dict): A dictionary containing the object detections.
             image_source (Optional[np.ndarray], optional): Optionally provide the
                 original image source. Defaults to None.
+            visualize (bool, optional): A flag indicating whether to visualize the
+                output data. Defaults to False.
         """
         return cls(
             image_source=image_source,
             boxes=torch.tensor(json_dict["boxes"]),
             logits=torch.tensor(json_dict["logits"]),
             phrases=json_dict["phrases"],
+            visualize=visualize,
             fmt="xyxy",
         )
 
