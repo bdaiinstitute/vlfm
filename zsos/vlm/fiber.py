@@ -28,7 +28,7 @@ class FIBER:
 
         cfg.freeze()
 
-        self.fiber = GLIPDemo(cfg)
+        self.fiber = GLIPDemo(cfg, confidence_threshold=0.2)
 
     def detect(
         self, image: np.ndarray, phrase: str, visualize: bool = False

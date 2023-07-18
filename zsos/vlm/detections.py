@@ -35,6 +35,28 @@ class ObjectDetections:
         else:
             self.annotated_frame = None
 
+    def filter_by_conf(self, conf_thresh: float):
+        """Filters detections by confidence threshold in-place.
+
+        Args:
+            conf_thresh (float): Confidence threshold to filter detections.
+        """
+
+        keep: torch.Tensor[bool] = torch.ge(self.logits, conf_thresh)  # >=
+
+        self.boxes = self.boxes[keep]
+        self.logits = self.logits[keep]
+        self.phrases = [p for i, p in enumerate(self.phrases) if keep[i]]
+
+        if self.annotated_frame is not None:
+            # Re-visualize with filtered detections
+            self.annotated_frame = annotate(
+                image_source=self.image_source,
+                boxes=self.boxes,
+                logits=self.logits,
+                phrases=self.phrases,
+            )
+
     def to_json(self) -> dict:
         """
         Converts the object detections to a JSON serializable format.

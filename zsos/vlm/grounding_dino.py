@@ -1,5 +1,4 @@
 import os
-from typing import Optional
 
 import numpy as np
 import torch
@@ -38,11 +37,7 @@ class GroundingDINO:
         self.box_threshold = box_threshold
         self.text_threshold = text_threshold
 
-    def predict(
-        self,
-        image: np.ndarray,
-        visualize: bool = False,
-    ) -> ObjectDetections:
+    def predict(self, image: np.ndarray, visualize: bool = False) -> ObjectDetections:
         """
         This function makes predictions on an input image tensor or numpy array using a
         pretrained model.
@@ -82,12 +77,9 @@ class GroundingDINOClient:
         self.classes = classes
 
     def predict(
-        self,
-        image_tensor: torch.Tensor,
-        image_numpy: Optional[np.ndarray] = None,
-        visualize: bool = False,
+        self, image_numpy: np.ndarray, visualize: bool = False
     ) -> ObjectDetections:
-        response = send_request(self.url, image=image_tensor)
+        response = send_request(self.url, image=image_numpy)
         detections = ObjectDetections.from_json(
             response, image_source=image_numpy, visualize=visualize
         )

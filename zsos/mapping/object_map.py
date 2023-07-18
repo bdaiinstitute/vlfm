@@ -11,7 +11,7 @@ class ObjectMap:
     its own position and yaw.
     """
 
-    map: List[Tuple[str, np.ndarray]] = []
+    map: List[Tuple[str, np.ndarray, float]] = []  # class_name, location, confidence
 
     def __init__(
         self,
@@ -41,6 +41,7 @@ class ObjectMap:
         depth_img: np.ndarray,
         agent_camera_position: np.ndarray,
         agent_camera_yaw: float,
+        confidence: float,
     ) -> None:
         """
         Updates the object map with the latest information from the agent.
@@ -48,36 +49,29 @@ class ObjectMap:
         location = self._estimate_object_location(
             bbox, depth_img, agent_camera_position, agent_camera_yaw
         )
-        self._add_object(object_name, location)
+        self._add_object(object_name, location, confidence)
 
-    def get_closest_object(self, agent_position: np.ndarray, object: str) -> np.ndarray:
+    def get_best_object(self, object: str) -> np.ndarray:
         """
         Returns the closest object to the agent that matches the given object name.
 
         Args:
-            agent_position (np.ndarray): The current position of the agent [x, y, z].
             object (str): The name of the object to search for.
 
         Returns:
             np.ndarray: The location of the closest object to the agent that matches the
                 given object name [x, y, z].
         """
-        names = [name for name, _ in self.map if name == object]
-        assert object in names, f"Object {object} not in map!"
+        best_loc, best_conf = None, -float("inf")
+        for name, location, conf in self.map:
+            if name == object and conf > best_conf:
+                best_loc = location
+                best_conf = conf
 
-        # Get the locations of all objects with the given name
-        locations = [location for name, location in self.map if name == object]
+        if best_loc is None:
+            raise ValueError(f"No object of type {object} found in the object map.")
 
-        # Add 0.88 to the end of the agent position to account for the height of the
-        # agent
-        agent_position = np.append(agent_position, 0.88)
-        distances = np.linalg.norm(locations - agent_position, axis=1)
-
-        # Get the index of the closest object
-        closest_object_index = np.argmin(distances)
-
-        # Return the location of the closest object
-        return locations[closest_object_index]
+        return best_loc
 
     def _estimate_object_location(
         self,
@@ -107,6 +101,7 @@ class ObjectMap:
         pixel_x, pixel_y, depth_value = self._get_object_depth(
             depth_image, bounding_box
         )
+        # TODO: Be careful if the depth is the max depth value of the camera
         object_coord_agent = calculate_3d_coordinates(
             self.hfov,
             self.image_width,
@@ -169,12 +164,14 @@ class ObjectMap:
 
         return pixel_x, pixel_y, depth_value
 
-    def _add_object(self, object_name: str, position: np.ndarray) -> None:
+    def _add_object(
+        self, object_name: str, position: np.ndarray, confidence: float
+    ) -> None:
         """
         Adds an object to the map.
         """
         # TODO: do some type of filtering here (like non-max suppression)
-        self.map.append((object_name, position))
+        self.map.append((object_name, position, confidence))
 
 
 def calculate_3d_coordinates(

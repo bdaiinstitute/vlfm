@@ -2,6 +2,7 @@ import os
 from typing import Dict, List, Tuple
 
 import numpy as np
+import torch
 from habitat.tasks.nav.object_nav_task import ObjectGoalSensor
 from habitat_baselines.common.baseline_registry import baseline_registry
 from habitat_baselines.common.tensor_dict import TensorDict
@@ -23,6 +24,13 @@ from zsos.vlm.grounding_dino import GroundingDINOClient, ObjectDetections
 ID_TO_NAME = ["chair", "bed", "potted_plant", "toilet", "tv", "couch"]
 
 
+class TorchActionIDs:
+    STOP = torch.tensor([[0]], dtype=torch.long)
+    MOVE_FORWARD = torch.tensor([[1]], dtype=torch.long)
+    TURN_LEFT = torch.tensor([[2]], dtype=torch.long)
+    TURN_RIGHT = torch.tensor([[3]], dtype=torch.long)
+
+
 @baseline_registry.register_policy
 class LLMPolicy(FrontierExplorationPolicy):
     llm: BaseLLM = None
@@ -32,6 +40,8 @@ class LLMPolicy(FrontierExplorationPolicy):
     current_best_object: str = ""
     depth_image_shape: Tuple[int, int] = (244, 224)
     camera_height: float = 0.88
+    det_conf_threshold: float = 0.5
+    pointnav_stop_radius: float = 0.65
 
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -48,6 +58,7 @@ class LLMPolicy(FrontierExplorationPolicy):
             os.environ["POINTNAV_POLICY_PATH"]
         )
         self.last_goal = np.zeros(2)
+        self.start_steps = 0
 
     def act(
         self, observations, rnn_hidden_states, prev_actions, masks, deterministic=False
@@ -77,16 +88,18 @@ class LLMPolicy(FrontierExplorationPolicy):
 
         self.target_object = ID_TO_NAME[observations[ObjectGoalSensor.cls_uuid][0]]
 
-        detections = self._get_object_detections(observations)
+        image_numpy = observations["rgb"][0].cpu().numpy()
+        detections = self._get_object_detections(image_numpy)
         self._update_object_map(observations, detections)
         llm_responses = self._get_llm_responses()
 
-        if self._should_explore():
+        if self.start_steps < 12:
+            self.start_steps += 1
+            pointnav_action = TorchActionIDs.TURN_LEFT
+        elif self._should_explore():
             pointnav_action = action_data.actions
         else:
-            goal = self.object_map.get_closest_object(
-                observations["gps"][0].cpu().numpy(), self.target_object
-            )
+            goal = self.object_map.get_best_object(self.target_object)
             # PointNav only cares about x, y
             pointnav_action = self._pointnav(
                 observations, masks, goal[:2], deterministic=deterministic
@@ -130,16 +143,9 @@ class LLMPolicy(FrontierExplorationPolicy):
 
         return policy_info
 
-    def _get_object_detections(self, observations: TensorDict) -> ObjectDetections:
-        image_numpy = observations["rgb"][0].cpu().numpy()
-        # observations["rgb"] is shape (N, H, W, 3); we want (N, 3, H, W)
-        rgb = observations["rgb"].permute(0, 3, 1, 2)
-        rgb = rgb.float() / 255.0  # normalize to [0, 1]
-
-        detections = self.object_detector.predict(
-            rgb[0], image_numpy=image_numpy, visualize=self.visualize
-        )
-
+    def _get_object_detections(self, img: np.ndarray) -> ObjectDetections:
+        detections = self.object_detector.predict(img, visualize=self.visualize)
+        detections.filter_by_conf(self.det_conf_threshold)
         objects = self._extract_detected_names(detections)
 
         self.seen_objects.update(objects)
@@ -185,6 +191,7 @@ class LLMPolicy(FrontierExplorationPolicy):
         obj_idx = extract_integer(llm_resp)
         if obj_idx != -1:
             self.current_best_object = choices[obj_idx]
+            # TODO: IndexError here
 
         return self.current_best_object
 
@@ -208,6 +215,8 @@ class LLMPolicy(FrontierExplorationPolicy):
             ),
             "pointgoal_with_gps_compass": rho_theta.unsqueeze(0),
         }
+        if rho_theta[0] < self.pointnav_stop_radius:
+            return TorchActionIDs.STOP
         action = self.pointnav_policy.get_actions(
             obs_pointnav, masks, deterministic=deterministic
         )
@@ -229,9 +238,15 @@ class LLMPolicy(FrontierExplorationPolicy):
             [*observations["gps"][0].cpu().numpy(), self.camera_height]
         )
         yaw = observations["compass"][0].item()
-        for object_name, bbox in zip(detections.phrases, detections.boxes):
+
+        for idx, confidence in enumerate(detections.logits):
             self.object_map.update_map(
-                object_name, bbox, depth, camera_coordinates, yaw
+                detections.phrases[idx],
+                detections.boxes[idx],
+                depth,
+                camera_coordinates,
+                yaw,
+                confidence,
             )
 
     def _should_explore(self) -> bool:
@@ -244,6 +259,7 @@ class LLMPolicy(FrontierExplorationPolicy):
         self.pointnav_policy.reset()
         self.object_map.reset()
         self.last_goal = np.zeros(2)
+        self.start_steps = 0
 
 
 def extract_integer(llm_resp: str) -> int:
