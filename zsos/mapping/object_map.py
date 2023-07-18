@@ -4,6 +4,15 @@ from typing import List, Optional, Tuple
 import numpy as np
 
 
+class Object:
+    def __init__(self, class_name, location, confidence, too_far):
+        self.class_name = class_name
+        self.location = location
+        self.confidence = confidence
+        self.too_far = too_far
+        self.explored = False
+
+
 class ObjectMap:
     """
     This class is used to localize objects detected by the agent. The agent has access
@@ -11,7 +20,7 @@ class ObjectMap:
     its own position and yaw.
     """
 
-    map: List[Tuple[str, np.ndarray, float]] = []  # class_name, location, confidence
+    map: List[Object] = []
 
     def __init__(
         self,
@@ -46,30 +55,36 @@ class ObjectMap:
         """
         Updates the object map with the latest information from the agent.
         """
-        location = self._estimate_object_location(
+        location, too_far = self._estimate_object_location(
             bbox, depth_img, agent_camera_position, agent_camera_yaw
         )
-        self._add_object(object_name, location, confidence)
+        new_object = Object(object_name, location, confidence, too_far)
+        self._add_object(new_object)
 
-    def get_best_object(self, object: str) -> np.ndarray:
+    def get_best_object(self, target_class: str) -> np.ndarray:
         """
         Returns the closest object to the agent that matches the given object name.
 
         Args:
-            object (str): The name of the object to search for.
+            target_class (str): The name of the object class to search for.
 
         Returns:
             np.ndarray: The location of the closest object to the agent that matches the
                 given object name [x, y, z].
         """
         best_loc, best_conf = None, -float("inf")
-        for name, location, conf in self.map:
-            if name == object and conf > best_conf:
-                best_loc = location
-                best_conf = conf
+        for object_inst in self.map:
+            if (
+                target_class == object_inst.class_name
+                and object_inst.confidence > best_conf
+            ):
+                best_loc = object_inst.location
+                best_conf = object_inst.confidence
 
         if best_loc is None:
-            raise ValueError(f"No object of type {object} found in the object map.")
+            raise ValueError(
+                f"No object of type {target_class} found in the object map."
+            )
 
         return best_loc
 
@@ -79,7 +94,7 @@ class ObjectMap:
         depth_image: np.ndarray,
         camera_coordinates: np.ndarray,
         camera_yaw: float,
-    ) -> np.ndarray:
+    ) -> Tuple[np.ndarray, bool]:
         """
         Estimates the location of a detected object in the global coordinate frame using
         a depth camera and a bounding box.
@@ -96,12 +111,14 @@ class ObjectMap:
         Returns:
             np.ndarray: The estimated 3D location of the detected object in the global
             coordinate frame [x, y, z].
+            bool: True if the object is too far away for the depth camera, False
+            otherwise.
         """
         # Get the depth value of the object
         pixel_x, pixel_y, depth_value = self._get_object_depth(
             depth_image, bounding_box
         )
-        # TODO: Be careful if the depth is the max depth value of the camera
+        too_far = depth_value >= self.max_depth
         object_coord_agent = calculate_3d_coordinates(
             self.hfov,
             self.image_width,
@@ -116,7 +133,7 @@ class ObjectMap:
             camera_coordinates, -camera_yaw, object_coord_agent
         )
 
-        return object_coord_global
+        return object_coord_global, too_far
 
     def _get_object_depth(
         self, depth: np.ndarray, object_bbox: np.ndarray
@@ -164,14 +181,12 @@ class ObjectMap:
 
         return pixel_x, pixel_y, depth_value
 
-    def _add_object(
-        self, object_name: str, position: np.ndarray, confidence: float
-    ) -> None:
+    def _add_object(self, object: Object) -> None:
         """
         Adds an object to the map.
         """
         # TODO: do some type of filtering here (like non-max suppression)
-        self.map.append((object_name, position, confidence))
+        self.map.append(object)
 
 
 def calculate_3d_coordinates(
