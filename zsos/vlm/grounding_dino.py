@@ -63,10 +63,20 @@ class GroundingDINO:
             box_threshold=self.box_threshold,
             text_threshold=self.text_threshold,
         )
-        det = ObjectDetections(
+        detections = ObjectDetections(
             boxes, logits, phrases, image_source=image, visualize=visualize
         )
-        return det
+
+        classes = self.classes.split(" . ")
+        keep = torch.tensor(
+            [p in classes for p in detections.phrases], dtype=torch.bool
+        )
+
+        detections.boxes = detections.boxes[keep]
+        detections.logits = detections.logits[keep]
+        detections.phrases = [p for i, p in enumerate(detections.phrases) if keep[i]]
+
+        return detections
 
 
 class GroundingDINOClient:
