@@ -1,7 +1,10 @@
 import math
 from typing import List, Optional, Tuple
 
+import cv2
 import numpy as np
+
+from zsos.policy.utils.pointnav_policy import wrap_heading
 
 
 class Object:
@@ -36,12 +39,14 @@ class ObjectMap:
         self.image_width = image_width
         self.image_height = image_height
         self.vfov = calculate_vfov(self.hfov, image_width, image_height)
+        self.camera_history = []
 
     def reset(self) -> None:
         """
         Resets the object map.
         """
         self.map = []
+        self.camera_history = []
 
     def update_map(
         self,
@@ -87,6 +92,58 @@ class ObjectMap:
             )
 
         return best_loc
+
+    def update_explored(
+        self, camera_coordinates: np.ndarray, camera_yaw: float
+    ) -> None:
+        self.camera_history.append((camera_coordinates, camera_yaw))
+        for obj in self.map:
+            if within_fov_cone(
+                camera_coordinates,
+                camera_yaw,
+                self.hfov,
+                self.max_depth,
+                obj.location,
+            ):
+                obj.explored = True
+
+    def visualize(self) -> np.ndarray:
+        """
+        Visualizes the object map by plotting the history of the camera coordinates
+        and the location of each object in a 2D top-down view. If the object is
+        explored, the object is plotted in a darker color. The map is a cv2 image with
+        height and width of 400, with the origin at the center of the image, and each
+        pixel representing 0.15 meters.
+        """
+        # Create black (blank) image of appropriate dimensions.
+        visual_map = np.zeros((400, 400, 3), dtype=np.uint8)
+
+        # Set the center of the map as (200,200)
+        origin = np.array([200, 200])
+        pixels_per_meter = 15
+
+        def plot_circle(coordinates, circle_color):
+            position = np.round(coordinates[:2] * pixels_per_meter).astype(int)
+
+            # Add origin offset
+            # y-axis in OpenCV goes from top to bottom, so need to invert y coordinate
+            position = origin + (position * np.array([1, -1]))
+
+            # Draw the camera on the map
+            cv2.circle(visual_map, tuple(position), 2, circle_color, -1)
+
+        for each_obj in self.map:
+            # Explored objects are blue, unexplored objects are red
+            color = (255, 0, 0) if each_obj.explored else (0, 0, 255)
+            plot_circle(each_obj.location, color)
+
+        for camera_c, _ in self.camera_history:
+            plot_circle(camera_c, (0, 255, 0))
+
+        visual_map = cv2.flip(visual_map, 0)
+        visual_map = cv2.rotate(visual_map, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+        return visual_map
 
     def _estimate_object_location(
         self,
@@ -181,12 +238,38 @@ class ObjectMap:
 
         return pixel_x, pixel_y, depth_value
 
-    def _add_object(self, object: Object) -> None:
+    def _add_object(self, proposed_object: Object) -> None:
         """
-        Adds an object to the map.
+        Updates the map with a proposed Object instance using non-maximal suppression.
+
+        Args:
+            proposed_object (Object): The proposed Object to be added to the map.
         """
-        # TODO: do some type of filtering here (like non-max suppression)
-        self.map.append(object)
+
+        updated_list = []
+        proximity_threshold = 1.5
+
+        for obj in self.map:
+            keep = True
+            same_name_and_close = (obj.class_name == proposed_object.class_name) and (
+                np.linalg.norm(obj.location - proposed_object.location)
+                <= proximity_threshold
+            )
+
+            if same_name_and_close:
+                if obj.confidence > proposed_object.confidence:
+                    # Do not modify map; proposed object was worse than what we already
+                    # have in our current map
+                    return
+                else:
+                    keep = False
+
+            if keep:
+                updated_list.append(obj)
+
+        # Proposed object is added if no nearby, more confident object exists
+        updated_list.append(proposed_object)
+        self.map = updated_list
 
 
 def calculate_3d_coordinates(
@@ -300,3 +383,29 @@ def convert_to_global_frame(
     global_pos_homogeneous = global_pos_homogeneous / global_pos_homogeneous[-1]
 
     return global_pos_homogeneous[:3]
+
+
+def within_fov_cone(
+    cone_origin: np.ndarray,
+    cone_angle: float,
+    cone_fov: float,
+    cone_range: float,
+    point: np.ndarray,
+) -> bool:
+    """
+    Checks if a point is within a cone of a given origin, angle, fov, and range.
+
+    Args:
+        cone_origin (np.ndarray): The origin of the cone.
+        cone_angle (float): The angle of the cone in radians.
+        cone_fov (float): The field of view of the cone in radians.
+        cone_range (float): The range of the cone.
+        point (np.ndarray): The point to check.
+
+    """
+    direction = point - cone_origin
+    dist = np.linalg.norm(direction)
+    angle = np.arctan2(direction[1], direction[0])
+    angle_diff = wrap_heading(angle - cone_angle)
+
+    return dist <= cone_range and abs(angle_diff) <= cone_fov / 2
