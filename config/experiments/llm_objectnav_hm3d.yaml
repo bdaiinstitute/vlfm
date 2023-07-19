@@ -7,6 +7,8 @@ defaults:
       - base_explorer
       - compass_sensor
       - gps_sensor
+      - heading_sensor
+      - frontier_sensor
   - /habitat/task/measurements:
     - frontier_exploration_map
   - _self_
