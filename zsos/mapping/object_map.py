@@ -4,6 +4,7 @@ from typing import List, Optional, Tuple
 import cv2
 import numpy as np
 
+from zsos.llm.prompts import get_textual_map_prompt, numbered_list, unnumbered_list
 from zsos.policy.utils.pointnav_policy import wrap_heading
 
 
@@ -107,7 +108,39 @@ class ObjectMap:
             ):
                 obj.explored = True
 
-    def visualize(self) -> np.ndarray:
+    def get_textual_map_prompt(
+        self, target: str, current_pos: np.ndarray, frontiers: np.ndarray
+    ) -> str:
+        """
+        Returns a textual representation of the object map. The {target} field will
+        still be unfilled.
+        """
+        # 'textual_map' is a list of strings, where each string represents the
+        # object's name and location
+        textual_map = objects_to_str(self.map, current_pos)
+        textual_map = unnumbered_list(textual_map)
+
+        # 'unexplored_objects' is a list of strings, where each string represents the
+        # object's name and location
+        unexplored_objects = [obj for obj in self.map if not obj.explored]
+        unexplored_objects = objects_to_str(unexplored_objects, current_pos)
+        # For object_options, only return a list of objects that have not been explored
+        object_options = numbered_list(unexplored_objects)
+
+        # 'frontiers_list' is a list of strings, where each string represents the
+        # frontier's location
+        frontiers_list = [
+            f"({frontier[0]:.2f}, {frontier[1]:.2f})" for frontier in frontiers
+        ]
+        frontier_options = numbered_list(
+            frontiers_list, start=len(unexplored_objects) + 1
+        )
+
+        return get_textual_map_prompt(
+            target, textual_map, object_options, frontier_options
+        )
+
+    def visualize(self, frontiers: np.ndarray) -> np.ndarray:
         """
         Visualizes the object map by plotting the history of the camera coordinates
         and the location of each object in a 2D top-down view. If the object is
@@ -139,6 +172,11 @@ class ObjectMap:
 
         for camera_c, _ in self.camera_history:
             plot_circle(camera_c, (0, 255, 0))
+
+        for frontier in frontiers:
+            if np.all(frontier == 0):  # ignore all zeros frontiers
+                continue
+            plot_circle(frontier, (255, 255, 255))
 
         visual_map = cv2.flip(visual_map, 0)
         visual_map = cv2.rotate(visual_map, cv2.ROTATE_90_COUNTERCLOCKWISE)
@@ -409,3 +447,35 @@ def within_fov_cone(
     angle_diff = wrap_heading(angle - cone_angle)
 
     return dist <= cone_range and abs(angle_diff) <= cone_fov / 2
+
+
+def objects_to_str(objs: List[Object], current_pos: np.ndarray) -> List[str]:
+    """
+    This function converts a list of object locations into strings. The list is first
+    sorted based on the distance of each object from the agent's current position.
+
+    Args:
+        objs (List[Object]): A list of Object instances representing the objects.
+        current_pos (np.ndarray): Current position of the agent.
+
+    Returns:
+        List[str]: A list where each string represents an object and its location in
+        relation to the agent's position.
+    """
+    objs.sort(key=lambda obj: np.linalg.norm(obj.location - current_pos))
+    objs = [f"{obj.class_name} at {obj_loc_to_str(obj.location)}" for obj in objs]
+    return objs
+
+
+def obj_loc_to_str(arr: np.ndarray) -> str:
+    """
+    Converts a numpy array representing an object's location into a string.
+
+    Args:
+        arr (np.ndarray): Object's coordinates.
+
+    Returns:
+        str: A string representation of the object's location with precision up to two
+        decimal places.
+    """
+    return f"({arr[0]:.2f}, {arr[1]:.2f})"

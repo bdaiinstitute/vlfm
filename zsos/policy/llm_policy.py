@@ -248,6 +248,7 @@ class LLMPolicy(FrontierExplorationPolicy):
                 yaw,
                 confidence,
             )
+        self.object_map.update_explored(camera_coordinates, yaw)
 
     def _should_explore(self) -> bool:
         return self.target_object not in self.seen_objects
