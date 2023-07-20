@@ -9,13 +9,16 @@ name = "zsos"
 version = "0.1"
 description = "Zero shot object search"
 authors = [
-    {name = "Naoki Yokoyama", email = "naokiyokoyama@github"},
+    {name = "Naoki Yokoyama", email = "nyokoyama@theaiinstitute.com"},
 ]
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "torch >= 1.13.1",
-    # "habitat @ git+https://github.com/facebookresearch/habitat-sim.git",
+    "habitat-sim @ git+https://github.com/facebookresearch/habitat-sim.git",
+    "habitat-baselines >= 0.2.4",
+    "habitat-lab",
+    "transformers",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +31,9 @@ dev = [
 [project.urls]
 "Homepage" = "theaiinstitute.com"
 "GitHub" = "https://github.com/bdaiinstitute/llm-object-search"
+
+[tool.setuptools]
+packages = ["zsos", "config"]
 
 [tool.ruff]
 # Enable pycodestyle (`E`), Pyflakes (`F`), and import sorting (`I`)
