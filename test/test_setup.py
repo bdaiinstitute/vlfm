@@ -2,6 +2,7 @@ import os
 
 import torch
 from habitat import get_config
+from habitat_baselines.common.baseline_registry import baseline_registry  # noqa
 
 
 def test_habitat():
