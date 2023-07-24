@@ -1,13 +1,14 @@
 import os
 
 import torch
-from habitat import get_config
 from habitat_baselines.common.baseline_registry import baseline_registry  # noqa
 
+from zsos import get_config
 
-def test_habitat():
+
+def test_load_and_save_config():
     # Save a dummy state_dict using torch.save
-    config = get_config("config/experiments/ppo_pointnav_example.yaml")
+    config = get_config("config/experiments/llm_objectnav_hm3d.yaml")
     dummy_dict = {
         "config": config,
         "extra_state": {"step": 0},

@@ -4,6 +4,8 @@ from habitat.config.default import patch_config
 from habitat_baselines.run import execute_exp
 from omegaconf import DictConfig
 
+from zsos.policy import base_policy, llm_policy  # noqa: F401
+
 
 @hydra.main(
     version_base=None,
