@@ -12,7 +12,7 @@ authors = [
     {name = "Naoki Yokoyama", email = "nyokoyama@theaiinstitute.com"},
 ]
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 dependencies = [
     "torch >= 1.13.1",
     "habitat-sim @ git+https://github.com/facebookresearch/habitat-sim.git",

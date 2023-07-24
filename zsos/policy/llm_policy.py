@@ -3,13 +3,13 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 import torch
+from frontier_exploration.policy import FrontierExplorationPolicy
 from habitat.tasks.nav.object_nav_task import ObjectGoalSensor
 from habitat_baselines.common.baseline_registry import baseline_registry
 from habitat_baselines.common.tensor_dict import TensorDict
 from habitat_baselines.rl.ppo.policy import PolicyActionData
 from torch import Tensor
 
-from frontier_exploration.policy import FrontierExplorationPolicy
 from zsos.llm.llm import BaseLLM, ClientFastChat
 from zsos.mapping.object_map import ObjectMap
 from zsos.obs_transformers.resize import image_resize
