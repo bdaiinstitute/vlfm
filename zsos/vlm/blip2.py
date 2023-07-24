@@ -26,20 +26,27 @@ class BLIP2:
         )
         self.device = device
 
-    def ask(self, image, prompt=None):
+    def ask(self, image, prompt=None) -> str:
+        """Generates a caption for the given image.
+
+        Args:
+            image (numpy.ndarray): The input image as a numpy array.
+            prompt (str, optional): An optional prompt to provide context and guide
+                the caption generation. Can be used to ask questions about the image.
+
+        Returns:
+            dict: The generated caption.
+
+        """
         pil_img = Image.fromarray(image)
         processed_image = (
             self.vis_processors["eval"](pil_img).unsqueeze(0).to(self.device)
         )
 
-        import time
-
-        st = time.time()
         if prompt is None or prompt == "":
-            out = self.model.generate({"image": processed_image})
+            out = self.model.generate({"image": processed_image})[0]
         else:
-            out = self.model.generate({"image": processed_image, "prompt": prompt})
-        print(f"Time taken: {time.time() - st:.2f}s")
+            out = self.model.generate({"image": processed_image, "prompt": prompt})[0]
 
         return out
 
@@ -68,7 +75,7 @@ if __name__ == "__main__":
     class BLIP2Server(ServerMixin, BLIP2):
         def process_payload(self, payload: dict) -> dict:
             image = str_to_image(payload["image"])
-            return {"response": self.ask(image, payload.get("prompt"))[0]}
+            return {"response": self.ask(image, payload.get("prompt"))}
 
     # blip = BLIP2Server(name="blip2_opt", model_type="pretrain_opt2.7b")
     blip = BLIP2Server(name="blip2_t5", model_type="pretrain_flant5xl")
