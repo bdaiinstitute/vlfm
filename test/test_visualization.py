@@ -1,5 +1,6 @@
-import cv2
 import os
+
+import cv2
 
 from zsos.utils.visualization import generate_text_image
 
