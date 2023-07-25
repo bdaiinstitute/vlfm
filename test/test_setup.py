@@ -7,6 +7,9 @@ from zsos import get_config
 
 
 def test_load_and_save_config():
+    if not os.path.exists("build"):
+        os.makedirs("build")
+
     # Save a dummy state_dict using torch.save
     config = get_config("config/experiments/llm_objectnav_hm3d.yaml")
     dummy_dict = {

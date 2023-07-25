@@ -6,6 +6,9 @@ from zsos.utils.visualization import generate_text_image
 
 
 def test_visualization():
+    if not os.path.exists("build"):
+        os.makedirs("build")
+
     width = 400
     text = (
         "This is a long text that needs to be drawn on an image with a specified "
