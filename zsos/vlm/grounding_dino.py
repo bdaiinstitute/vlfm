@@ -3,8 +3,8 @@ import os
 import numpy as np
 import torch
 import torchvision.transforms.functional as F
-
 from groundingdino.util.inference import load_model, predict
+
 from zsos.vlm.detections import ObjectDetections
 
 from .server_wrapper import ServerMixin, host_model, send_request, str_to_image

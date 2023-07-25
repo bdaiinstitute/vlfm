@@ -9,13 +9,18 @@ name = "zsos"
 version = "0.1"
 description = "Zero shot object search"
 authors = [
-    {name = "Naoki Yokoyama", email = "naokiyokoyama@github"},
+    {name = "Naoki Yokoyama", email = "nyokoyama@theaiinstitute.com"},
 ]
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 dependencies = [
     "torch >= 1.13.1",
-    # "habitat @ git+https://github.com/facebookresearch/habitat-sim.git",
+    "habitat-sim @ git+https://github.com/facebookresearch/habitat-sim.git",
+    "habitat-baselines >= 0.2.4",
+    "habitat-lab",
+    "frontier_exploration @ git+https://github.com/naokiyokoyama/frontier_exploration.git",
+    "transformers == 4.28.0",  # higher versions break BLIP-2
+    "flask >= 2.3.2"
 ]
 
 [project.optional-dependencies]
@@ -28,6 +33,9 @@ dev = [
 [project.urls]
 "Homepage" = "theaiinstitute.com"
 "GitHub" = "https://github.com/bdaiinstitute/llm-object-search"
+
+[tool.setuptools]
+packages = ["zsos", "config"]
 
 [tool.ruff]
 # Enable pycodestyle (`E`), Pyflakes (`F`), and import sorting (`I`)
@@ -69,8 +77,8 @@ line-length = 120
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
-# Assume Python 3.10.
-target-version = "py310"
+# Assume Python 3.9.
+target-version = "py39"
 
 [tool.ruff.per-file-ignores]
 "__init__.py" = ["F401"]
@@ -81,7 +89,7 @@ max-complexity = 10
 
 [tool.black]
 line-length = 88
-target-version = ['py310']
+target-version = ['py39']
 include = '\.pyi?$'
 # `extend-exclude` is not honored when `black` is passed a file path explicitly,
 # as is typical when `black` is invoked via `pre-commit`.
@@ -95,7 +103,7 @@ preview = true
 
 # mypy configuration
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.9"
 disallow_untyped_defs = true
 ignore_missing_imports = true
 explicit_package_bases = true
