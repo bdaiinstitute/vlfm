@@ -10,7 +10,6 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-    group: bdai-gh-large-runners
     strategy:
       fail-fast: false
       matrix:
