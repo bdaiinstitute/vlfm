@@ -2,8 +2,6 @@
 # Copyright [2023] Boston Dynamics AI Institute, Inc.
 
 python -um zsos.run \
-  --config-name=experiments/llm_objectnav_hm3d.yaml \
-  --config-path ../config \
   habitat_baselines.evaluate=True \
   habitat_baselines.eval_ckpt_path_dir=dummy_policy.pth \
   habitat_baselines.load_resume_state_config=False \
