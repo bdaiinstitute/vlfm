@@ -11,5 +11,6 @@ python -um zsos.run \
   habitat.task.lab_sensors.base_explorer.turn_angle=30 \
   habitat_baselines.num_environments=1 \
   habitat_baselines.eval.video_option='["disk"]'
+#  habitat.environment.max_episode_steps=30 \
+#  habitat_baselines.test_episode_count=1 \
 #  habitat_baselines.eval.video_option='[]'
-#  habitat.environment.max_episode_steps=20 \  # Useful for debugging
