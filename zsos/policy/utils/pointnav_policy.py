@@ -1,4 +1,4 @@
-from typing import Dict, Union
+from typing import Dict, Tuple, Union
 
 import numpy as np
 import torch
@@ -86,45 +86,72 @@ def rho_theta_from_gps_compass_goal(
     observations: TensorDict, goal: np.ndarray
 ) -> Tensor:
     """
-    Calculates polar coordinates (rho, theta) from GPS, compass, and a goal position.
-    Currently, assumes only one environment is being used (hence the [0]s).
+    Calculates polar coordinates (rho, theta) relative to the agent's current position
+    and heading towards a given goal position using GPS and compass observations given
+    in Habitat format from the observations batch.
 
     Args:
-        observations (TensorDict): A dictionary containing sensor observations.
-            It should contain the following keys:
-            - "gps" (torch.Tensor): Tensor of shape (N, 2)
-              representing GPS coordinates.
-            - "compass" (torch.Tensor): Tensor of shape (N, 1)
-              representing compass heading in radians.
-
-        goal (np.ndarray): Array of shape (2,) representing the goal position.
+       observations (TensorDict): A dictionary containing observations from the agent.
+           It should include "gps" and "compass" information.
+           - "gps" (Tensor): Tensor of shape (batch_size, 2) representing the
+             GPS coordinates of the agent.
+           - "compass" (Tensor): Tensor of shape (batch_size, 1) representing
+             the compass heading of the agent in radians. It represents how many radians
+             the agent must turn to the left (CCW from above) from its initial heading to
+             reach its current heading.
+       goal (np.ndarray): Array of shape (2,) representing the goal position.
 
     Returns:
-        Tensor: A tensor of shape (2,) representing the polar coordinates (rho, theta).
-            - rho: Distance from the agent to the goal.
-            - theta: Angle between agent's heading and the vector to the goal, in
-                radians.
-
-    Note:
-        - The function assumes that the input tensors are on the GPU (device="cuda").
-        - The output tensor is also placed on the GPU.
+       Tensor: A tensor of shape (2,) representing the polar coordinates (rho, theta).
+           - rho (float): The distance from the agent to the goal.
+           - theta (float): The angle, in radians, that the agent must turn (to the
+             left, CCW from above) to face the goal.
     """
     gps_numpy = observations["gps"].squeeze(1).cpu().numpy()[0]
-    heading_numpy = observations["compass"].squeeze(1).cpu().numpy()[0]
-
-    rho = np.linalg.norm(gps_numpy - goal)
-
-    theta = wrap_heading(
-        np.arctan2(goal[0] - gps_numpy[0], goal[1] - gps_numpy[1])
-        - heading_numpy
-        - np.pi / 2
-    )
-
+    heading = observations["compass"].squeeze(1).cpu().numpy()[0]
+    gps_numpy[1] *= -1  # Flip y-axis to match habitat's coordinate system.
+    rho, theta = rho_theta(gps_numpy, heading, goal)
     rho_theta_tensor = torch.tensor(
         [rho, theta], device=torch.device("cuda"), dtype=torch.float32
     )
 
     return rho_theta_tensor
+
+
+def rho_theta(
+    curr_pos: np.ndarray, curr_heading: float, curr_goal: np.ndarray
+) -> Tuple[float, float]:
+    """
+    Calculates polar coordinates (rho, theta) relative to a given position and heading
+    to a given goal position. 'rho' is the distance from the agent to the goal, and
+    theta is how many radians the agent must turn (to the left, CCW from above) to face
+    the goal. Coordinates are in (x, y), where x is the distance forward/backwards, and
+    y is the distance to the left or right (right is negative)
+
+    Args:
+        curr_pos (np.ndarray): Array of shape (2,) representing the current position.
+        curr_heading (float): The current heading, in radians. It represents how many
+            radians  the agent must turn to the left (CCW from above) from its initial
+            heading to reach its current heading.
+        curr_goal (np.ndarray): Array of shape (2,) representing the goal position.
+
+    Returns:
+        Tuple[float, float]: A tuple of floats representing the polar coordinates
+            (rho, theta).
+    """
+    rotation_matrix = np.array(
+        [
+            [np.cos(-curr_heading), -np.sin(-curr_heading)],
+            [np.sin(-curr_heading), np.cos(-curr_heading)],
+        ]
+    )
+    local_goal = curr_goal - curr_pos
+    local_goal = rotation_matrix @ local_goal
+
+    rho = np.linalg.norm(local_goal)
+    theta = np.arctan2(local_goal[1], local_goal[0])
+
+    return rho, theta
 
 
 def load_pointnav_policy(file_path: str) -> PointNavResNetPolicy:

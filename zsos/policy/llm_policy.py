@@ -3,13 +3,13 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 import torch
-from frontier_exploration.policy import FrontierExplorationPolicy
 from habitat.tasks.nav.object_nav_task import ObjectGoalSensor
 from habitat_baselines.common.baseline_registry import baseline_registry
 from habitat_baselines.common.tensor_dict import TensorDict
 from habitat_baselines.rl.ppo.policy import PolicyActionData
 from torch import Tensor
 
+from frontier_exploration.policy import FrontierExplorationPolicy
 from zsos.llm.llm import BaseLLM, ClientFastChat
 from zsos.mapping.object_map import ObjectMap
 from zsos.obs_transformers.resize import image_resize
@@ -76,6 +76,7 @@ class LLMPolicy(FrontierExplorationPolicy):
         assert masks.shape[1] == 1, "Currently only supporting one env at a time"
         if masks[0] == 0:
             self._reset()
+            self.target_object = ID_TO_NAME[observations[ObjectGoalSensor.cls_uuid][0]]
 
         # Get action_data from FrontierExplorationPolicy
         action_data = super().act(
@@ -86,29 +87,50 @@ class LLMPolicy(FrontierExplorationPolicy):
             deterministic=deterministic,
         )
 
-        self.target_object = ID_TO_NAME[observations[ObjectGoalSensor.cls_uuid][0]]
+        detections = self._update_object_map(observations)
 
-        image_numpy = observations["rgb"][0].cpu().numpy()
-        detections = self._get_object_detections(image_numpy)
-        self._update_object_map(observations, detections)
-        llm_responses = self._get_llm_responses()
+        try:
+            # Target object has been spotted
+            goal = self.object_map.get_best_object(self.target_object)
+        except ValueError:
+            # Target object has not been spotted
+            goal = None
+
+        # baseline = True
+        baseline = False
 
         if self.start_steps < 12:
             self.start_steps += 1
             pointnav_action = TorchActionIDs.TURN_LEFT
-        elif self._should_explore():
-            pointnav_action = action_data.actions
-        else:
-            goal = self.object_map.get_best_object(self.target_object)
-            # PointNav only cares about x, y
+            llm_responses = "Spinning..."
+        elif goal is not None:
             pointnav_action = self._pointnav(
-                observations, masks, goal[:2], deterministic=deterministic
+                observations, masks, goal[:2], deterministic=deterministic, stop=True
             )
+            llm_responses = "Beelining to target!"
+        else:
+            curr_pos = observations["gps"][0].cpu().numpy() * np.array([1, -1])
+            llm_responses = "Closest exploration" if baseline else "LLM exploration"
+            if np.linalg.norm(self.last_goal - curr_pos) < 0.25:
+                frontiers = observations["frontier_sensor"][0].cpu().numpy()
+                if baseline:
+                    goal = frontiers[0]
+                else:
+                    # Ask LLM which waypoint to head to next
+                    goal, llm_responses = self._get_llm_goal(curr_pos, frontiers)
+            else:
+                goal = self.last_goal
+
+            pointnav_action = self._pointnav(
+                observations, masks, goal[:2], deterministic=deterministic, stop=False
+            )
+
         action_data.actions = pointnav_action
 
         action_data.policy_info = self._get_policy_info(
             observations, detections, llm_responses
         )
+        print(llm_responses)
 
         return action_data
 
@@ -146,54 +168,39 @@ class LLMPolicy(FrontierExplorationPolicy):
     def _get_object_detections(self, img: np.ndarray) -> ObjectDetections:
         detections = self.object_detector.predict(img, visualize=self.visualize)
         detections.filter_by_conf(self.det_conf_threshold)
-        objects = self._extract_detected_names(detections)
-
-        self.seen_objects.update(objects)
 
         return detections
 
-    def _extract_detected_names(self, detections: ObjectDetections) -> List[str]:
-        # Filter out detections that are not verbatim in the classes.txt file
-        objects = [
-            phrase
-            for phrase in detections.phrases
-            if phrase in self.object_detector.classes
-        ]
-        return objects
-
-    def _get_llm_responses(self) -> str:
+    def _get_llm_goal(
+        self, current_pos: np.ndarray, frontiers: np.ndarray
+    ) -> Tuple[np.ndarray, str]:
         """
-        Asks LLM which object to go to next, conditioned on the target object.
+        Asks LLM which object or frontier to go to next. self.object_map is used to
+        generate the prompt for the LLM.
+
+        Args:
+            current_pos (np.ndarray): A 1D array of shape (2,) containing the current
+                position of the robot.
+            frontiers (np.ndarray): A 2D array of shape (num_frontiers, 2) containing
+                the coordinates of the frontiers.
 
         Returns:
-            List[str]: A list containing the responses generated by the LLM.
+            Tuple[np.ndarray, str]: A tuple containing the goal and the LLM response.
         """
-        if len(self.seen_objects) == 0:
-            return ""
-
-        if self.target_object in self.seen_objects:
-            return self.target_object
-
-        choices = list(self.seen_objects)
-        choices_str = ""
-        for i, category in enumerate(choices):
-            choices_str += f"{i}. {category}\n"
-
-        prompt = (
-            "Question: Which object category from the following options would be most "
-            f"likely to be found near a '{self.target_object}'?\n\n"
-            f"{choices_str}"
-            "\nYour response must be ONLY ONE integer (ex. '0', '15', etc.).\n"
-            "Answer: "
+        prompt, waypoints = self.object_map.get_textual_map_prompt(
+            self.target_object, current_pos, frontiers
         )
+        resp = self.llm.ask(prompt)
+        int_resp = extract_integer(resp) - 1
 
-        llm_resp = self.llm.ask(prompt)
-        obj_idx = extract_integer(llm_resp)
-        if obj_idx != -1:
-            self.current_best_object = choices[obj_idx]
-            # TODO: IndexError here
+        try:
+            waypoint = waypoints[int_resp]
+        except IndexError:
+            print("Seems like the LLM returned an invalid response:\n")
+            print(resp)
+            waypoint = waypoints[-1]
 
-        return self.current_best_object
+        return waypoint, resp
 
     def _pointnav(
         self,
@@ -201,10 +208,12 @@ class LLMPolicy(FrontierExplorationPolicy):
         masks: Tensor,
         goal: np.ndarray,
         deterministic=False,
+        stop=False,
     ) -> Tensor:
         if not np.array_equal(goal, self.last_goal):
             self.last_goal = goal
             self.pointnav_policy.reset()
+            masks = torch.zeros_like(masks)
         rho_theta = rho_theta_from_gps_compass_goal(observations, goal)
         obs_pointnav = {
             "depth": image_resize(
@@ -215,16 +224,14 @@ class LLMPolicy(FrontierExplorationPolicy):
             ),
             "pointgoal_with_gps_compass": rho_theta.unsqueeze(0),
         }
-        if rho_theta[0] < self.pointnav_stop_radius:
+        if rho_theta[0] < self.pointnav_stop_radius and stop:
             return TorchActionIDs.STOP
         action = self.pointnav_policy.get_actions(
             obs_pointnav, masks, deterministic=deterministic
         )
         return action
 
-    def _update_object_map(
-        self, observations: TensorDict, detections: ObjectDetections
-    ) -> None:
+    def _update_object_map(self, observations: TensorDict) -> ObjectDetections:
         """
         Updates the object map with the detections from the current timestep.
 
@@ -233,11 +240,15 @@ class LLMPolicy(FrontierExplorationPolicy):
             detections (ObjectDetections): The detections from the current
                 timestep.
         """
+        rgb = observations["rgb"][0].cpu().numpy()
         depth = observations["depth"][0].cpu().numpy()
+        x, y = observations["gps"][0].cpu().numpy()
         camera_coordinates = np.array(
-            [*observations["gps"][0].cpu().numpy(), self.camera_height]
+            [x, -y, self.camera_height]  # Habitat GPS makes west negative, so flip y
         )
         yaw = observations["compass"][0].item()
+
+        detections = self._get_object_detections(rgb)
 
         for idx, confidence in enumerate(detections.logits):
             self.object_map.update_map(
@@ -249,6 +260,11 @@ class LLMPolicy(FrontierExplorationPolicy):
                 confidence,
             )
         self.object_map.update_explored(camera_coordinates, yaw)
+
+        seen_objects = set(i.class_name for i in self.object_map.map)
+        self.seen_objects.update(seen_objects)
+
+        return detections
 
     def _should_explore(self) -> bool:
         return self.target_object not in self.seen_objects

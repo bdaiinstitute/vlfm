@@ -69,7 +69,9 @@ class ObjectMap:
 
     def get_best_object(self, target_class: str) -> np.ndarray:
         """
-        Returns the closest object to the agent that matches the given object name.
+        Returns the closest object to the agent that matches the given object name. It
+        will not go towards objects that are too far away, unless there are no other
+        objects of the same class.
 
         Args:
             target_class (str): The name of the object class to search for.
@@ -78,19 +80,22 @@ class ObjectMap:
             np.ndarray: The location of the closest object to the agent that matches the
                 given object name [x, y, z].
         """
-        best_loc, best_conf = None, -float("inf")
-        for object_inst in self.map:
-            if (
-                target_class == object_inst.class_name
-                and object_inst.confidence > best_conf
-            ):
-                best_loc = object_inst.location
-                best_conf = object_inst.confidence
-
-        if best_loc is None:
+        matches = [obj for obj in self.map if obj.class_name == target_class]
+        if len(matches) == 0:
             raise ValueError(
                 f"No object of type {target_class} found in the object map."
             )
+
+        ignore_too_far = any([not obj.too_far for obj in matches])
+        best_loc, best_conf = None, -float("inf")
+        for object_inst in matches:
+            if object_inst.confidence > best_conf:
+                if ignore_too_far and object_inst.too_far:
+                    continue
+                best_loc = object_inst.location
+                best_conf = object_inst.confidence
+
+        assert best_loc is not None, "This error should never be reached."
 
         return best_loc
 
@@ -107,10 +112,12 @@ class ObjectMap:
                 obj.location,
             ):
                 obj.explored = True
+        # Remove objects that are both too far and explored
+        self.map = [obj for obj in self.map if not (obj.explored and obj.too_far)]
 
     def get_textual_map_prompt(
         self, target: str, current_pos: np.ndarray, frontiers: np.ndarray
-    ) -> str:
+    ) -> Tuple[str, np.ndarray]:
         """
         Returns a textual representation of the object map. The {target} field will
         still be unfilled.
@@ -123,9 +130,9 @@ class ObjectMap:
         # 'unexplored_objects' is a list of strings, where each string represents the
         # object's name and location
         unexplored_objects = [obj for obj in self.map if not obj.explored]
-        unexplored_objects = objects_to_str(unexplored_objects, current_pos)
+        unexplored_objects_strs = objects_to_str(unexplored_objects, current_pos)
         # For object_options, only return a list of objects that have not been explored
-        object_options = numbered_list(unexplored_objects)
+        object_options = numbered_list(unexplored_objects_strs)
 
         # 'frontiers_list' is a list of strings, where each string represents the
         # frontier's location
@@ -133,12 +140,26 @@ class ObjectMap:
             f"({frontier[0]:.2f}, {frontier[1]:.2f})" for frontier in frontiers
         ]
         frontier_options = numbered_list(
-            frontiers_list, start=len(unexplored_objects) + 1
+            frontiers_list, start=len(unexplored_objects_strs) + 1
         )
 
-        return get_textual_map_prompt(
-            target, textual_map, object_options, frontier_options
+        curr_pos_str = f"({current_pos[0]:.2f}, {current_pos[1]:.2f})"
+
+        prompt = get_textual_map_prompt(
+            target,
+            textual_map,
+            object_options,
+            frontier_options,
+            curr_position=curr_pos_str,
         )
+
+        waypoints = []
+        for obj in unexplored_objects:
+            waypoints.append(obj.location)
+        waypoints.extend(list(frontiers))
+        waypoints = np.array(waypoints)
+
+        return prompt, waypoints
 
     def visualize(self, frontiers: np.ndarray) -> np.ndarray:
         """
@@ -196,18 +217,18 @@ class ObjectMap:
 
         Args:
             bounding_box (np.ndarray): The bounding box coordinates of the detected
-            object in the image [x_min, y_min, x_max, y_max]. These coordinates are
-            normalized to the range [0, 1].
+                object in the image [x_min, y_min, x_max, y_max]. These coordinates are
+                normalized to the range [0, 1].
             depth_image (np.ndarray): The depth image captured by the RGBD camera.
             camera_coordinates (np.ndarray): The global coordinates of the camera
-            [x, y, z].
+                [x, y, z].
             camera_yaw (float): The yaw angle of the camera in radians.
 
         Returns:
             np.ndarray: The estimated 3D location of the detected object in the global
-            coordinate frame [x, y, z].
+                coordinate frame [x, y, z].
             bool: True if the object is too far away for the depth camera, False
-            otherwise.
+                otherwise.
         """
         # Get the depth value of the object
         pixel_x, pixel_y, depth_value = self._get_object_depth(
@@ -225,7 +246,7 @@ class ObjectMap:
         )
         # Yaw from compass sensor must be negated to work properly
         object_coord_global = convert_to_global_frame(
-            camera_coordinates, -camera_yaw, object_coord_agent
+            camera_coordinates, camera_yaw, object_coord_agent
         )
 
         return object_coord_global, too_far
@@ -350,9 +371,7 @@ def calculate_3d_coordinates(
 
     hor_distance = depth_value * math.cos(phi)
     x = hor_distance * math.cos(theta)
-
-    y = hor_distance * math.sin(theta)
-
+    y = -hor_distance * math.sin(theta)
     ver_distance = depth_value * math.sin(theta)
     z = ver_distance * math.sin(phi)
 
@@ -462,7 +481,7 @@ def objects_to_str(objs: List[Object], current_pos: np.ndarray) -> List[str]:
         List[str]: A list where each string represents an object and its location in
         relation to the agent's position.
     """
-    objs.sort(key=lambda obj: np.linalg.norm(obj.location - current_pos))
+    objs.sort(key=lambda obj: np.linalg.norm(obj.location[:2] - current_pos))
     objs = [f"{obj.class_name} at {obj_loc_to_str(obj.location)}" for obj in objs]
     return objs
 
