@@ -1,3 +1,5 @@
+import os
+
 import requests
 
 
@@ -66,3 +68,30 @@ class ClientVLLM(ClientLLM):
 
     def _extract_answer_from_response(self, resp: dict) -> str:
         return resp["text"][0]
+
+
+class ClientGPT4(BaseLLM):
+    def ask(self, prompt) -> str:
+        import openai
+
+        openai.api_key = os.environ["OPENAI_API_KEY"]
+        openai.organization = os.environ["OPENAI_ORGANIZATION"]
+
+        resp = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
+            ],
+            temperature=1,
+            max_tokens=256,
+            top_p=1,
+            frequency_penalty=0,
+            presence_penalty=0,
+        )
+
+        resp = resp["choices"][0]["message"]["content"]
+
+        return resp
