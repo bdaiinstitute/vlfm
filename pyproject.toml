@@ -15,12 +15,13 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "torch >= 1.13.1",
-    "habitat-sim @ git+https://github.com/facebookresearch/habitat-sim.git",
-    "habitat-baselines >= 0.2.4",
-    "habitat-lab",
+#    "habitat-sim @ git+https://github.com/facebookresearch/habitat-sim.git",
+#    "habitat-baselines >= 0.2.4",
+#    "habitat-lab",
     "frontier_exploration @ git+https://github.com/naokiyokoyama/frontier_exploration.git",
     "transformers == 4.28.0",  # higher versions break BLIP-2
-    "flask >= 2.3.2"
+    "flask >= 2.3.2",
+    "gym >= 0.26.2"
 ]
 
 [project.optional-dependencies]

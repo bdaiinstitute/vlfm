@@ -12,7 +12,7 @@ from torch import Tensor
 from frontier_exploration.policy import FrontierExplorationPolicy
 from zsos.llm.llm import BaseLLM, ClientFastChat
 from zsos.mapping.object_map import ObjectMap
-from zsos.obs_transformers.resize import image_resize
+from zsos.obs_transformers.utils import image_resize
 from zsos.policy.utils.pointnav_policy import (
     WrappedPointNavResNetPolicy,
     rho_theta_from_gps_compass_goal,
@@ -226,7 +226,7 @@ class LLMPolicy(FrontierExplorationPolicy):
         }
         if rho_theta[0] < self.pointnav_stop_radius and stop:
             return TorchActionIDs.STOP
-        action = self.pointnav_policy.get_actions(
+        action = self.pointnav_policy.act(
             obs_pointnav, masks, deterministic=deterministic
         )
         return action
