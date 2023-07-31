@@ -9,6 +9,8 @@ from omegaconf import DictConfig
 
 @baseline_registry.register_policy
 class BasePolicy(Policy):
+    """The bare minimum needed to load a policy for evaluation using ppo_trainer.py"""
+
     def __init__(self, *args, **kwargs):
         super().__init__()
 
@@ -34,6 +36,7 @@ class BasePolicy(Policy):
         masks,
         deterministic=False,
     ):
+        # Just moves forwards
         num_envs = observations["rgb"].shape[0]
         action = torch.ones(num_envs, 1, dtype=torch.long)
         return PolicyActionData(actions=action, rnn_hidden_states=rnn_hidden_states)
@@ -51,7 +54,9 @@ class BasePolicy(Policy):
 
 
 if __name__ == "__main__":
-    # Save a dummy state_dict using torch.save
+    # Save a dummy state_dict using torch.save. This is useful for generating a pth file
+    # that can be used to load other policies that don't even read from checkpoints,
+    # even though habitat requires a checkpoint to be loaded.
     config = get_config(
         "habitat-lab/habitat-baselines/habitat_baselines/config/pointnav/ppo_pointnav_example.yaml"
     )
