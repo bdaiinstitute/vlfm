@@ -1,13 +1,22 @@
-from typing import Dict, Tuple, Union
+from typing import Any, Dict, Tuple, Union
 
 import numpy as np
 import torch
 from gym import spaces
 from gym.spaces import Dict as SpaceDict
 from gym.spaces import Discrete
-from habitat.tasks.nav.nav import IntegratedPointGoalGPSAndCompassSensor
-from habitat_baselines.common.tensor_dict import TensorDict
-from habitat_baselines.rl.ddppo.policy import PointNavResNetPolicy
+
+try:
+    from habitat_baselines.rl.ddppo.policy import PointNavResNetPolicy
+
+    HABITAT_BASELINES_AVAILABLE = True
+except ModuleNotFoundError:
+    from zsos.policy.utils.non_habitat_policy.nh_pointnav_policy import (
+        PointNavResNetPolicy,
+    )
+
+    HABITAT_BASELINES_AVAILABLE = False
+
 from torch import Tensor
 
 
@@ -34,9 +43,9 @@ class WrappedPointNavResNetPolicy:
             dtype=torch.long,
         )
 
-    def get_actions(
+    def act(
         self,
-        observations: Union[TensorDict, Dict],
+        observations: Union["TensorDict", Dict],  # noqa: F821
         masks: torch.Tensor,
         deterministic: bool = False,
     ) -> Tensor:
@@ -45,7 +54,7 @@ class WrappedPointNavResNetPolicy:
         depth vision.
 
         Args:
-            observations (Union[TensorDict, Dict]): A dictionary containing (at least)
+            observations (Union["TensorDict", Dict]): A dictionary containing (at least)
                 the following:
                     - "depth" (torch.float32): Depth image tensor (N, H, W, 1).
                     - "pointgoal_with_gps_compass" (torch.float32):
@@ -83,7 +92,7 @@ class WrappedPointNavResNetPolicy:
 
 
 def rho_theta_from_gps_compass_goal(
-    observations: TensorDict, goal: np.ndarray
+    observations: "TensorDict", goal: np.ndarray  # noqa: F821
 ) -> Tensor:
     """
     Calculates polar coordinates (rho, theta) relative to the agent's current position
@@ -91,7 +100,7 @@ def rho_theta_from_gps_compass_goal(
     in Habitat format from the observations batch.
 
     Args:
-       observations (TensorDict): A dictionary containing observations from the agent.
+       observations ("TensorDict"): A dictionary containing observations from the agent.
            It should include "gps" and "compass" information.
            - "gps" (Tensor): Tensor of shape (batch_size, 2) representing the
              GPS coordinates of the agent.
@@ -164,25 +173,44 @@ def load_pointnav_policy(file_path: str) -> PointNavResNetPolicy:
         NetPolicy: The policy.
     """
     ckpt_dict = torch.load(file_path, map_location="cpu")
-    obs_space = SpaceDict(
-        {
-            "depth": spaces.Box(
-                low=0.0, high=1.0, shape=(224, 224, 1), dtype=np.float32
-            ),
-            IntegratedPointGoalGPSAndCompassSensor.cls_uuid: spaces.Box(
-                low=np.finfo(np.float32).min,
-                high=np.finfo(np.float32).max,
-                shape=(2,),
-                dtype=np.float32,
-            ),
-        }
-    )
-    action_space = Discrete(4)
-    policy = PointNavResNetPolicy.from_config(
-        ckpt_dict["config"], obs_space, action_space
-    )
-    policy.load_state_dict(ckpt_dict["state_dict"])
-    return policy
+    pointnav_policy = _generate_untrained_policy(ckpt_dict)
+    return pointnav_policy
+
+
+def _generate_untrained_policy(ckpt_dict: Any) -> PointNavResNetPolicy:
+    if HABITAT_BASELINES_AVAILABLE:
+        obs_space = SpaceDict(
+            {
+                "depth": spaces.Box(
+                    low=0.0, high=1.0, shape=(224, 224, 1), dtype=np.float32
+                ),
+                "pointgoal_with_gps_compass": spaces.Box(
+                    low=np.finfo(np.float32).min,
+                    high=np.finfo(np.float32).max,
+                    shape=(2,),
+                    dtype=np.float32,
+                ),
+            }
+        )
+        action_space = Discrete(4)
+        policy = PointNavResNetPolicy.from_config(
+            ckpt_dict["config"], obs_space, action_space
+        )
+        policy.load_state_dict(ckpt_dict["state_dict"])
+        return policy
+
+    else:
+        policy = PointNavResNetPolicy()
+        current_state_dict = policy.state_dict()
+        policy.load_state_dict(
+            {k: v for k, v in ckpt_dict.items() if k in current_state_dict}
+        )
+        unused_keys = [k for k in ckpt_dict.keys() if k not in current_state_dict]
+        print(
+            "The following unused keys were not loaded when loading the pointnav"
+            f" policy: {unused_keys}"
+        )
+        return policy
 
 
 def wrap_heading(theta: Union[float, np.ndarray]) -> Union[float, np.ndarray]:

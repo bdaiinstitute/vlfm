@@ -3,7 +3,7 @@ import os
 import torch
 from habitat_baselines.common.baseline_registry import baseline_registry  # noqa
 
-from zsos import get_config
+from zsos.run import get_config
 
 
 def test_load_and_save_config():
