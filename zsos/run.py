@@ -5,13 +5,13 @@ from habitat.config.default import patch_config
 from habitat_baselines.run import execute_exp
 from omegaconf import DictConfig
 
-import zsos.obs_transformers.resize  # noqa: F401
-
 # The following imports require habitat to be installed, and will register several
 # classes and make them discoverable by Hydra. This run.py script is expected
 # to only be used when habitat is installed, thus they are hidden here instead of in an
 # __init__.py file. noqa is used to suppress the unused import warning by ruff.
-from zsos.policy import base_policy, llm_policy  # noqa: F401
+import frontier_exploration  # noqa: F401
+import zsos.obs_transformers.resize  # noqa: F401
+from zsos.policy import base_policy, itm_policy, llm_policy  # noqa: F401
 
 
 @hydra.main(
