@@ -17,7 +17,8 @@ tmux send-keys -t vlm_servers:0.0 "${OS_PYTHON} -m zsos.vlm.grounding_dino ; sle
 
 # Split the second pane horizontally and run ${OS_PYTHON} -m zsos.vlm.blip2 in the new pane
 tmux split-window -h -t vlm_servers:0
-tmux send-keys -t vlm_servers:0.1 "${OS_PYTHON} -m zsos.vlm.blip2 ; sleep 30" C-m
+#tmux send-keys -t vlm_servers:0.1 "${OS_PYTHON} -m zsos.vlm.blip2 ; sleep 30" C-m
+tmux send-keys -t vlm_servers:0.1 "${OS_PYTHON} -m zsos.vlm.blip2itm ; sleep 30" C-m
 
 # Select the third pane and run ${OS_PYTHON} -m zsos.vlm.fiber
 tmux select-pane -t vlm_servers:0.2
