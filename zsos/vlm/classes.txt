@@ -3,6 +3,7 @@ bed
 toilet
 chair
 couch
+potted plant
 dining table
 bed frame
 wardrobe

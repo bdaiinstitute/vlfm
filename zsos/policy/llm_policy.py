@@ -1,7 +1,6 @@
 from typing import Tuple
 
 import numpy as np
-import torch
 from habitat_baselines.common.baseline_registry import baseline_registry
 from habitat_baselines.common.tensor_dict import TensorDict
 from torch import Tensor
@@ -11,18 +10,11 @@ from zsos.policy.semantic_policy import SemanticPolicy
 from zsos.vlm.blip2 import BLIP2Client
 from zsos.vlm.fiber import FIBERClient
 
-ID_TO_NAME = ["chair", "bed", "potted plant", "toilet", "tv", "couch"]
-
 
 @baseline_registry.register_policy
 class LLMPolicy(SemanticPolicy):
     llm: BaseLLM = None
     visualize: bool = True
-    current_best_object: str = ""
-    depth_image_shape: Tuple[int, int] = (244, 224)
-    camera_height: float = 0.88
-    det_conf_threshold: float = 0.5
-    pointnav_stop_radius: float = 0.65
 
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -30,7 +22,6 @@ class LLMPolicy(SemanticPolicy):
         self.vlm = BLIP2Client()
         self.grounding_model = FIBERClient()
         self.llm = ClientFastChat()
-        self.last_goal = np.zeros(2)
 
     def _explore(self, observations: TensorDict) -> Tensor:
         curr_pos = observations["gps"][0].cpu().numpy() * np.array([1, -1])
@@ -45,9 +36,8 @@ class LLMPolicy(SemanticPolicy):
         else:
             goal = self.last_goal
 
-        masks = torch.tensor([self.start_steps != 0], dtype=torch.bool, device="cuda")
         pointnav_action = self._pointnav(
-            observations, masks, goal[:2], deterministic=True, stop=False
+            observations, goal[:2], deterministic=True, stop=False
         )
 
         return pointnav_action

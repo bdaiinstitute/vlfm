@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Union
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
 import torch
@@ -29,6 +29,10 @@ class TorchActionIDs:
 
 class SemanticPolicy(BasePolicy):
     target_object: str = ""
+    camera_height: float = 0.88
+    depth_image_shape: Tuple[int, int] = (244, 224)
+    det_conf_threshold: float = 0.35
+    pointnav_stop_radius: float = 0.9
 
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -40,8 +44,16 @@ class SemanticPolicy(BasePolicy):
             min_depth=0.5, max_depth=5.0, hfov=79.0, image_width=640, image_height=480
         )
 
-        self.start_steps = 0
+        self.num_steps = 0
         self.last_goal = np.zeros(2)
+        self.done_initializing = False
+
+    def _reset(self):
+        self.target_object = ""
+        self.pointnav_policy.reset()
+        self.object_map.reset()
+        self.last_goal = np.zeros(2)
+        self.num_steps = 0
         self.done_initializing = False
 
     def act(
@@ -66,7 +78,7 @@ class SemanticPolicy(BasePolicy):
             pointnav_action = self._initialize()
         elif goal is not None:  # Found target object
             pointnav_action = self._pointnav(
-                observations, masks, goal[:2], deterministic=deterministic, stop=True
+                observations, goal[:2], deterministic=deterministic, stop=True
             )
         else:
             pointnav_action = self._explore(observations)
@@ -76,12 +88,12 @@ class SemanticPolicy(BasePolicy):
             policy_info=self._get_policy_info(observations, detections),
         )
 
-        self.start_steps += 1
+        self.num_steps += 1
 
         return action_data
 
     def _initialize(self) -> Tensor:
-        self.done_initializing = not self.start_steps < 11
+        self.done_initializing = not self.num_steps < 11
         return TorchActionIDs.TURN_LEFT
 
     def _explore(self, observations: TensorDict) -> Tensor:
@@ -133,11 +145,11 @@ class SemanticPolicy(BasePolicy):
     def _pointnav(
         self,
         observations: TensorDict,
-        masks: Tensor,
         goal: np.ndarray,
         deterministic=False,
         stop=False,
     ) -> Tensor:
+        masks = torch.tensor([self.num_steps != 0], dtype=torch.bool, device="cuda")
         if not np.array_equal(goal, self.last_goal):
             self.last_goal = goal
             self.pointnav_policy.reset()
@@ -190,10 +202,3 @@ class SemanticPolicy(BasePolicy):
         self.object_map.update_explored(camera_coordinates, yaw)
 
         return detections
-
-    def _reset(self):
-        self.target_object = ""
-        self.pointnav_policy.reset()
-        self.object_map.reset()
-        self.last_goal = np.zeros(2)
-        self.start_steps = 0
