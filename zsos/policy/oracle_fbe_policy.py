@@ -1,8 +1,8 @@
+from frontier_exploration.base_explorer import BaseExplorer
 from habitat_baselines.common.baseline_registry import baseline_registry
 from habitat_baselines.common.tensor_dict import TensorDict
 from torch import Tensor
 
-from frontier_exploration.base_explorer import BaseExplorer
 from zsos.policy.semantic_policy import SemanticPolicy
 
 
