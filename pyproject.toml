@@ -23,14 +23,14 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pre-commit>=3.1.1",
-    "pytest>=7.2.1",
-    "pytest-cov>=4.0.0",
+    "pre-commit >= 3.1.1",
+    "pytest >= 7.2.1",
+    "pytest-cov >= 4.0.0",
 ]
 habitat = [
-    "habitat-sim @ git+https://github.com/facebookresearch/habitat-sim.git",
-    "habitat-baselines >= 0.2.4",
-    "habitat-lab",
+    "habitat-sim == 0.2.4 @ git+https://github.com/facebookresearch/habitat-sim.git",
+    "habitat-baselines == 0.2.4",
+    "habitat-lab == 0.2.4",
 ]
 
 [project.urls]
