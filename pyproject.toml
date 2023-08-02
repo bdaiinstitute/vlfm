@@ -18,7 +18,8 @@ dependencies = [
     "frontier_exploration @ git+https://github.com/naokiyokoyama/frontier_exploration.git",
     "transformers == 4.28.0",  # higher versions break BLIP-2
     "flask >= 2.3.2",
-    "gym >=0.22.0,<0.23.1"
+    "gym >=0.22.0,<0.23.1",
+    "lavis >= 1.0.2",
 ]
 
 [project.optional-dependencies]
