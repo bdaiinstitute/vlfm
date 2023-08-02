@@ -9,7 +9,7 @@ from omegaconf import DictConfig
 # classes and make them discoverable by Hydra. This run.py script is expected
 # to only be used when habitat is installed, thus they are hidden here instead of in an
 # __init__.py file. noqa is used to suppress the unused import warning by ruff.
-import frontier_exploration  # noqa: F401
+import frontier_exploration  # noqa: F401, E001
 import zsos.obs_transformers.resize  # noqa: F401
 from zsos.policy import base_policy, itm_policy, llm_policy  # noqa: F401
 
