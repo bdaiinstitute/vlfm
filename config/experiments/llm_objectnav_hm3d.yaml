@@ -80,7 +80,7 @@ habitat_baselines:
       # Whether or not the visual encoder backbone will be trained.
       train_encoder: True
       # Whether or not to reset the critic linear layer
-      reset_critic: True
+      reset_critic: False
 
       # Model parameters
       backbone: resnet50
