@@ -1,4 +1,4 @@
-import hydra # noqa
+import hydra  # noqa
 from habitat.config import read_write
 from habitat.config.default import patch_config
 from habitat_baselines.run import execute_exp
