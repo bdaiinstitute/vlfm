@@ -24,6 +24,7 @@ jobs:
     - name: Install package
       run: |
         sudo apt-get install -y libgl1-mesa-dev
+        pip install -e .[habitat]
         pip install -e .[dev]
     - name: Pytest
       run: |
