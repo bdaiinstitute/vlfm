@@ -1,8 +1,8 @@
 from typing import Dict, Optional, Tuple
 
 import torch
-import torch.functional as F
 import torch.nn as nn
+import torch.nn.functional as F
 from torch import Size
 
 from .resnet import resnet18
@@ -15,7 +15,7 @@ class ResNetEncoder(nn.Module):
     def __init__(self):
         super().__init__()
         self.running_mean_and_var = nn.Sequential()
-        self.backbone = resnet18(1, 32, 32)
+        self.backbone = resnet18(1, 32, 16)
         self.compression = nn.Sequential(
             nn.Conv2d(
                 256, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
@@ -121,7 +121,7 @@ class GaussianNet(nn.Module):
 
         mu = torch.tanh(mu)
 
-        std = torch.clamp(std, self.min_std, self.max_std)
+        std = torch.clamp(std, self.min_log_std, self.max_log_std)
         std = torch.exp(std)
 
         return CustomNormal(mu, std, validate_args=False)
@@ -162,8 +162,30 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     ckpt = torch.load(args.state_dict_path, map_location="cpu")
-    model = PointNavResNetPolicy()
-    print(model)
-    current_state_dict = model.state_dict()
-    model.load_state_dict({k: v for k, v in ckpt.items() if k in current_state_dict})
+    policy = PointNavResNetPolicy()
+    print(policy)
+    current_state_dict = policy.state_dict()
+    policy.load_state_dict({k: v for k, v in ckpt.items() if k in current_state_dict})
     print("Loaded model from checkpoint successfully!")
+
+    policy = policy.to(torch.device("cuda"))
+    print("Successfully moved model to GPU!")
+
+    observations = {
+        "depth": torch.ones(1, 212, 240, 1, device=torch.device("cuda")),
+        "pointgoal_with_gps_compass": torch.zeros(1, 2, device=torch.device("cuda")),
+    }
+    mask = torch.zeros(1, 1, device=torch.device("cuda"), dtype=torch.bool)
+
+    rnn_state = torch.zeros(1, 4, 512, device=torch.device("cuda"), dtype=torch.float32)
+
+    action = policy.act(
+        observations,
+        rnn_state,
+        torch.zeros(1, 2, device=torch.device("cuda"), dtype=torch.float32),
+        mask,
+        deterministic=True,
+    )
+
+    print("Forward pass successful!")
+    print(action[0].detach().cpu().numpy())

@@ -27,21 +27,35 @@ class WrappedPointNavResNetPolicy:
     and previous action for the policy.
     """
 
-    def __init__(self, ckpt_path: str):
+    def __init__(
+        self,
+        ckpt_path: str,
+        device: Union[str, torch.device] = "cuda",
+        discrete_actions: bool = True,
+    ):
+        if isinstance(device, str):
+            device = torch.device(device)
         self.policy = load_pointnav_policy(ckpt_path)
-        self.policy.to(torch.device("cuda"))
+        self.policy.to(device)
         self.pointnav_test_recurrent_hidden_states = torch.zeros(
             1,  # The number of environments.
             self.policy.net.num_recurrent_layers,
             512,  # hidden state size
-            device=torch.device("cuda"),
+            device=device,
         )
+        if discrete_actions:
+            num_actions = 1
+            action_dtype = torch.long
+        else:
+            num_actions = 2
+            action_dtype = torch.float32
         self.pointnav_prev_actions = torch.zeros(
-            1,  # The number of environments.
-            1,  # The number of actions.
-            device=torch.device("cuda"),
-            dtype=torch.long,
+            1,  # number of environments
+            num_actions,
+            device=device,
+            dtype=action_dtype,
         )
+        self.device = device
 
     def act(
         self,
@@ -68,6 +82,19 @@ class WrappedPointNavResNetPolicy:
             Tensor (torch.dtype.long): A tensor denoting the action to take:
                 (0: STOP, 1: FWD, 2: LEFT, 3: RIGHT).
         """
+        # Convert numpy arrays to torch tensors for each dict value
+        for k, v in observations.items():
+            if isinstance(v, np.ndarray):
+                observations[k] = torch.from_numpy(v).to(
+                    device=self.device, dtype=torch.float32
+                )
+                if k == "depth" and len(observations[k].shape) == 3:
+                    observations[k] = observations[k].unsqueeze(0)
+                elif (
+                    k == "pointgoal_with_gps_compass"
+                    and len(observations[k].shape) == 1
+                ):
+                    observations[k] = observations[k].unsqueeze(0)
         pointnav_action = self.policy.act(
             observations,
             self.pointnav_test_recurrent_hidden_states,
@@ -76,10 +103,16 @@ class WrappedPointNavResNetPolicy:
             deterministic=deterministic,
         )
 
-        self.pointnav_test_recurrent_hidden_states = pointnav_action.rnn_hidden_states
-        self.pointnav_prev_actions = pointnav_action.actions.clone()
-
-        return pointnav_action.actions
+        if HABITAT_BASELINES_AVAILABLE:
+            self.pointnav_prev_actions = pointnav_action.actions.clone()
+            self.pointnav_test_recurrent_hidden_states = (
+                pointnav_action.rnn_hidden_states
+            )
+            return pointnav_action.actions
+        else:
+            self.pointnav_prev_actions = pointnav_action[0].clone()
+            self.pointnav_test_recurrent_hidden_states = pointnav_action[1]
+            return pointnav_action[0]
 
     def reset(self) -> None:
         """
@@ -92,7 +125,9 @@ class WrappedPointNavResNetPolicy:
 
 
 def rho_theta_from_gps_compass_goal(
-    observations: "TensorDict", goal: np.ndarray  # noqa: F821
+    observations: "TensorDict",  # noqa: F821
+    goal: np.ndarray,
+    device: Union[str, torch.device] = "cuda",  # noqa: F821
 ) -> Tensor:
     """
     Calculates polar coordinates (rho, theta) relative to the agent's current position
@@ -109,6 +144,7 @@ def rho_theta_from_gps_compass_goal(
              the agent must turn to the left (CCW from above) from its initial heading to
              reach its current heading.
        goal (np.ndarray): Array of shape (2,) representing the goal position.
+       device (Union[str, torch.device]): The device to use for the tensor.
 
     Returns:
        Tensor: A tensor of shape (2,) representing the polar coordinates (rho, theta).
@@ -120,9 +156,7 @@ def rho_theta_from_gps_compass_goal(
     heading = observations["compass"].squeeze(1).cpu().numpy()[0]
     gps_numpy[1] *= -1  # Flip y-axis to match habitat's coordinate system.
     rho, theta = rho_theta(gps_numpy, heading, goal)
-    rho_theta_tensor = torch.tensor(
-        [rho, theta], device=torch.device("cuda"), dtype=torch.float32
-    )
+    rho_theta_tensor = torch.tensor([rho, theta], device=device, dtype=torch.float32)
 
     return rho_theta_tensor
 
@@ -233,4 +267,17 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     policy = load_pointnav_policy(args.ckpt_path)
-    print(policy)
+    print("Loaded model from checkpoint successfully!")
+    mask = torch.zeros(1, 1, device=torch.device("cuda"), dtype=torch.bool)
+    observations = {
+        "depth": torch.zeros(1, 224, 224, 1, device=torch.device("cuda")),
+        "pointgoal_with_gps_compass": torch.zeros(1, 2, device=torch.device("cuda")),
+    }
+    policy.to(torch.device("cuda"))
+    action = policy.act(
+        observations,
+        torch.zeros(1, 4, 512, device=torch.device("cuda"), dtype=torch.float32),
+        torch.zeros(1, 1, device=torch.device("cuda"), dtype=torch.long),
+        mask,
+    )
+    print("Forward pass successful!")
