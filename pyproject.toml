@@ -33,6 +33,9 @@ habitat = [
     "habitat-baselines == 0.2.420230405",
     "habitat-lab == 0.2.420230405",
 ]
+reality = [
+    "depth_camera_filtering @ git+https://github.com/naokiyokoyama/depth_camera_filtering",
+]
 
 [project.urls]
 "Homepage" = "theaiinstitute.com"
