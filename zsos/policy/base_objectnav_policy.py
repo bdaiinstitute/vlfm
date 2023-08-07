@@ -41,7 +41,7 @@ class TorchActionIDs:
     TURN_RIGHT = torch.tensor([[3]], dtype=torch.long)
 
 
-class SemanticPolicy(BasePolicy):
+class BaseObjectNavPolicy(BasePolicy):
     target_object: str = ""
     camera_height: float = 0.88
     depth_image_shape: Tuple[int, int] = (244, 224)

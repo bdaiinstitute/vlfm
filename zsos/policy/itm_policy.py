@@ -5,12 +5,12 @@ from habitat_baselines.common.tensor_dict import TensorDict
 from torch import Tensor
 
 from zsos.mapping.frontier_map import FrontierMap
-from zsos.policy.semantic_policy import SemanticPolicy
+from zsos.policy.base_objectnav_policy import BaseObjectNavPolicy
 from zsos.vlm.blip2itm import BLIP2ITMClient
 
 
 @baseline_registry.register_policy
-class ITMPolicy(SemanticPolicy):
+class ITMPolicy(BaseObjectNavPolicy):
     def __init__(self, *args, **kwargs):
         super().__init__()
         # VL models
