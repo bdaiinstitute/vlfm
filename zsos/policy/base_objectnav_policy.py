@@ -24,13 +24,6 @@ except ModuleNotFoundError:
         pass
 
 
-class TorchActionIDs:
-    STOP = torch.tensor([[0]], dtype=torch.long)
-    MOVE_FORWARD = torch.tensor([[1]], dtype=torch.long)
-    TURN_LEFT = torch.tensor([[2]], dtype=torch.long)
-    TURN_RIGHT = torch.tensor([[3]], dtype=torch.long)
-
-
 class BaseObjectNavPolicy(BasePolicy):
     target_object: str = ""
     camera_height: float = 0.88
@@ -40,11 +33,12 @@ class BaseObjectNavPolicy(BasePolicy):
     visualize: bool = True
     policy_info: Dict[str, Any] = {}
     id_to_padding: Dict[str, float] = {}
-    # ObjectMap parameters
-    min_depth: float = 0.5
-    max_depth: float = 5.0
-    hfov: float = 79.0
-    proximity_threshold: float = 1.5
+    _stop_action: Tensor = None  # must be set by subclass
+    # ObjectMap parameters; these must be set by subclass
+    min_depth: float = None
+    max_depth: float = None
+    hfov: float = None
+    proximity_threshold: float = None
 
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -109,8 +103,7 @@ class BaseObjectNavPolicy(BasePolicy):
         return pointnav_action, rnn_hidden_states
 
     def _initialize(self) -> Tensor:
-        self.done_initializing = not self.num_steps < 11
-        return TorchActionIDs.TURN_LEFT
+        raise NotImplementedError
 
     def _explore(self, observations: "TensorDict") -> Tensor:
         raise NotImplementedError
@@ -188,7 +181,7 @@ class BaseObjectNavPolicy(BasePolicy):
             self.target_object, 0.0
         )
         if rho_theta[0] < stop_dist and stop:
-            return TorchActionIDs.STOP
+            return self._stop_action
         action = self.pointnav_policy.act(
             obs_pointnav, masks, deterministic=deterministic
         )

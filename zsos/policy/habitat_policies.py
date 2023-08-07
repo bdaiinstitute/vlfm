@@ -25,6 +25,12 @@ class HabitatMixin:
         "bed": 0.3,
         "couch": 0.15,
     }
+    _stop_action: Tensor = TorchActionIDs.STOP
+    # ObjectMap parameters
+    min_depth: float = 0.5
+    max_depth: float = 5.0
+    hfov: float = 79.0
+    proximity_threshold: float = 1.5
 
     def act(
         self: BaseObjectNavPolicy,
