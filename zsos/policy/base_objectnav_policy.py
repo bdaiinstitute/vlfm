@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Tuple, Union
+from typing import Any, Dict, Tuple, Union
 
 import numpy as np
 import torch
@@ -16,24 +16,12 @@ from zsos.vlm.grounding_dino import GroundingDINOClient, ObjectDetections
 
 try:
     from habitat_baselines.common.tensor_dict import TensorDict
-    from habitat_baselines.rl.ppo.policy import PolicyActionData
 
     from zsos.policy.base_policy import BasePolicy
-
-    HABITAT_BASELINES = True
 except ModuleNotFoundError:
 
     class BasePolicy:
         pass
-
-    HABITAT_BASELINES = False
-
-
-ID_TO_NAME = ["chair", "bed", "potted plant", "toilet", "tv", "couch"]
-ID_TO_PADDING = {
-    "bed": 0.2,
-    "couch": 0.15,
-}
 
 
 class TorchActionIDs:
@@ -50,6 +38,8 @@ class BaseObjectNavPolicy(BasePolicy):
     det_conf_threshold: float = 0.50
     pointnav_stop_radius: float = 0.85
     visualize: bool = True
+    policy_info: Dict[str, Any] = {}
+    id_to_padding: Dict[str, float] = {}
     # ObjectMap parameters
     min_depth: float = 0.5
     max_depth: float = 5.0
@@ -83,7 +73,7 @@ class BaseObjectNavPolicy(BasePolicy):
 
     def act(
         self, observations, rnn_hidden_states, prev_actions, masks, deterministic=False
-    ) -> Union["PolicyActionData", Tensor]:
+    ) -> Tuple[Tensor, Tensor]:
         """
         Starts the episode by 'initializing' and allowing robot to get its bearings
         (e.g., spinning in place to get a good view of the scene).
@@ -94,13 +84,9 @@ class BaseObjectNavPolicy(BasePolicy):
         assert masks.shape[1] == 1, "Currently only supporting one env at a time"
         if masks[0] == 0:
             self._reset()
-            object_goal = observations["objectgoal"][0].item()
-            if isinstance(object_goal, str):
-                self.target_object = object_goal
-            elif isinstance(object_goal, int):
-                self.target_object = ID_TO_NAME[object_goal]
-            else:
-                raise ValueError("Invalid object goal")
+            self.target_object = observations["objectgoal"]
+
+        self.policy_info = {}
 
         rgb, depth, tf_camera_to_episodic = self._get_detection_camera_info(
             observations
@@ -116,23 +102,17 @@ class BaseObjectNavPolicy(BasePolicy):
             )
         else:
             pointnav_action = self._explore(observations)
-        self.num_steps += 1
-        if HABITAT_BASELINES:
-            action_data = PolicyActionData(
-                actions=pointnav_action,
-                rnn_hidden_states=rnn_hidden_states,
-                policy_info=self._get_policy_info(observations, detections),
-            )
 
-            return action_data
-        else:
-            return pointnav_action  # just return the action
+        self.policy_info = self._get_policy_info(observations, detections)
+        self.num_steps += 1
+
+        return pointnav_action, rnn_hidden_states
 
     def _initialize(self) -> Tensor:
         self.done_initializing = not self.num_steps < 11
         return TorchActionIDs.TURN_LEFT
 
-    def _explore(self, observations: "TensorDict") -> Tensor:  # noqa: F821
+    def _explore(self, observations: "TensorDict") -> Tensor:
         raise NotImplementedError
 
     def _get_target_object_location(self) -> Union[None, np.ndarray]:
@@ -144,31 +124,27 @@ class BaseObjectNavPolicy(BasePolicy):
 
     def _get_policy_info(
         self,
-        observations: "TensorDict",  # noqa: F821
+        observations: "TensorDict",
         detections: ObjectDetections,
-    ) -> List[Dict]:
-        policy_info = []
-        num_envs = observations["rgb"].shape[0]
+    ) -> Dict[str, Any]:
         seen_objects = set(i.class_name for i in self.object_map.map)
         seen_objects_str = ", ".join(seen_objects)
-        for env_idx in range(num_envs):
-            curr_info = {
-                "target_object": "target: " + self.target_object,
-                "visualized_detections": detections.annotated_frame,
-                "seen_objects": seen_objects_str,
-                "gps": str(observations["gps"][0].cpu().numpy()),
-                "yaw": np.rad2deg(observations["compass"][0].item()),
-                # don't render these on egocentric images when making videos:
-                "render_below_images": [
-                    "target_object",
-                    "llm_response",
-                    "seen_objects",
-                ],
-            }
-            if "DEBUG_INFO" in os.environ:
-                curr_info["render_below_images"].append("debug")
-                curr_info["debug"] = "debug: " + os.environ["DEBUG_INFO"]
-            policy_info.append(curr_info)
+        policy_info = {
+            "target_object": "target: " + self.target_object,
+            "visualized_detections": detections.annotated_frame,
+            "seen_objects": seen_objects_str,
+            "gps": str(observations["gps"][0].cpu().numpy()),
+            "yaw": np.rad2deg(observations["compass"][0].item()),
+            # don't render these on egocentric images when making videos:
+            "render_below_images": [
+                "target_object",
+                "llm_response",
+                "seen_objects",
+            ],
+        }
+        if "DEBUG_INFO" in os.environ:
+            policy_info["render_below_images"].append("debug")
+            policy_info["debug"] = "debug: " + os.environ["DEBUG_INFO"]
 
         return policy_info
 
@@ -180,7 +156,7 @@ class BaseObjectNavPolicy(BasePolicy):
 
     def _pointnav(
         self,
-        observations: "TensorDict",  # noqa: F821
+        observations: "TensorDict",
         goal: np.ndarray,
         deterministic=False,
         stop=False,
@@ -208,7 +184,7 @@ class BaseObjectNavPolicy(BasePolicy):
             ),
             "pointgoal_with_gps_compass": rho_theta.unsqueeze(0),
         }
-        stop_dist = self.pointnav_stop_radius + ID_TO_PADDING.get(
+        stop_dist = self.pointnav_stop_radius + self.id_to_padding.get(
             self.target_object, 0.0
         )
         if rho_theta[0] < stop_dist and stop:

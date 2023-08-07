@@ -8,13 +8,11 @@ from zsos.policy.base_objectnav_policy import BaseObjectNavPolicy
 from zsos.vlm.blip2itm import BLIP2ITMClient
 
 try:
-    from habitat_baselines.common.baseline_registry import baseline_registry
     from habitat_baselines.common.tensor_dict import TensorDict
 except ModuleNotFoundError:
     pass
 
 
-@baseline_registry.register_policy
 class ITMPolicy(BaseObjectNavPolicy):
     def __init__(self, *args, **kwargs):
         super().__init__()
