@@ -1,15 +1,23 @@
-from typing import Any, Dict, Union
+from typing import Dict, Tuple, Union
 
 import numpy as np
 import torch
 from gym import spaces
 from gym.spaces import Dict as SpaceDict
 from gym.spaces import Discrete
+from torch import Tensor
 
 from zsos.utils.geometry_utils import rho_theta
 
 try:
+    from habitat_baselines.common.tensor_dict import TensorDict
     from habitat_baselines.rl.ddppo.policy import PointNavResNetPolicy
+    from habitat_baselines.rl.ppo.policy import PolicyActionData
+
+    class PointNavResNetTensorOutputPolicy(PointNavResNetPolicy):
+        def act(self, *args, **kwargs) -> Tuple[Tensor, Tensor]:
+            policy_actions: "PolicyActionData" = super().act(*args, **kwargs)
+            return policy_actions.actions, policy_actions.rnn_hidden_states
 
     HABITAT_BASELINES_AVAILABLE = True
 except ModuleNotFoundError:
@@ -17,9 +25,10 @@ except ModuleNotFoundError:
         PointNavResNetPolicy,
     )
 
-    HABITAT_BASELINES_AVAILABLE = False
+    class PointNavResNetTensorOutputPolicy(PointNavResNetPolicy):
+        pass
 
-from torch import Tensor
+    HABITAT_BASELINES_AVAILABLE = False
 
 
 class WrappedPointNavResNetPolicy:
@@ -61,13 +70,11 @@ class WrappedPointNavResNetPolicy:
 
     def act(
         self,
-        observations: Union["TensorDict", Dict],  # noqa: F821
-        masks: torch.Tensor,
+        observations: Union["TensorDict", Dict],
+        masks: Tensor,
         deterministic: bool = False,
     ) -> Tensor:
-        """
-        Determines the best action to take towards the given (rho, theta) based on
-        depth vision.
+        """Infers action to take towards the given (rho, theta) based on depth vision.
 
         Args:
             observations (Union["TensorDict", Dict]): A dictionary containing (at least)
@@ -81,40 +88,20 @@ class WrappedPointNavResNetPolicy:
             deterministic (bool): Whether to select a logit action deterministically.
 
         Returns:
-            Tensor (torch.dtype.long): A tensor denoting the action to take:
-                (0: STOP, 1: FWD, 2: LEFT, 3: RIGHT).
+            Tensor: A tensor denoting the action to take.
         """
         # Convert numpy arrays to torch tensors for each dict value
-        for k, v in observations.items():
-            if isinstance(v, np.ndarray):
-                observations[k] = torch.from_numpy(v).to(
-                    device=self.device, dtype=torch.float32
-                )
-                if k == "depth" and len(observations[k].shape) == 3:
-                    observations[k] = observations[k].unsqueeze(0)
-                elif (
-                    k == "pointgoal_with_gps_compass"
-                    and len(observations[k].shape) == 1
-                ):
-                    observations[k] = observations[k].unsqueeze(0)
-        pointnav_action = self.policy.act(
+        observations = move_obs_to_device(observations, self.device)
+        pointnav_action, rnn_hidden_states = self.policy.act(
             observations,
             self.pointnav_test_recurrent_hidden_states,
             self.pointnav_prev_actions,
             masks,
             deterministic=deterministic,
         )
-
-        if HABITAT_BASELINES_AVAILABLE:
-            self.pointnav_prev_actions = pointnav_action.actions.clone()
-            self.pointnav_test_recurrent_hidden_states = (
-                pointnav_action.rnn_hidden_states
-            )
-            return pointnav_action.actions
-        else:
-            self.pointnav_prev_actions = pointnav_action[0].clone()
-            self.pointnav_test_recurrent_hidden_states = pointnav_action[1]
-            return pointnav_action[0]
+        self.pointnav_prev_actions = pointnav_action.clone()
+        self.pointnav_test_recurrent_hidden_states = rnn_hidden_states
+        return pointnav_action
 
     def reset(self) -> None:
         """
@@ -127,14 +114,13 @@ class WrappedPointNavResNetPolicy:
 
 
 def rho_theta_from_gps_compass_goal(
-    observations: "TensorDict",  # noqa: F821
+    observations: "TensorDict",
     goal: np.ndarray,
-    device: Union[str, torch.device] = "cuda",  # noqa: F821
+    device: Union[str, torch.device] = "cuda",
 ) -> Tensor:
-    """
-    Calculates polar coordinates (rho, theta) relative to the agent's current position
-    and heading towards a given goal position using GPS and compass observations given
-    in Habitat format from the observations batch.
+    """Calculates polar coordinates (rho, theta) relative to the agent's current
+    position and heading towards a given goal position using GPS and compass
+    observations given in Habitat format from the observations batch.
 
     Args:
        observations ("TensorDict"): A dictionary containing observations from the agent.
@@ -163,21 +149,17 @@ def rho_theta_from_gps_compass_goal(
     return rho_theta_tensor
 
 
-def load_pointnav_policy(file_path: str) -> PointNavResNetPolicy:
-    """
-    Loads a PointNavResNetPolicy policy from a .pth file.
+def load_pointnav_policy(file_path: str) -> PointNavResNetTensorOutputPolicy:
+    """Loads a PointNavResNetPolicy policy from a .pth file.
 
     Args:
-        file_path (str): The path to the policy file.
+        file_path (str): The path to the trained weights of the pointnav policy.
     Returns:
-        NetPolicy: The policy.
+        Union[PointNavResNetTensorOutputPolicy, "PointNavResNetPolicyNoHabitat"]: The
+            policy.
     """
     ckpt_dict = torch.load(file_path, map_location="cpu")
-    pointnav_policy = _generate_untrained_policy(ckpt_dict)
-    return pointnav_policy
 
-
-def _generate_untrained_policy(ckpt_dict: Any) -> PointNavResNetPolicy:
     if HABITAT_BASELINES_AVAILABLE:
         obs_space = SpaceDict(
             {
@@ -193,16 +175,16 @@ def _generate_untrained_policy(ckpt_dict: Any) -> PointNavResNetPolicy:
             }
         )
         action_space = Discrete(4)
-        policy = PointNavResNetPolicy.from_config(
+        pointnav_policy = PointNavResNetTensorOutputPolicy.from_config(
             ckpt_dict["config"], obs_space, action_space
         )
-        policy.load_state_dict(ckpt_dict["state_dict"])
-        return policy
+        pointnav_policy.load_state_dict(ckpt_dict["state_dict"])
+        return pointnav_policy
 
     else:
-        policy = PointNavResNetPolicy()
-        current_state_dict = policy.state_dict()
-        policy.load_state_dict(
+        pointnav_policy = PointNavResNetTensorOutputPolicy()
+        current_state_dict = pointnav_policy.state_dict()
+        pointnav_policy.load_state_dict(
             {k: v for k, v in ckpt_dict.items() if k in current_state_dict}
         )
         unused_keys = [k for k in ckpt_dict.keys() if k not in current_state_dict]
@@ -210,7 +192,32 @@ def _generate_untrained_policy(ckpt_dict: Any) -> PointNavResNetPolicy:
             "The following unused keys were not loaded when loading the pointnav"
             f" policy: {unused_keys}"
         )
-        return policy
+        return pointnav_policy
+
+
+def move_obs_to_device(
+    observations: Dict[str, Union[Tensor, np.ndarray]],
+    device: torch.device,
+    unsqueeze: bool = False,
+) -> Dict[str, Tensor]:
+    """Moves observations to the given device, converts numpy arrays to torch tensors.
+
+    Args:
+        observations (Dict[str, Union[Tensor, np.ndarray]]): The observations.
+        device (torch.device): The device to move the observations to.
+        unsqueeze (bool): Whether to unsqueeze the tensors or not.
+    Returns:
+        Dict[str, Tensor]: The observations on the given device as torch tensors.
+    """
+    # Convert numpy arrays to torch tensors for each dict value
+    for k, v in observations.items():
+        if isinstance(v, np.ndarray):
+            tensor_dtype = torch.uint8 if v.dtype == np.uint8 else torch.float32
+            observations[k] = torch.from_numpy(v).to(device=device, dtype=tensor_dtype)
+            if unsqueeze:
+                observations[k] = observations[k].unsqueeze(0)
+
+    return observations
 
 
 if __name__ == "__main__":
