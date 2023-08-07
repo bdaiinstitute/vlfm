@@ -7,12 +7,11 @@ import numpy as np
 def rho_theta(
     curr_pos: np.ndarray, curr_heading: float, curr_goal: np.ndarray
 ) -> Tuple[float, float]:
-    """
-    Calculates polar coordinates (rho, theta) relative to a given position and heading
-    to a given goal position. 'rho' is the distance from the agent to the goal, and
-    theta is how many radians the agent must turn (to the left, CCW from above) to face
-    the goal. Coordinates are in (x, y), where x is the distance forward/backwards, and
-    y is the distance to the left or right (right is negative)
+    """Calculates polar coordinates (rho, theta) relative to a given position and
+    heading to a given goal position. 'rho' is the distance from the agent to the goal,
+    and theta is how many radians the agent must turn (to the left, CCW from above) to
+    face the goal. Coordinates are in (x, y), where x is the distance forward/backwards,
+    and y is the distance to the left or right (right is negative)
 
     Args:
         curr_pos (np.ndarray): Array of shape (2,) representing the current position.
@@ -25,12 +24,7 @@ def rho_theta(
         Tuple[float, float]: A tuple of floats representing the polar coordinates
             (rho, theta).
     """
-    rotation_matrix = np.array(
-        [
-            [np.cos(-curr_heading), -np.sin(-curr_heading)],
-            [np.sin(-curr_heading), np.cos(-curr_heading)],
-        ]
-    )
+    rotation_matrix = get_rotation_matrix(-curr_heading, ndims=2)
     local_goal = curr_goal - curr_pos
     local_goal = rotation_matrix @ local_goal
 
@@ -40,9 +34,30 @@ def rho_theta(
     return rho, theta
 
 
+def get_rotation_matrix(angle: float, ndims=2) -> np.ndarray:
+    """Returns a 2x2 or 3x3 rotation matrix for a given angle; if 3x3, the z-axis is
+    rotated."""
+    if ndims == 2:
+        return np.array(
+            [
+                [np.cos(angle), -np.sin(angle)],
+                [np.sin(angle), np.cos(angle)],
+            ]
+        )
+    elif ndims == 3:
+        return np.array(
+            [
+                [np.cos(angle), -np.sin(angle), 0],
+                [np.sin(angle), np.cos(angle), 0],
+                [0, 0, 1],
+            ]
+        )
+    else:
+        raise ValueError("ndims must be 2 or 3")
+
+
 def wrap_heading(theta: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
-    """
-    Wraps given angle to be between -pi and pi.
+    """Wraps given angle to be between -pi and pi.
 
     Args:
         theta (float): The angle in radians.
@@ -53,9 +68,8 @@ def wrap_heading(theta: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
 
 
 def calculate_vfov(hfov: float, width: int, height: int) -> float:
-    """
-    Calculates the vertical field of view (VFOV) based on the horizontal field of view
-    (HFOV), width, and height of the image sensor.
+    """Calculates the vertical field of view (VFOV) based on the horizontal field of
+    view (HFOV), width, and height of the image sensor.
 
     Args:
         hfov (float): The HFOV in radians.
@@ -86,8 +100,7 @@ def within_fov_cone(
     cone_range: float,
     point: np.ndarray,
 ) -> bool:
-    """
-    Checks if a point is within a cone of a given origin, angle, fov, and range.
+    """Checks if a point is within a cone of a given origin, angle, fov, and range.
 
     Args:
         cone_origin (np.ndarray): The origin of the cone.
@@ -108,8 +121,7 @@ def within_fov_cone(
 def convert_to_global_frame(
     agent_pos: np.ndarray, agent_yaw: float, local_pos: np.ndarray
 ) -> np.ndarray:
-    """
-    Converts a given position from the agent's local frame to the global frame.
+    """Converts a given position from the agent's local frame to the global frame.
 
     Args:
         agent_pos (np.ndarray): A 3D vector representing the agent's position in their
@@ -121,22 +133,52 @@ def convert_to_global_frame(
     Returns:
         A 3D numpy array representing the position in the global frame.
     """
+    # Append a homogeneous coordinate of 1 to the local position vector
+    local_pos_homogeneous = np.append(local_pos, 1)
+
     # Construct the homogeneous transformation matrix
-    x, y, z = agent_pos
+    transformation_matrix = xyz_yaw_to_tf_matrix(agent_pos, agent_yaw)
+
+    # Perform the transformation using matrix multiplication
+    global_pos_homogeneous = transformation_matrix.dot(local_pos_homogeneous)
+    global_pos_homogeneous = global_pos_homogeneous[:3] / global_pos_homogeneous[-1]
+
+    return global_pos_homogeneous
+
+
+def extract_yaw(matrix: np.ndarray) -> float:
+    """Extract the yaw angle from a 4x4 transformation matrix.
+
+    Args:
+        matrix (np.ndarray): A 4x4 transformation matrix.
+    Returns:
+        float: The yaw angle in radians.
+    """
+    assert matrix.shape == (4, 4), "The input matrix must be 4x4"
+    rotation_matrix = matrix[:3, :3]
+
+    # Compute the yaw angle
+    yaw = np.arctan2(rotation_matrix[1, 0], rotation_matrix[0, 0])
+
+    return yaw
+
+
+def xyz_yaw_to_tf_matrix(xyz: np.ndarray, yaw: float) -> np.ndarray:
+    """Converts a given position and yaw angle to a 4x4 transformation matrix.
+
+    Args:
+        xyz (np.ndarray): A 3D vector representing the position.
+        yaw (float): The yaw angle in radians.
+    Returns:
+        np.ndarray: A 4x4 transformation matrix.
+    """
+    x, y, z = xyz
     transformation_matrix = np.array(
         [
-            [np.cos(agent_yaw), -np.sin(agent_yaw), 0, x],
-            [np.sin(agent_yaw), np.cos(agent_yaw), 0, y],
+            [np.cos(yaw), -np.sin(yaw), 0, x],
+            [np.sin(yaw), np.cos(yaw), 0, y],
             [0, 0, 1, z],
             [0, 0, 0, 1],
         ]
     )
-
-    # Append a homogeneous coordinate of 1 to the local position vector
-    local_pos_homogeneous = np.append(local_pos, 1)
-
-    # Perform the transformation using matrix multiplication
-    global_pos_homogeneous = transformation_matrix.dot(local_pos_homogeneous)
-    global_pos_homogeneous = global_pos_homogeneous / global_pos_homogeneous[-1]
-
-    return global_pos_homogeneous[:3]
+    return transformation_matrix
