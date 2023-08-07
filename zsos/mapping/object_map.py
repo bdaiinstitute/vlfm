@@ -20,6 +20,9 @@ class Object:
         self.too_far = too_far
         self.explored = False
 
+    def __repr__(self):
+        return f"{self.class_name} at {self.location} with confidence {self.confidence}"
+
 
 class ObjectMap:
     """
@@ -29,27 +32,27 @@ class ObjectMap:
     """
 
     map: List[Object] = []
+    image_width: int = None  # set upon execution of update_map method
+    image_height: int = None  # set upon execution of update_map method
 
     def __init__(
         self,
         min_depth: float = 0.5,
         max_depth: float = 5.0,
         hfov: float = 79.0,
-        image_width: int = 640,
-        image_height: int = 480,
+        proximity_threshold: float = 1.5,
     ) -> None:
         self.min_depth = min_depth
         self.max_depth = max_depth
         self.hfov = np.deg2rad(hfov)
-        self.image_width = image_width
-        self.image_height = image_height
-        self.vfov = calculate_vfov(self.hfov, image_width, image_height)
+        self.proximity_threshold = proximity_threshold
         self.camera_history = []
 
+    @property
+    def vfov(self) -> float:
+        return calculate_vfov(self.hfov, self.image_width, self.image_height)
+
     def reset(self) -> None:
-        """
-        Resets the object map.
-        """
         self.map = []
         self.camera_history = []
 
@@ -62,9 +65,8 @@ class ObjectMap:
         agent_camera_yaw: float,
         confidence: float,
     ) -> None:
-        """
-        Updates the object map with the latest information from the agent.
-        """
+        """Updates the object map with the latest information from the agent."""
+        self.image_height, self.image_width = depth_img.shape[:2]
         location, too_far = self._estimate_object_location(
             bbox, depth_img, agent_camera_position, agent_camera_yaw
         )
@@ -72,10 +74,9 @@ class ObjectMap:
         self._add_object(new_object)
 
     def get_best_object(self, target_class: str) -> np.ndarray:
-        """
-        Returns the closest object to the agent that matches the given object name. It
-        will not go towards objects that are too far away, unless there are no other
-        objects of the same class.
+        """Returns the closest object to the agent that matches the given object name.
+        It will ignore any detections of the target class if they are too far away,
+        unless all the detections we have of the target class are too far away.
 
         Args:
             target_class (str): The name of the object class to search for.

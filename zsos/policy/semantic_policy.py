@@ -48,6 +48,10 @@ class SemanticPolicy(BasePolicy):
     det_conf_threshold: float = 0.50
     pointnav_stop_radius: float = 0.85
     visualize: bool = True
+    # ObjectMap parameters
+    min_depth: float = 0.5
+    max_depth: float = 5.0
+    hfov: float = 79.0
 
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -56,7 +60,7 @@ class SemanticPolicy(BasePolicy):
             os.environ["POINTNAV_POLICY_PATH"]
         )
         self.object_map: ObjectMap = ObjectMap(
-            min_depth=0.5, max_depth=5.0, hfov=79.0, image_width=640, image_height=480
+            min_depth=self.min_depth, max_depth=self.max_depth, hfov=self.hfov
         )
 
         self.num_steps = 0
