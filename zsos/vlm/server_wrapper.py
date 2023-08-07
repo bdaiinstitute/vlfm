@@ -49,7 +49,7 @@ def send_request(url, **kwargs) -> dict:
     payload = {}
     for k, v in kwargs.items():
         if isinstance(v, np.ndarray):
-            payload[k] = image_to_str(v, quality=kwargs.get("quality", 90))
+            payload[k] = image_to_str(v, quality=kwargs.get("quality", 100))
         else:
             payload[k] = v
 

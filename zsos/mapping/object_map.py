@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 
 from zsos.llm.prompts import get_textual_map_prompt, numbered_list, unnumbered_list
-from zsos.policy.utils.pointnav_policy import wrap_heading
+from zsos.utils.geometry_utils import wrap_heading
 
 
 class Object:
@@ -16,6 +16,9 @@ class Object:
         self.too_far = too_far
         self.explored = False
 
+    def __repr__(self):
+        return f"{self.class_name} at {self.location} with confidence {self.confidence}"
+
 
 class ObjectMap:
     """
@@ -25,27 +28,27 @@ class ObjectMap:
     """
 
     map: List[Object] = []
+    image_width: int = None  # set upon execution of update_map method
+    image_height: int = None  # set upon execution of update_map method
 
     def __init__(
         self,
         min_depth: float = 0.5,
         max_depth: float = 5.0,
         hfov: float = 79.0,
-        image_width: int = 640,
-        image_height: int = 480,
+        proximity_threshold: float = 1.5,
     ) -> None:
         self.min_depth = min_depth
         self.max_depth = max_depth
         self.hfov = np.deg2rad(hfov)
-        self.image_width = image_width
-        self.image_height = image_height
-        self.vfov = calculate_vfov(self.hfov, image_width, image_height)
+        self.proximity_threshold = proximity_threshold
         self.camera_history = []
 
+    @property
+    def vfov(self) -> float:
+        return calculate_vfov(self.hfov, self.image_width, self.image_height)
+
     def reset(self) -> None:
-        """
-        Resets the object map.
-        """
         self.map = []
         self.camera_history = []
 
@@ -54,15 +57,17 @@ class ObjectMap:
         object_name: str,
         bbox: np.ndarray,
         depth_img: np.ndarray,
-        agent_camera_position: np.ndarray,
-        agent_camera_yaw: float,
+        tf_camera_to_episodic: np.ndarray,
         confidence: float,
     ) -> None:
         """
         Updates the object map with the latest information from the agent.
         """
+        print("Class name: ", object_name)
+        self.image_height = depth_img.shape[0]
+        self.image_width = depth_img.shape[1]
         location, too_far = self._estimate_object_location(
-            bbox, depth_img, agent_camera_position, agent_camera_yaw
+            bbox, depth_img, tf_camera_to_episodic
         )
         new_object = Object(object_name, location, confidence, too_far)
         self._add_object(new_object)
@@ -70,8 +75,8 @@ class ObjectMap:
     def get_best_object(self, target_class: str) -> np.ndarray:
         """
         Returns the closest object to the agent that matches the given object name. It
-        will not go towards objects that are too far away, unless there are no other
-        objects of the same class.
+        will ignore any detections of the target class if they are too far away, unless
+        all the detections we have of the target class are too far away.
 
         Args:
             target_class (str): The name of the object class to search for.
@@ -100,15 +105,18 @@ class ObjectMap:
         return best_loc
 
     def update_explored(
-        self, camera_coordinates: np.ndarray, camera_yaw: float
+        self, tf_camera_to_episodic: np.ndarray
     ) -> None:
+        camera_coordinates = tf_camera_to_episodic[:3, 3] / tf_camera_to_episodic[3, 3]
+        camera_yaw = extract_yaw(tf_camera_to_episodic)
+
         self.camera_history.append((camera_coordinates, camera_yaw))
         for obj in self.map:
             if within_fov_cone(
                 camera_coordinates,
                 camera_yaw,
                 self.hfov,
-                self.max_depth,
+                self.max_depth / 2,
                 obj.location,
             ):
                 obj.explored = True
@@ -208,8 +216,7 @@ class ObjectMap:
         self,
         bounding_box: np.ndarray,
         depth_image: np.ndarray,
-        camera_coordinates: np.ndarray,
-        camera_yaw: float,
+        tf_camera_to_episodic: np.ndarray,
     ) -> Tuple[np.ndarray, bool]:
         """
         Estimates the location of a detected object in the global coordinate frame using
@@ -220,9 +227,8 @@ class ObjectMap:
                 object in the image [x_min, y_min, x_max, y_max]. These coordinates are
                 normalized to the range [0, 1].
             depth_image (np.ndarray): The depth image captured by the RGBD camera.
-            camera_coordinates (np.ndarray): The global coordinates of the camera
-                [x, y, z].
-            camera_yaw (float): The yaw angle of the camera in radians.
+            tf_camera_to_episodic (np.ndarray): The transformation matrix from the camera
+                coordinate frame to the episodic coordinate frame.
 
         Returns:
             np.ndarray: The estimated 3D location of the detected object in the global
@@ -234,6 +240,8 @@ class ObjectMap:
         pixel_x, pixel_y, depth_value = self._get_object_depth(
             depth_image, bounding_box
         )
+
+        print(f"Depth value: {depth_value}")
         too_far = depth_value >= self.max_depth
         object_coord_agent = calculate_3d_coordinates(
             self.hfov,
@@ -245,9 +253,9 @@ class ObjectMap:
             vfov=self.vfov,
         )
         # Yaw from compass sensor must be negated to work properly
-        object_coord_global = convert_to_global_frame(
-            camera_coordinates, camera_yaw, object_coord_agent
-        )
+        object_coord_agent = np.append(object_coord_agent, 1)
+        object_coord_global = tf_camera_to_episodic @ object_coord_agent
+        object_coord_global = object_coord_global[:3] / object_coord_global[3]
 
         return object_coord_global, too_far
 
@@ -306,13 +314,12 @@ class ObjectMap:
         """
 
         updated_list = []
-        proximity_threshold = 1.5
 
         for obj in self.map:
             keep = True
             same_name_and_close = (obj.class_name == proposed_object.class_name) and (
                 np.linalg.norm(obj.location - proposed_object.location)
-                <= proximity_threshold
+                <= self.proximity_threshold
             )
 
             if same_name_and_close:
@@ -422,15 +429,7 @@ def convert_to_global_frame(
         A 3D numpy array representing the position in the global frame.
     """
     # Construct the homogeneous transformation matrix
-    x, y, z = agent_pos
-    transformation_matrix = np.array(
-        [
-            [np.cos(agent_yaw), -np.sin(agent_yaw), 0, x],
-            [np.sin(agent_yaw), np.cos(agent_yaw), 0, y],
-            [0, 0, 1, z],
-            [0, 0, 0, 1],
-        ]
-    )
+    transformation_matrix = xyz_yaw_to_tf_matrix(agent_pos, agent_yaw)
 
     # Append a homogeneous coordinate of 1 to the local position vector
     local_pos_homogeneous = np.append(local_pos, 1)
@@ -441,6 +440,42 @@ def convert_to_global_frame(
 
     return global_pos_homogeneous[:3]
 
+
+def xyz_yaw_to_tf_matrix(xyz: np.ndarray, yaw: float) -> np.ndarray:
+    x, y, z = xyz
+    transformation_matrix = np.array(
+        [
+            [np.cos(yaw), -np.sin(yaw), 0, x],
+            [np.sin(yaw), np.cos(yaw), 0, y],
+            [0, 0, 1, z],
+            [0, 0, 0, 1],
+        ]
+    )
+    return transformation_matrix
+
+def extract_yaw(matrix):
+    """
+    Extract the yaw angle from a 4x4 transformation matrix.
+
+    Parameters:
+    matrix (numpy.ndarray): A 4x4 transformation matrix.
+
+    Returns:
+    float: The yaw angle in radians.
+    """
+    # Ensure the matrix is a numpy array
+    matrix = np.array(matrix)
+
+    # Check that the input is a 4x4 matrix
+    assert matrix.shape == (4, 4), "The input matrix must be 4x4"
+
+    # Extract the rotation matrix
+    R = matrix[:3, :3]
+
+    # Compute the yaw angle
+    yaw = np.arctan2(R[1, 0], R[0, 0])
+
+    return yaw
 
 def within_fov_cone(
     cone_origin: np.ndarray,

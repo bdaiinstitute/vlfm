@@ -12,12 +12,7 @@ from omegaconf import DictConfig
 import frontier_exploration  # noqa
 from habitat import get_config  # noqa
 import zsos.obs_transformers.resize  # noqa: F401
-from zsos.policy import (  # noqa: F401
-    base_policy,
-    itm_policy,
-    llm_policy,
-    oracle_fbe_policy,
-)
+from zsos.policy import habitat_policies  # noqa: F401
 
 
 @hydra.main(

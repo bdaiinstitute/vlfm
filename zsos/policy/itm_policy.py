@@ -1,6 +1,5 @@
 import os
 
-from habitat_baselines.common.baseline_registry import baseline_registry
 from habitat_baselines.common.tensor_dict import TensorDict
 from torch import Tensor
 
@@ -9,11 +8,9 @@ from zsos.policy.semantic_policy import SemanticPolicy
 from zsos.vlm.blip2itm import BLIP2ITMClient
 
 
-@baseline_registry.register_policy
 class ITMPolicy(SemanticPolicy):
     def __init__(self, *args, **kwargs):
         super().__init__()
-        # VL models
         self.itm = BLIP2ITMClient()
         self.frontier_map: FrontierMap = FrontierMap()
 
@@ -21,7 +18,7 @@ class ITMPolicy(SemanticPolicy):
         super()._reset()
         self.frontier_map.reset()
 
-    def _explore(self, observations: TensorDict) -> Tensor:
+    def _explore(self, observations: "TensorDict") -> Tensor:  # noqa: F821
         frontiers = observations["frontier_sensor"][0].cpu().numpy()
         rgb = observations["rgb"][0].cpu().numpy()
         text = f"Seems like there is a {self.target_object} ahead."

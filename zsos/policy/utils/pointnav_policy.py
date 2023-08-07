@@ -1,10 +1,12 @@
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Union
 
 import numpy as np
 import torch
 from gym import spaces
 from gym.spaces import Dict as SpaceDict
 from gym.spaces import Discrete
+
+from zsos.utils.geometry_utils import rho_theta
 
 try:
     from habitat_baselines.rl.ddppo.policy import PointNavResNetPolicy
@@ -24,7 +26,7 @@ class WrappedPointNavResNetPolicy:
     """
     Wrapper for the PointNavResNetPolicy that allows for easier usage, however it can
     only handle one environment at a time. Automatically updates the hidden state
-    and previous action for the policy.
+    and previous action for the policy, and assumes torch.inference_mode() is True.
     """
 
     def __init__(
@@ -60,7 +62,7 @@ class WrappedPointNavResNetPolicy:
     def act(
         self,
         observations: Union["TensorDict", Dict],  # noqa: F821
-        masks: torch.Tensor,
+        masks: Tensor,
         deterministic: bool = False,
     ) -> Tensor:
         """
@@ -82,37 +84,32 @@ class WrappedPointNavResNetPolicy:
             Tensor (torch.dtype.long): A tensor denoting the action to take:
                 (0: STOP, 1: FWD, 2: LEFT, 3: RIGHT).
         """
-        # Convert numpy arrays to torch tensors for each dict value
-        for k, v in observations.items():
-            if isinstance(v, np.ndarray):
-                observations[k] = torch.from_numpy(v).to(
-                    device=self.device, dtype=torch.float32
-                )
-                if k == "depth" and len(observations[k].shape) == 3:
-                    observations[k] = observations[k].unsqueeze(0)
-                elif (
-                    k == "pointgoal_with_gps_compass"
-                    and len(observations[k].shape) == 1
-                ):
-                    observations[k] = observations[k].unsqueeze(0)
-        pointnav_action = self.policy.act(
-            observations,
-            self.pointnav_test_recurrent_hidden_states,
-            self.pointnav_prev_actions,
-            masks,
-            deterministic=deterministic,
-        )
+        with torch.inference_mode():
+            # Convert numpy arrays to torch tensors for each dict value if necessary
+            observations = move_obs_to_device(observations, self.device)
 
-        if HABITAT_BASELINES_AVAILABLE:
-            self.pointnav_prev_actions = pointnav_action.actions.clone()
-            self.pointnav_test_recurrent_hidden_states = (
-                pointnav_action.rnn_hidden_states
+            pointnav_action = self.policy.act(
+                observations,
+                self.pointnav_test_recurrent_hidden_states,
+                self.pointnav_prev_actions,
+                masks,
+                deterministic=deterministic,
             )
-            return pointnav_action.actions
-        else:
-            self.pointnav_prev_actions = pointnav_action[0].clone()
-            self.pointnav_test_recurrent_hidden_states = pointnav_action[1]
-            return pointnav_action[0]
+
+            if HABITAT_BASELINES_AVAILABLE:
+                self.pointnav_prev_actions = pointnav_action.actions.clone()
+                self.pointnav_test_recurrent_hidden_states = (
+                    pointnav_action.rnn_hidden_states
+                )
+                return pointnav_action.actions
+            else:
+                self.pointnav_prev_actions = pointnav_action[0].clone()
+                self.pointnav_test_recurrent_hidden_states = pointnav_action[1]
+                angular_action, linear_action = pointnav_action[0][0]
+                return {
+                    "angular_action": angular_action.cpu().numpy(),
+                    "linear_action": linear_action.cpu().numpy(),
+                }
 
     def reset(self) -> None:
         """
@@ -141,8 +138,8 @@ def rho_theta_from_gps_compass_goal(
              GPS coordinates of the agent.
            - "compass" (Tensor): Tensor of shape (batch_size, 1) representing
              the compass heading of the agent in radians. It represents how many radians
-             the agent must turn to the left (CCW from above) from its initial heading to
-             reach its current heading.
+             the agent must turn to the left (CCW from above) from its initial heading
+             to reach its current heading.
        goal (np.ndarray): Array of shape (2,) representing the goal position.
        device (Union[str, torch.device]): The device to use for the tensor.
 
@@ -159,42 +156,6 @@ def rho_theta_from_gps_compass_goal(
     rho_theta_tensor = torch.tensor([rho, theta], device=device, dtype=torch.float32)
 
     return rho_theta_tensor
-
-
-def rho_theta(
-    curr_pos: np.ndarray, curr_heading: float, curr_goal: np.ndarray
-) -> Tuple[float, float]:
-    """
-    Calculates polar coordinates (rho, theta) relative to a given position and heading
-    to a given goal position. 'rho' is the distance from the agent to the goal, and
-    theta is how many radians the agent must turn (to the left, CCW from above) to face
-    the goal. Coordinates are in (x, y), where x is the distance forward/backwards, and
-    y is the distance to the left or right (right is negative)
-
-    Args:
-        curr_pos (np.ndarray): Array of shape (2,) representing the current position.
-        curr_heading (float): The current heading, in radians. It represents how many
-            radians  the agent must turn to the left (CCW from above) from its initial
-            heading to reach its current heading.
-        curr_goal (np.ndarray): Array of shape (2,) representing the goal position.
-
-    Returns:
-        Tuple[float, float]: A tuple of floats representing the polar coordinates
-            (rho, theta).
-    """
-    rotation_matrix = np.array(
-        [
-            [np.cos(-curr_heading), -np.sin(-curr_heading)],
-            [np.sin(-curr_heading), np.cos(-curr_heading)],
-        ]
-    )
-    local_goal = curr_goal - curr_pos
-    local_goal = rotation_matrix @ local_goal
-
-    rho = np.linalg.norm(local_goal)
-    theta = np.arctan2(local_goal[1], local_goal[0])
-
-    return rho, theta
 
 
 def load_pointnav_policy(file_path: str) -> PointNavResNetPolicy:
@@ -247,16 +208,30 @@ def _generate_untrained_policy(ckpt_dict: Any) -> PointNavResNetPolicy:
         return policy
 
 
-def wrap_heading(theta: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+def move_obs_to_device(
+    observations: Dict[str, Union[Tensor, np.ndarray]],
+    device: torch.device,
+    unsqueeze: bool = False,
+) -> Dict[str, Tensor]:
     """
-    Wraps given angle to be between -pi and pi.
+    Moves observations to a given device.
 
     Args:
-        theta (float): The angle in radians.
+        observations (Dict[str, Union[Tensor, np.ndarray]]): The observations.
+        device (torch.device): The device to move the observations to.
+        unsqueeze (bool): Whether to unsqueeze the tensors or not.
     Returns:
-        float: The wrapped angle in radians.
+        Dict[str, Tensor]: The observations on the given device as torch tensors.
     """
-    return (theta + np.pi) % (2 * np.pi) - np.pi
+    # Convert numpy arrays to torch tensors for each dict value
+    for k, v in observations.items():
+        if isinstance(v, np.ndarray):
+            tensor_dtype = torch.uint8 if v.dtype == np.uint8 else torch.float32
+            observations[k] = torch.from_numpy(v).to(device=device, dtype=tensor_dtype)
+            if unsqueeze:
+                observations[k] = observations[k].unsqueeze(0)
+
+    return observations
 
 
 if __name__ == "__main__":

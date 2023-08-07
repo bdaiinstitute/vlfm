@@ -1,33 +1,41 @@
 import time
-from typing import Dict, Tuple, Union
+from typing import Any, Dict, Optional, Tuple
 
 import cv2
 import numpy as np
-import torch
 from depth_camera_filtering import filter_depth
 
 from zsos.mapping.object_map import convert_to_global_frame
-from zsos.policy.utils.pointnav_policy import rho_theta
-from zsos.reality.robots.base_robot import BaseRobot
-from zsos.reality.robots.camera_ids import SpotCamIds
+from ..utils.geometry_utils import rho_theta
+
+from .robots.base_robot import BaseRobot
+from .robots.camera_ids import SpotCamIds
 
 
 class PointNavEnv:
-    """Gym environment for doing the PointNav task."""
+    """
+    Gym environment for doing the PointNav task on the Spot robot in the real world.
+    """
 
-    max_depth: float = 3.5
+    max_depth: float = 3.5  # max depth value in meters policy was trained on
     success_radius: float = 0.425
-    goal: np.ndarray = np.array([0.0, 0.0])
+    goal: Any = None  # dummy values; must be set by reset()
     max_lin_dist: float = 0.25
     max_ang_dist: float = np.deg2rad(30)
     time_step: float = 0.5
-    depth_shape: Tuple[int, int] = (212, 240)  # height, width
+    depth_image_shape: Tuple[int, int] = (212, 240)  # height, width
     info: Dict = {}
 
     def __init__(self, robot: BaseRobot):
         self.robot = robot
 
-    def reset(self, goal: np.ndarray, relative=True) -> Dict[str, np.ndarray]:
+    @property
+    def done(self) -> bool:
+        rho, _ = self._get_rho_theta()
+        return rho < self.success_radius
+
+    def reset(self, goal: Any, relative=True, *args, **kwargs) -> Dict[str, np.ndarray]:
+        assert isinstance(goal, np.ndarray)
         if relative:
             # Transform (x,y) goal from robot frame to global frame
             pos, yaw = self.robot.xy_yaw
@@ -37,38 +45,24 @@ class PointNavEnv:
         self.goal = goal
         return self._get_obs()
 
-    def step(
-        self, action: Union[np.ndarray, torch.Tensor]
-    ) -> Tuple[Dict, float, bool, Dict]:
-        self.info = {}
-        if isinstance(action, torch.Tensor):
-            action = action.detach().cpu().numpy()
+    def step(self, action: Dict[str, np.ndarray]) -> Tuple[Dict, float, bool, Dict]:
         ang_vel, lin_vel = self._compute_velocities(action)
         self.robot.command_base_velocity(ang_vel, lin_vel)
         time.sleep(self.time_step)
         self.robot.command_base_velocity(0.0, 0.0)
-        r_t = self._get_rho_theta()
-        print("rho: ", r_t[0], "theta: ", np.rad2deg(r_t[1]))
-        return self._get_obs(), 0.0, self.done, self.info
+        return self._get_obs(), 0.0, self.done, {}  # not using info dict yet
 
-    @property
-    def done(self) -> bool:
-        rho = self._get_rho_theta()[0]
-        return rho < self.success_radius
-
-    def _compute_velocities(self, action: np.ndarray) -> Tuple[float, float]:
-        ang_dist, lin_dist = np.clip(
-            action[0],
-            -1.0,
-            1.0,
-        )
-        ang_dist *= self.max_ang_dist
-        lin_dist *= self.max_lin_dist
-        ang_vel = ang_dist / self.time_step
-        lin_vel = lin_dist / self.time_step
-        print("action: ", action[0])
-        print("ang_vel: ", np.rad2deg(ang_vel), "lin_vel: ", lin_vel)
-        print("ang_dist: ", np.rad2deg(ang_dist), "lin_dist: ", lin_dist)
+    def _compute_velocities(self, action: Dict[str, np.ndarray]) -> Tuple[float, float]:
+        velocities = []
+        for action_key, max_dist in (
+            ["angular_action", self.max_ang_dist],
+            ["linear_action", self.max_lin_dist],
+        ):
+            act_val = action.get(action_key, 0.0)  # default to 0.0 if key not present
+            dist = np.clip(act_val, -1.0, 1.0)  # clip to [-1, 1]
+            dist *= max_dist  # scale to max distance
+            velocities.append(dist / self.time_step)  # convert to velocity
+        ang_vel, lin_vel = velocities
         return ang_vel, lin_vel
 
     def _get_obs(self) -> Dict[str, np.ndarray]:
@@ -85,20 +79,27 @@ class PointNavEnv:
         img = np.hstack(
             [images[SpotCamIds.FRONTRIGHT_DEPTH], images[SpotCamIds.FRONTLEFT_DEPTH]]
         )
+        img = self._process_depth(img, self.max_depth, self.depth_image_shape)
+
+        return img
+
+    @staticmethod
+    def _process_depth(
+        img: np.ndarray, max_depth, depth_shape: Optional[Tuple[int, int]] = None
+    ) -> np.ndarray:
         img = img.astype(np.float32) / 1000.0  # Convert to meters from mm (uint16)
         # Filter the image and re-scale based on max depth limit (self.max_depth)
-        img = filter_depth(
-            img, clip_far_thresh=self.max_depth, set_black_value=self.max_depth
-        )
-        img = img / self.max_depth  # Normalize to [0, 1]
-        # Down-sample to policy input shape
-        img = cv2.resize(
-            img,
-            (self.depth_shape[1], self.depth_shape[0]),
-            interpolation=cv2.INTER_AREA,
-        )
-        # Add a channel dimension
-        img = img.reshape(img.shape + (1,))
+        img = filter_depth(img, clip_far_thresh=max_depth, set_black_value=max_depth)
+        img = img / max_depth  # Normalize to [0, 1]
+        if depth_shape is not None:
+            # Down-sample to policy input shape
+            img = cv2.resize(
+                img,
+                (depth_shape[1], depth_shape[0]),
+                interpolation=cv2.INTER_AREA,
+            )
+        # Ensure a channel dimension
+        img = img.reshape(img.shape[0], img.shape[1], 1)
 
         return img
 

@@ -35,6 +35,9 @@ class ObjectDetections:
         else:
             self.annotated_frame = None
 
+    def __repr__(self):
+        return f"ObjectDetections({self.boxes}, {self.logits}, {self.phrases})"
+
     def filter_by_conf(self, conf_thresh: float):
         """Filters detections by confidence threshold in-place.
 
