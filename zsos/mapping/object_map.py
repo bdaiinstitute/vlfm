@@ -5,7 +5,11 @@ import cv2
 import numpy as np
 
 from zsos.llm.prompts import get_textual_map_prompt, numbered_list, unnumbered_list
-from zsos.policy.utils.pointnav_policy import wrap_heading
+from zsos.utils.geometry_utils import (
+    calculate_vfov,
+    convert_to_global_frame,
+    within_fov_cone,
+)
 
 
 class Object:
@@ -376,96 +380,6 @@ def calculate_3d_coordinates(
     z = ver_distance * math.sin(phi)
 
     return np.array([x, y, z])
-
-
-def calculate_vfov(hfov: float, width: int, height: int) -> float:
-    """
-    Calculates the vertical field of view (VFOV) based on the horizontal field of view
-    (HFOV), width, and height of the image sensor.
-
-    Args:
-        hfov (float): The HFOV in radians.
-        width (int): Width of the image sensor in pixels.
-        height (int): Height of the image sensor in pixels.
-
-    Returns:
-        A float representing the VFOV in radians.
-    """
-    # Calculate the diagonal field of view (DFOV)
-    dfov = 2 * math.atan(
-        math.tan(hfov / 2)
-        * math.sqrt((width**2 + height**2) / (width**2 + height**2))
-    )
-
-    # Calculate the vertical field of view (VFOV)
-    vfov = 2 * math.atan(
-        math.tan(dfov / 2) * (height / math.sqrt(width**2 + height**2))
-    )
-
-    return vfov
-
-
-def convert_to_global_frame(
-    agent_pos: np.ndarray, agent_yaw: float, local_pos: np.ndarray
-) -> np.ndarray:
-    """
-    Converts a given position from the agent's local frame to the global frame.
-
-    Args:
-        agent_pos (np.ndarray): A 3D vector representing the agent's position in their
-            local frame.
-        agent_yaw (float): The agent's yaw in radians.
-        local_pos (np.ndarray): A 3D vector representing the position to be converted in
-            the agent's local frame.
-
-    Returns:
-        A 3D numpy array representing the position in the global frame.
-    """
-    # Construct the homogeneous transformation matrix
-    x, y, z = agent_pos
-    transformation_matrix = np.array(
-        [
-            [np.cos(agent_yaw), -np.sin(agent_yaw), 0, x],
-            [np.sin(agent_yaw), np.cos(agent_yaw), 0, y],
-            [0, 0, 1, z],
-            [0, 0, 0, 1],
-        ]
-    )
-
-    # Append a homogeneous coordinate of 1 to the local position vector
-    local_pos_homogeneous = np.append(local_pos, 1)
-
-    # Perform the transformation using matrix multiplication
-    global_pos_homogeneous = transformation_matrix.dot(local_pos_homogeneous)
-    global_pos_homogeneous = global_pos_homogeneous / global_pos_homogeneous[-1]
-
-    return global_pos_homogeneous[:3]
-
-
-def within_fov_cone(
-    cone_origin: np.ndarray,
-    cone_angle: float,
-    cone_fov: float,
-    cone_range: float,
-    point: np.ndarray,
-) -> bool:
-    """
-    Checks if a point is within a cone of a given origin, angle, fov, and range.
-
-    Args:
-        cone_origin (np.ndarray): The origin of the cone.
-        cone_angle (float): The angle of the cone in radians.
-        cone_fov (float): The field of view of the cone in radians.
-        cone_range (float): The range of the cone.
-        point (np.ndarray): The point to check.
-
-    """
-    direction = point - cone_origin
-    dist = np.linalg.norm(direction)
-    angle = np.arctan2(direction[1], direction[0])
-    angle_diff = wrap_heading(angle - cone_angle)
-
-    return dist <= cone_range and abs(angle_diff) <= cone_fov / 2
 
 
 def objects_to_str(objs: List[Object], current_pos: np.ndarray) -> List[str]:

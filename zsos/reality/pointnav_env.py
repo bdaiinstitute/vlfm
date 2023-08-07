@@ -6,10 +6,9 @@ import numpy as np
 import torch
 from depth_camera_filtering import filter_depth
 
-from zsos.mapping.object_map import convert_to_global_frame
-from zsos.policy.utils.pointnav_policy import rho_theta
 from zsos.reality.robots.base_robot import BaseRobot
 from zsos.reality.robots.camera_ids import SpotCamIds
+from zsos.utils.geometry_utils import convert_to_global_frame, rho_theta
 
 
 class PointNavEnv:
