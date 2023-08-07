@@ -36,10 +36,10 @@ class ObjectMap:
 
     def __init__(
         self,
-        min_depth: float = 0.5,
-        max_depth: float = 5.0,
-        hfov: float = 79.0,
-        proximity_threshold: float = 1.5,
+        min_depth: float,
+        max_depth: float,
+        hfov: float,
+        proximity_threshold: float,
     ) -> None:
         self.min_depth = min_depth
         self.max_depth = max_depth
