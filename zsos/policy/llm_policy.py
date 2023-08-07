@@ -6,13 +6,13 @@ from habitat_baselines.common.tensor_dict import TensorDict
 from torch import Tensor
 
 from zsos.llm.llm import BaseLLM, ClientFastChat
-from zsos.policy.semantic_policy import SemanticPolicy
+from zsos.policy.base_objectnav_policy import BaseObjectNavPolicy
 from zsos.vlm.blip2 import BLIP2Client
 from zsos.vlm.fiber import FIBERClient
 
 
 @baseline_registry.register_policy
-class LLMPolicy(SemanticPolicy):
+class LLMPolicy(BaseObjectNavPolicy):
     llm: BaseLLM = None
     visualize: bool = True
 

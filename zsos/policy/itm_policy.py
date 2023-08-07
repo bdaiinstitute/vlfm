@@ -1,19 +1,21 @@
 import os
+from typing import Dict, Union
 
-from habitat_baselines.common.baseline_registry import baseline_registry
-from habitat_baselines.common.tensor_dict import TensorDict
 from torch import Tensor
 
 from zsos.mapping.frontier_map import FrontierMap
-from zsos.policy.semantic_policy import SemanticPolicy
+from zsos.policy.base_objectnav_policy import BaseObjectNavPolicy
 from zsos.vlm.blip2itm import BLIP2ITMClient
 
+try:
+    from habitat_baselines.common.tensor_dict import TensorDict
+except ModuleNotFoundError:
+    pass
 
-@baseline_registry.register_policy
-class ITMPolicy(SemanticPolicy):
+
+class ITMPolicy(BaseObjectNavPolicy):
     def __init__(self, *args, **kwargs):
         super().__init__()
-        # VL models
         self.itm = BLIP2ITMClient()
         self.frontier_map: FrontierMap = FrontierMap()
 
@@ -21,7 +23,7 @@ class ITMPolicy(SemanticPolicy):
         super()._reset()
         self.frontier_map.reset()
 
-    def _explore(self, observations: TensorDict) -> Tensor:
+    def _explore(self, observations: Union[Dict[str, Tensor], "TensorDict"]) -> Tensor:
         frontiers = observations["frontier_sensor"][0].cpu().numpy()
         rgb = observations["rgb"][0].cpu().numpy()
         text = f"Seems like there is a {self.target_object} ahead."

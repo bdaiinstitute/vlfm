@@ -5,7 +5,11 @@ import cv2
 import numpy as np
 
 from zsos.llm.prompts import get_textual_map_prompt, numbered_list, unnumbered_list
-from zsos.policy.utils.pointnav_policy import wrap_heading
+from zsos.utils.geometry_utils import (
+    calculate_vfov,
+    extract_yaw,
+    within_fov_cone,
+)
 
 
 class Object:
@@ -16,36 +20,38 @@ class Object:
         self.too_far = too_far
         self.explored = False
 
+    def __repr__(self):
+        return f"{self.class_name} at {self.location} with confidence {self.confidence}"
+
 
 class ObjectMap:
-    """
-    This class is used to localize objects detected by the agent. The agent has access
-    to a depth camera, bounding boxes provided by an object detector, and an estimate of
-    its own position and yaw.
+    """This class is used to localize objects detected by the agent. The agent has
+    access to a depth camera, bounding boxes provided by an object detector, and an
+    estimate of its own position and yaw.
     """
 
     map: List[Object] = []
+    image_width: int = None  # set upon execution of update_map method
+    image_height: int = None  # set upon execution of update_map method
 
     def __init__(
         self,
-        min_depth: float = 0.5,
-        max_depth: float = 5.0,
-        hfov: float = 79.0,
-        image_width: int = 640,
-        image_height: int = 480,
+        min_depth: float,
+        max_depth: float,
+        hfov: float,
+        proximity_threshold: float,
     ) -> None:
         self.min_depth = min_depth
         self.max_depth = max_depth
         self.hfov = np.deg2rad(hfov)
-        self.image_width = image_width
-        self.image_height = image_height
-        self.vfov = calculate_vfov(self.hfov, image_width, image_height)
+        self.proximity_threshold = proximity_threshold
         self.camera_history = []
 
+    @property
+    def vfov(self) -> float:
+        return calculate_vfov(self.hfov, self.image_width, self.image_height)
+
     def reset(self) -> None:
-        """
-        Resets the object map.
-        """
         self.map = []
         self.camera_history = []
 
@@ -54,24 +60,21 @@ class ObjectMap:
         object_name: str,
         bbox: np.ndarray,
         depth_img: np.ndarray,
-        agent_camera_position: np.ndarray,
-        agent_camera_yaw: float,
+        tf_camera_to_episodic: np.ndarray,
         confidence: float,
     ) -> None:
-        """
-        Updates the object map with the latest information from the agent.
-        """
+        """Updates the object map with the latest information from the agent."""
+        self.image_height, self.image_width = depth_img.shape[:2]
         location, too_far = self._estimate_object_location(
-            bbox, depth_img, agent_camera_position, agent_camera_yaw
+            bbox, depth_img, tf_camera_to_episodic
         )
         new_object = Object(object_name, location, confidence, too_far)
         self._add_object(new_object)
 
     def get_best_object(self, target_class: str) -> np.ndarray:
-        """
-        Returns the closest object to the agent that matches the given object name. It
-        will not go towards objects that are too far away, unless there are no other
-        objects of the same class.
+        """Returns the closest object to the agent that matches the given object name.
+        It will ignore any detections of the target class if they are too far away,
+        unless all the detections we have of the target class are too far away.
 
         Args:
             target_class (str): The name of the object class to search for.
@@ -99,9 +102,10 @@ class ObjectMap:
 
         return best_loc
 
-    def update_explored(
-        self, camera_coordinates: np.ndarray, camera_yaw: float
-    ) -> None:
+    def update_explored(self, tf_camera_to_episodic: np.ndarray) -> None:
+        camera_coordinates = tf_camera_to_episodic[:3, 3] / tf_camera_to_episodic[3, 3]
+        camera_yaw = extract_yaw(tf_camera_to_episodic)
+
         self.camera_history.append((camera_coordinates, camera_yaw))
         for obj in self.map:
             if within_fov_cone(
@@ -118,8 +122,7 @@ class ObjectMap:
     def get_textual_map_prompt(
         self, target: str, current_pos: np.ndarray, frontiers: np.ndarray
     ) -> Tuple[str, np.ndarray]:
-        """
-        Returns a textual representation of the object map. The {target} field will
+        """Returns a textual representation of the object map. The {target} field will
         still be unfilled.
         """
         # 'textual_map' is a list of strings, where each string represents the
@@ -162,8 +165,7 @@ class ObjectMap:
         return prompt, waypoints
 
     def visualize(self, frontiers: np.ndarray) -> np.ndarray:
-        """
-        Visualizes the object map by plotting the history of the camera coordinates
+        """Visualizes the object map by plotting the history of the camera coordinates
         and the location of each object in a 2D top-down view. If the object is
         explored, the object is plotted in a darker color. The map is a cv2 image with
         height and width of 400, with the origin at the center of the image, and each
@@ -208,21 +210,18 @@ class ObjectMap:
         self,
         bounding_box: np.ndarray,
         depth_image: np.ndarray,
-        camera_coordinates: np.ndarray,
-        camera_yaw: float,
+        tf_camera_to_episodic: np.ndarray,
     ) -> Tuple[np.ndarray, bool]:
-        """
-        Estimates the location of a detected object in the global coordinate frame using
-        a depth camera and a bounding box.
+        """Estimates the location of a detected object in the global coordinate frame
+        using a depth camera and a bounding box.
 
         Args:
             bounding_box (np.ndarray): The bounding box coordinates of the detected
                 object in the image [x_min, y_min, x_max, y_max]. These coordinates are
                 normalized to the range [0, 1].
             depth_image (np.ndarray): The depth image captured by the RGBD camera.
-            camera_coordinates (np.ndarray): The global coordinates of the camera
-                [x, y, z].
-            camera_yaw (float): The yaw angle of the camera in radians.
+            tf_camera_to_episodic (np.ndarray): The transformation matrix from the camera
+                coordinate frame to the episodic coordinate frame.
 
         Returns:
             np.ndarray: The estimated 3D location of the detected object in the global
@@ -245,17 +244,21 @@ class ObjectMap:
             vfov=self.vfov,
         )
         # Yaw from compass sensor must be negated to work properly
-        object_coord_global = convert_to_global_frame(
-            camera_coordinates, camera_yaw, object_coord_agent
-        )
+        object_coord_agent = np.append(object_coord_agent, 1)
+        object_coord_global = tf_camera_to_episodic @ object_coord_agent
+        object_coord_global = object_coord_global[:3] / object_coord_global[3]
+        extract_yaw(tf_camera_to_episodic)
+        # print("tf_camera_to_episodic", tf_camera_to_episodic)
+        # print("camera_yaw", camera_yaw)
+        # print("object_coord_agent", object_coord_agent)
+        # print("object_coord_global", object_coord_global)
 
         return object_coord_global, too_far
 
     def _get_object_depth(
         self, depth: np.ndarray, object_bbox: np.ndarray
     ) -> Tuple[int, int, float]:
-        """
-        Gets the depth value of an object in the depth image.
+        """Gets the depth value of an object in the depth image.
 
         Args:
             depth (np.ndarray): The depth image captured by the RGBD camera.
@@ -298,21 +301,19 @@ class ObjectMap:
         return pixel_x, pixel_y, depth_value
 
     def _add_object(self, proposed_object: Object) -> None:
-        """
-        Updates the map with a proposed Object instance using non-maximal suppression.
+        """Updates the map with a proposed Object instance using non-maximal
+        suppression.
 
         Args:
             proposed_object (Object): The proposed Object to be added to the map.
         """
-
         updated_list = []
-        proximity_threshold = 1.5
 
         for obj in self.map:
             keep = True
             same_name_and_close = (obj.class_name == proposed_object.class_name) and (
                 np.linalg.norm(obj.location - proposed_object.location)
-                <= proximity_threshold
+                <= self.proximity_threshold
             )
 
             if same_name_and_close:
@@ -340,10 +341,9 @@ def calculate_3d_coordinates(
     pixel_y: int,
     vfov: Optional[float] = None,
 ) -> np.ndarray:
-    """
-    Calculates the 3D coordinates (x, y, z) of a point in the image plane based on the
-    horizontal field of view (HFOV), the image width and height, the depth value, and
-    the pixel x and y coordinates.
+    """Calculates the 3D coordinates (x, y, z) of a point in the image plane based on
+    the horizontal field of view (HFOV), the image width and height, the depth value,
+    and the pixel x and y coordinates.
 
     Args:
         hfov (float): A float representing the HFOV in radians.
@@ -378,99 +378,8 @@ def calculate_3d_coordinates(
     return np.array([x, y, z])
 
 
-def calculate_vfov(hfov: float, width: int, height: int) -> float:
-    """
-    Calculates the vertical field of view (VFOV) based on the horizontal field of view
-    (HFOV), width, and height of the image sensor.
-
-    Args:
-        hfov (float): The HFOV in radians.
-        width (int): Width of the image sensor in pixels.
-        height (int): Height of the image sensor in pixels.
-
-    Returns:
-        A float representing the VFOV in radians.
-    """
-    # Calculate the diagonal field of view (DFOV)
-    dfov = 2 * math.atan(
-        math.tan(hfov / 2)
-        * math.sqrt((width**2 + height**2) / (width**2 + height**2))
-    )
-
-    # Calculate the vertical field of view (VFOV)
-    vfov = 2 * math.atan(
-        math.tan(dfov / 2) * (height / math.sqrt(width**2 + height**2))
-    )
-
-    return vfov
-
-
-def convert_to_global_frame(
-    agent_pos: np.ndarray, agent_yaw: float, local_pos: np.ndarray
-) -> np.ndarray:
-    """
-    Converts a given position from the agent's local frame to the global frame.
-
-    Args:
-        agent_pos (np.ndarray): A 3D vector representing the agent's position in their
-            local frame.
-        agent_yaw (float): The agent's yaw in radians.
-        local_pos (np.ndarray): A 3D vector representing the position to be converted in
-            the agent's local frame.
-
-    Returns:
-        A 3D numpy array representing the position in the global frame.
-    """
-    # Construct the homogeneous transformation matrix
-    x, y, z = agent_pos
-    transformation_matrix = np.array(
-        [
-            [np.cos(agent_yaw), -np.sin(agent_yaw), 0, x],
-            [np.sin(agent_yaw), np.cos(agent_yaw), 0, y],
-            [0, 0, 1, z],
-            [0, 0, 0, 1],
-        ]
-    )
-
-    # Append a homogeneous coordinate of 1 to the local position vector
-    local_pos_homogeneous = np.append(local_pos, 1)
-
-    # Perform the transformation using matrix multiplication
-    global_pos_homogeneous = transformation_matrix.dot(local_pos_homogeneous)
-    global_pos_homogeneous = global_pos_homogeneous / global_pos_homogeneous[-1]
-
-    return global_pos_homogeneous[:3]
-
-
-def within_fov_cone(
-    cone_origin: np.ndarray,
-    cone_angle: float,
-    cone_fov: float,
-    cone_range: float,
-    point: np.ndarray,
-) -> bool:
-    """
-    Checks if a point is within a cone of a given origin, angle, fov, and range.
-
-    Args:
-        cone_origin (np.ndarray): The origin of the cone.
-        cone_angle (float): The angle of the cone in radians.
-        cone_fov (float): The field of view of the cone in radians.
-        cone_range (float): The range of the cone.
-        point (np.ndarray): The point to check.
-
-    """
-    direction = point - cone_origin
-    dist = np.linalg.norm(direction)
-    angle = np.arctan2(direction[1], direction[0])
-    angle_diff = wrap_heading(angle - cone_angle)
-
-    return dist <= cone_range and abs(angle_diff) <= cone_fov / 2
-
-
 def objects_to_str(objs: List[Object], current_pos: np.ndarray) -> List[str]:
-    """
-    This function converts a list of object locations into strings. The list is first
+    """This function converts a list of object locations into strings. The list is first
     sorted based on the distance of each object from the agent's current position.
 
     Args:
@@ -487,8 +396,7 @@ def objects_to_str(objs: List[Object], current_pos: np.ndarray) -> List[str]:
 
 
 def obj_loc_to_str(arr: np.ndarray) -> str:
-    """
-    Converts a numpy array representing an object's location into a string.
+    """Converts a numpy array representing an object's location into a string.
 
     Args:
         arr (np.ndarray): Object's coordinates.
