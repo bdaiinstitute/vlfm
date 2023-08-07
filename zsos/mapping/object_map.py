@@ -25,10 +25,9 @@ class Object:
 
 
 class ObjectMap:
-    """
-    This class is used to localize objects detected by the agent. The agent has access
-    to a depth camera, bounding boxes provided by an object detector, and an estimate of
-    its own position and yaw.
+    """This class is used to localize objects detected by the agent. The agent has
+    access to a depth camera, bounding boxes provided by an object detector, and an
+    estimate of its own position and yaw.
     """
 
     map: List[Object] = []
@@ -123,8 +122,7 @@ class ObjectMap:
     def get_textual_map_prompt(
         self, target: str, current_pos: np.ndarray, frontiers: np.ndarray
     ) -> Tuple[str, np.ndarray]:
-        """
-        Returns a textual representation of the object map. The {target} field will
+        """Returns a textual representation of the object map. The {target} field will
         still be unfilled.
         """
         # 'textual_map' is a list of strings, where each string represents the
@@ -167,8 +165,7 @@ class ObjectMap:
         return prompt, waypoints
 
     def visualize(self, frontiers: np.ndarray) -> np.ndarray:
-        """
-        Visualizes the object map by plotting the history of the camera coordinates
+        """Visualizes the object map by plotting the history of the camera coordinates
         and the location of each object in a 2D top-down view. If the object is
         explored, the object is plotted in a darker color. The map is a cv2 image with
         height and width of 400, with the origin at the center of the image, and each
@@ -216,9 +213,8 @@ class ObjectMap:
         camera_coordinates: np.ndarray,
         camera_yaw: float,
     ) -> Tuple[np.ndarray, bool]:
-        """
-        Estimates the location of a detected object in the global coordinate frame using
-        a depth camera and a bounding box.
+        """Estimates the location of a detected object in the global coordinate frame
+        using a depth camera and a bounding box.
 
         Args:
             bounding_box (np.ndarray): The bounding box coordinates of the detected
@@ -259,8 +255,7 @@ class ObjectMap:
     def _get_object_depth(
         self, depth: np.ndarray, object_bbox: np.ndarray
     ) -> Tuple[int, int, float]:
-        """
-        Gets the depth value of an object in the depth image.
+        """Gets the depth value of an object in the depth image.
 
         Args:
             depth (np.ndarray): The depth image captured by the RGBD camera.
@@ -303,21 +298,19 @@ class ObjectMap:
         return pixel_x, pixel_y, depth_value
 
     def _add_object(self, proposed_object: Object) -> None:
-        """
-        Updates the map with a proposed Object instance using non-maximal suppression.
+        """Updates the map with a proposed Object instance using non-maximal
+        suppression.
 
         Args:
             proposed_object (Object): The proposed Object to be added to the map.
         """
-
         updated_list = []
-        proximity_threshold = 1.5
 
         for obj in self.map:
             keep = True
             same_name_and_close = (obj.class_name == proposed_object.class_name) and (
                 np.linalg.norm(obj.location - proposed_object.location)
-                <= proximity_threshold
+                <= self.proximity_threshold
             )
 
             if same_name_and_close:
@@ -345,10 +338,9 @@ def calculate_3d_coordinates(
     pixel_y: int,
     vfov: Optional[float] = None,
 ) -> np.ndarray:
-    """
-    Calculates the 3D coordinates (x, y, z) of a point in the image plane based on the
-    horizontal field of view (HFOV), the image width and height, the depth value, and
-    the pixel x and y coordinates.
+    """Calculates the 3D coordinates (x, y, z) of a point in the image plane based on
+    the horizontal field of view (HFOV), the image width and height, the depth value,
+    and the pixel x and y coordinates.
 
     Args:
         hfov (float): A float representing the HFOV in radians.
@@ -384,8 +376,7 @@ def calculate_3d_coordinates(
 
 
 def objects_to_str(objs: List[Object], current_pos: np.ndarray) -> List[str]:
-    """
-    This function converts a list of object locations into strings. The list is first
+    """This function converts a list of object locations into strings. The list is first
     sorted based on the distance of each object from the agent's current position.
 
     Args:
@@ -402,8 +393,7 @@ def objects_to_str(objs: List[Object], current_pos: np.ndarray) -> List[str]:
 
 
 def obj_loc_to_str(arr: np.ndarray) -> str:
-    """
-    Converts a numpy array representing an object's location into a string.
+    """Converts a numpy array representing an object's location into a string.
 
     Args:
         arr (np.ndarray): Object's coordinates.
