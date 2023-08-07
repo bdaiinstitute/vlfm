@@ -6,8 +6,8 @@ import numpy as np
 from depth_camera_filtering import filter_depth
 
 from zsos.mapping.object_map import convert_to_global_frame
-from ..utils.geometry_utils import rho_theta
 
+from ..utils.geometry_utils import rho_theta
 from .robots.base_robot import BaseRobot
 from .robots.camera_ids import SpotCamIds
 

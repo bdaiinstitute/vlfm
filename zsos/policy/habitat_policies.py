@@ -1,4 +1,4 @@
-from typing import Any, Dict, Union
+from typing import Any
 
 import numpy as np
 import torch
@@ -33,9 +33,7 @@ class HabitatMixin:
         """Converts object ID to string name, returns action as PolicyActionData"""
         object_id: int = observations[ObjectGoalSensor.cls_uuid][0].item()
         obs_dict = observations.to_tree()
-        obs_dict[ObjectGoalSensor.cls_uuid]: str = ID_TO_NAME[  # type: ignore
-            object_id
-        ]
+        obs_dict[ObjectGoalSensor.cls_uuid]: str = ID_TO_NAME[object_id]  # type: ignore
         action = super().act(  # type: ignore
             obs_dict, rnn_hidden_states, prev_actions, masks, deterministic
         )

@@ -104,9 +104,7 @@ class ObjectMap:
 
         return best_loc
 
-    def update_explored(
-        self, tf_camera_to_episodic: np.ndarray
-    ) -> None:
+    def update_explored(self, tf_camera_to_episodic: np.ndarray) -> None:
         camera_coordinates = tf_camera_to_episodic[:3, 3] / tf_camera_to_episodic[3, 3]
         camera_yaw = extract_yaw(tf_camera_to_episodic)
 
@@ -453,6 +451,7 @@ def xyz_yaw_to_tf_matrix(xyz: np.ndarray, yaw: float) -> np.ndarray:
     )
     return transformation_matrix
 
+
 def extract_yaw(matrix):
     """
     Extract the yaw angle from a 4x4 transformation matrix.
@@ -476,6 +475,7 @@ def extract_yaw(matrix):
     yaw = np.arctan2(R[1, 0], R[0, 0])
 
     return yaw
+
 
 def within_fov_cone(
     cone_origin: np.ndarray,
