@@ -11,9 +11,11 @@ from zsos.policy.utils.pointnav_policy import (
     WrappedPointNavResNetPolicy,
     rho_theta_from_gps_compass_goal,
 )
+from zsos.utils.geometry_utils import xyz_yaw_to_tf_matrix
 from zsos.vlm.grounding_dino import GroundingDINOClient, ObjectDetections
 
 try:
+    from habitat_baselines.common.tensor_dict import TensorDict
     from habitat_baselines.rl.ppo.policy import PolicyActionData
 
     from zsos.policy.base_policy import BasePolicy
@@ -100,7 +102,10 @@ class BaseObjectNavPolicy(BasePolicy):
             else:
                 raise ValueError("Invalid object goal")
 
-        detections = self._update_object_map(observations)
+        rgb, depth, tf_camera_to_episodic = self._get_detection_camera_info(
+            observations
+        )
+        detections = self._update_object_map(rgb, depth, tf_camera_to_episodic)
         goal = self._get_target_object_location()
 
         if not self.done_initializing:  # Initialize
@@ -112,7 +117,6 @@ class BaseObjectNavPolicy(BasePolicy):
         else:
             pointnav_action = self._explore(observations)
         self.num_steps += 1
-
         if HABITAT_BASELINES:
             action_data = PolicyActionData(
                 actions=pointnav_action,
@@ -214,23 +218,19 @@ class BaseObjectNavPolicy(BasePolicy):
         )
         return action
 
-    def _update_object_map(
-        self, observations: "TensorDict"  # noqa: F821
-    ) -> ObjectDetections:
-        """
-        Updates the object map with the detections from the current timestep.
-
-        Args:
-            observations ("TensorDict"): The observations from the current timestep.
-        """
+    def _get_detection_camera_info(self, observations: "TensorDict") -> Tuple:
         rgb = observations["rgb"][0].cpu().numpy()
         depth = observations["depth"][0].cpu().numpy()
         x, y = observations["gps"][0].cpu().numpy()
-        camera_coordinates = np.array(
-            [x, -y, self.camera_height]  # Habitat GPS makes west negative, so flip y
-        )
-        yaw = observations["compass"][0].item()
+        camera_yaw = observations["compass"][0].cpu().item()
+        # Habitat GPS makes west negative, so flip y
+        camera_position = np.array([x, -y, self.camera_height])
+        tf_camera_to_episodic = xyz_yaw_to_tf_matrix(camera_position, camera_yaw)
+        return rgb, depth, tf_camera_to_episodic
 
+    def _update_object_map(
+        self, rgb: np.ndarray, depth: np.ndarray, tf_camera_to_episodic: np.ndarray
+    ) -> ObjectDetections:
         detections = self._get_object_detections(rgb)
 
         for idx, confidence in enumerate(detections.logits):
@@ -238,10 +238,10 @@ class BaseObjectNavPolicy(BasePolicy):
                 detections.phrases[idx],
                 detections.boxes[idx],
                 depth,
-                camera_coordinates,
-                yaw,
+                tf_camera_to_episodic,
                 confidence,
             )
-        self.object_map.update_explored(camera_coordinates, yaw)
+
+        self.object_map.update_explored(tf_camera_to_episodic)
 
         return detections

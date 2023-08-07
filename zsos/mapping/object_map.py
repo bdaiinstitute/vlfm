@@ -7,7 +7,7 @@ import numpy as np
 from zsos.llm.prompts import get_textual_map_prompt, numbered_list, unnumbered_list
 from zsos.utils.geometry_utils import (
     calculate_vfov,
-    convert_to_global_frame,
+    extract_yaw,
     within_fov_cone,
 )
 
@@ -60,14 +60,13 @@ class ObjectMap:
         object_name: str,
         bbox: np.ndarray,
         depth_img: np.ndarray,
-        agent_camera_position: np.ndarray,
-        agent_camera_yaw: float,
+        tf_camera_to_episodic: np.ndarray,
         confidence: float,
     ) -> None:
         """Updates the object map with the latest information from the agent."""
         self.image_height, self.image_width = depth_img.shape[:2]
         location, too_far = self._estimate_object_location(
-            bbox, depth_img, agent_camera_position, agent_camera_yaw
+            bbox, depth_img, tf_camera_to_episodic
         )
         new_object = Object(object_name, location, confidence, too_far)
         self._add_object(new_object)
@@ -103,9 +102,10 @@ class ObjectMap:
 
         return best_loc
 
-    def update_explored(
-        self, camera_coordinates: np.ndarray, camera_yaw: float
-    ) -> None:
+    def update_explored(self, tf_camera_to_episodic: np.ndarray) -> None:
+        camera_coordinates = tf_camera_to_episodic[:3, 3] / tf_camera_to_episodic[3, 3]
+        camera_yaw = extract_yaw(tf_camera_to_episodic)
+
         self.camera_history.append((camera_coordinates, camera_yaw))
         for obj in self.map:
             if within_fov_cone(
@@ -210,8 +210,7 @@ class ObjectMap:
         self,
         bounding_box: np.ndarray,
         depth_image: np.ndarray,
-        camera_coordinates: np.ndarray,
-        camera_yaw: float,
+        tf_camera_to_episodic: np.ndarray,
     ) -> Tuple[np.ndarray, bool]:
         """Estimates the location of a detected object in the global coordinate frame
         using a depth camera and a bounding box.
@@ -221,9 +220,8 @@ class ObjectMap:
                 object in the image [x_min, y_min, x_max, y_max]. These coordinates are
                 normalized to the range [0, 1].
             depth_image (np.ndarray): The depth image captured by the RGBD camera.
-            camera_coordinates (np.ndarray): The global coordinates of the camera
-                [x, y, z].
-            camera_yaw (float): The yaw angle of the camera in radians.
+            tf_camera_to_episodic (np.ndarray): The transformation matrix from the camera
+                coordinate frame to the episodic coordinate frame.
 
         Returns:
             np.ndarray: The estimated 3D location of the detected object in the global
@@ -246,9 +244,14 @@ class ObjectMap:
             vfov=self.vfov,
         )
         # Yaw from compass sensor must be negated to work properly
-        object_coord_global = convert_to_global_frame(
-            camera_coordinates, camera_yaw, object_coord_agent
-        )
+        object_coord_agent = np.append(object_coord_agent, 1)
+        object_coord_global = tf_camera_to_episodic @ object_coord_agent
+        object_coord_global = object_coord_global[:3] / object_coord_global[3]
+        extract_yaw(tf_camera_to_episodic)
+        # print("tf_camera_to_episodic", tf_camera_to_episodic)
+        # print("camera_yaw", camera_yaw)
+        # print("object_coord_agent", object_coord_agent)
+        # print("object_coord_global", object_coord_global)
 
         return object_coord_global, too_far
 
