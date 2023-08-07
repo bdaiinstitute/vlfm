@@ -129,8 +129,8 @@ def rho_theta_from_gps_compass_goal(
              GPS coordinates of the agent.
            - "compass" (Tensor): Tensor of shape (batch_size, 1) representing
              the compass heading of the agent in radians. It represents how many radians
-             the agent must turn to the left (CCW from above) from its initial heading to
-             reach its current heading.
+             the agent must turn to the left (CCW from above) from its initial heading
+             to reach its current heading.
        goal (np.ndarray): Array of shape (2,) representing the goal position.
        device (Union[str, torch.device]): The device to use for the tensor.
 
@@ -155,8 +155,7 @@ def load_pointnav_policy(file_path: str) -> PointNavResNetTensorOutputPolicy:
     Args:
         file_path (str): The path to the trained weights of the pointnav policy.
     Returns:
-        Union[PointNavResNetTensorOutputPolicy, "PointNavResNetPolicyNoHabitat"]: The
-            policy.
+        PointNavResNetTensorOutputPolicy: The policy.
     """
     ckpt_dict = torch.load(file_path, map_location="cpu")
 
