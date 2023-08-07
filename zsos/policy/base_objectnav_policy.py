@@ -52,6 +52,7 @@ class BaseObjectNavPolicy(BasePolicy):
     min_depth: float = 0.5
     max_depth: float = 5.0
     hfov: float = 79.0
+    proximity_threshold: float = 1.5
 
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -60,7 +61,10 @@ class BaseObjectNavPolicy(BasePolicy):
             os.environ["POINTNAV_POLICY_PATH"]
         )
         self.object_map: ObjectMap = ObjectMap(
-            min_depth=self.min_depth, max_depth=self.max_depth, hfov=self.hfov
+            min_depth=self.min_depth,
+            max_depth=self.max_depth,
+            hfov=self.hfov,
+            proximity_threshold=self.proximity_threshold,
         )
 
         self.num_steps = 0
