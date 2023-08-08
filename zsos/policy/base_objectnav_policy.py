@@ -90,12 +90,12 @@ class BaseObjectNavPolicy(BasePolicy):
 
         if not self.done_initializing:  # Initialize
             pointnav_action = self._initialize()
-        elif goal is not None:  # Found target object
+        elif goal is None:  # Haven't found target object yet
+            pointnav_action = self._explore(observations)
+        else:
             pointnav_action = self._pointnav(
                 observations, goal[:2], deterministic=deterministic, stop=True
             )
-        else:
-            pointnav_action = self._explore(observations)
 
         self.policy_info = self._get_policy_info(observations, detections)
         self.num_steps += 1
