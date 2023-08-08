@@ -29,10 +29,10 @@ class ValueMap:
         self._get_visible_mask(depth)
 
         # Determine where this mask should be overlaid
-        cx, cy = tf_episodic_to_camera[:2, 3] / tf_episodic_to_camera[3, 3]
+        cam_x, cam_y = tf_episodic_to_camera[:2, 3] / tf_episodic_to_camera[3, 3]
         # Convert to pixel units
-        cx = int(cx * self.pixels_per_meter + self.map.shape[0] / 2)
-        cy = int(cy * self.pixels_per_meter + self.map.shape[1] / 2)
+        int(cam_x * self.pixels_per_meter + self.map.shape[0] / 2)
+        int(cam_y * self.pixels_per_meter + self.map.shape[1] / 2)
 
     def _get_visible_mask(self, depth: np.ndarray):
         """Using the FOV and depth, return the visible portion of the FOV."""
@@ -61,17 +61,16 @@ class ValueMap:
         start = np.array([[0, last_col]])
         end = np.array([[last_row, last_col]])
         contour = np.concatenate((start, np.stack((y, x), axis=1), end), axis=0)
-        contour_cv2 = contour[:, [1, 0]]  # cv2 uses (y, x) instead of (x, y)
 
         # Draw the contour onto the cone mask, in filled-in black
-        visible_mask = cv2.drawContours(cone_mask, [contour_cv2], -1, 0, -1)
+        visible_mask = cv2.drawContours(cone_mask, [contour], -1, 0, -1)
 
         if DEBUG:
             vis = np.zeros((visible_mask.shape[0], visible_mask.shape[1], 3))
             vis[cone_mask == 1] = (255, 255, 255)
-            cv2.drawContours(vis, [contour_cv2], -1, (0, 0, 255), -1)
+            cv2.drawContours(vis, [contour], -1, (0, 0, 255), -1)
             for point in contour:
-                vis[point[0], point[1]] = (0, 255, 0)
+                vis[point[1], point[0]] = (0, 255, 0)
             cv2.imshow("obstacle mask", vis)
             cv2.waitKey(0)
 
@@ -86,8 +85,8 @@ class ValueMap:
             (size, size),  # center_pixel
             (size, size),  # axes lengths
             0,  # angle circle is rotated
-            -np.rad2deg(self.fov) / 2,  # start_angle
-            np.rad2deg(self.fov) / 2,  # end_angle
+            -np.rad2deg(self.fov) / 2 + 90,  # start_angle
+            np.rad2deg(self.fov) / 2 + 90,  # end_angle
             1,  # color
             -1,  # thickness
         )
