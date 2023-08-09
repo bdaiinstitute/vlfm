@@ -28,7 +28,8 @@ class ValueMap:
         """Updates the value map with the given depth image, pose, and value to use.
 
         Args:
-            depth: The depth image to use for updating the map.
+            depth: The depth image to use for updating the map; expected to be already
+                normalized to the range [0, 1].
             tf_episodic_to_camera: The transformation matrix from the episodic frame to
                 the camera frame.
             value: The value to use for updating the map.
@@ -80,7 +81,7 @@ class ValueMap:
         y = depth_row * np.sin(angles)
 
         # Get blank cone mask
-        cone_mask = self._get_blank_cone_mask()
+        cone_mask = self._get_confidence_mask()
 
         # Convert the x, y coordinates to pixel coordinates
         x = (x * self.pixels_per_meter + cone_mask.shape[0] / 2).astype(int)
@@ -98,8 +99,7 @@ class ValueMap:
         visible_mask = cv2.drawContours(cone_mask, [contour], -1, 0, -1)
 
         if DEBUG:
-            vis = np.zeros((visible_mask.shape[0], visible_mask.shape[1], 3))
-            vis[cone_mask == 1] = (255, 255, 255)
+            vis = cv2.cvtColor((cone_mask * 255).astype(np.uint8), cv2.COLOR_GRAY2RGB)
             cv2.drawContours(vis, [contour], -1, (0, 0, 255), -1)
             for point in contour:
                 vis[point[1], point[0]] = (0, 255, 0)
@@ -148,7 +148,7 @@ class ValueMap:
 def remap(value, from_low, from_high, to_low, to_high):
     """Maps a value from one range to another.
 
-    Parameters:
+    Args:
         value (float): The value to be mapped.
         from_low (float): The lower bound of the input range.
         from_high (float): The upper bound of the input range.
