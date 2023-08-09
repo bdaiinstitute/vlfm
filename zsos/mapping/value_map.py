@@ -23,14 +23,14 @@ class ValueMap:
         self.min_confidence = 0.25
 
     def update_map(
-        self, depth: np.ndarray, tf_episodic_to_camera: np.ndarray, value: float
+        self, depth: np.ndarray, tf_camera_to_episodic: np.ndarray, value: float
     ):
         """Updates the value map with the given depth image, pose, and value to use.
 
         Args:
             depth: The depth image to use for updating the map; expected to be already
                 normalized to the range [0, 1].
-            tf_episodic_to_camera: The transformation matrix from the episodic frame to
+            tf_camera_to_episodic: The transformation matrix from the episodic frame to
                 the camera frame.
             value: The value to use for updating the map.
         """
@@ -38,10 +38,10 @@ class ValueMap:
         curr_data = self._get_visible_mask(depth)
 
         # Rotate this new data to match the camera's orientation
-        curr_data = rotate_image(curr_data, -extract_yaw(tf_episodic_to_camera))
+        curr_data = rotate_image(curr_data, -extract_yaw(tf_camera_to_episodic))
 
         # Determine where this mask should be overlaid
-        cam_x, cam_y = tf_episodic_to_camera[:2, 3] / tf_episodic_to_camera[3, 3]
+        cam_x, cam_y = tf_camera_to_episodic[:2, 3] / tf_camera_to_episodic[3, 3]
 
         # Convert to pixel units
         px = int(cam_x * self.pixels_per_meter) + self.episode_pixel_origin[0]
