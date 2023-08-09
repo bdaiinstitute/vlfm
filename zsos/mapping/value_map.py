@@ -48,15 +48,23 @@ class ValueMap:
         blank_map = place_img_in_img(blank_map, curr_data, (-py, px))
         self.map[blank_map == 1] = value
 
-    def visualize(self):
+    def visualize(self) -> np.ndarray:
         """Return an image representation of the map"""
         # Must negate the y values, then rotate 90 degrees counter-clockwise
         # to get the correct orientation
         map_img = np.flipud(self.map)
         return (map_img * 255).astype(np.uint8)
 
-    def _get_visible_mask(self, depth: np.ndarray):
-        """Using the FOV and depth, return the visible portion of the FOV."""
+    def _get_visible_mask(self, depth: np.ndarray) -> np.ndarray:
+        """Using the FOV and depth, return the visible portion of the FOV.
+
+        Args:
+            depth: The depth image to use for determining the visible portion of the
+                FOV.
+
+        Returns:
+            A mask of the visible portion of the FOV.
+        """
         # Squash depth image into one row with the max depth value for each column
         depth_row = np.max(depth, axis=0) * self.max_depth
 
