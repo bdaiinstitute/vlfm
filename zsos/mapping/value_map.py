@@ -1,6 +1,9 @@
 import cv2
 import numpy as np
 
+from zsos.utils.geometry_utils import extract_yaw, get_rotation_matrix
+from zsos.utils.img_utils import place_img_in_img, rotate_image
+
 DEBUG = False
 
 
@@ -9,10 +12,12 @@ class ValueMap:
     are with respect to finding and navigating to the target object."""
 
     def __init__(self, fov: float, max_depth: float):
+        size = 700
         self.fov = fov
         self.max_depth = max_depth
-        self.map = np.ones((100, 100)) * -1.0
+        self.map = np.ones((size, size)) * -1.0
         self.pixels_per_meter = 20
+        self.episode_pixel_origin = np.array([size // 2, size // 2])
 
     def update_map(
         self, depth: np.ndarray, tf_episodic_to_camera: np.ndarray, value: float
@@ -26,13 +31,29 @@ class ValueMap:
             value: The value to use for updating the map.
         """
         # Get new portion of the map
-        self._get_visible_mask(depth)
+        curr_data = self._get_visible_mask(depth)
+
+        # Rotate this new data to match the camera's orientation
+        curr_data = rotate_image(curr_data, -extract_yaw(tf_episodic_to_camera))
 
         # Determine where this mask should be overlaid
         cam_x, cam_y = tf_episodic_to_camera[:2, 3] / tf_episodic_to_camera[3, 3]
+
         # Convert to pixel units
-        int(cam_x * self.pixels_per_meter + self.map.shape[0] / 2)
-        int(cam_y * self.pixels_per_meter + self.map.shape[1] / 2)
+        px = int(cam_x * self.pixels_per_meter) + self.episode_pixel_origin[0]
+        py = int(cam_y * self.pixels_per_meter) + self.episode_pixel_origin[1]
+
+        # Overlay the new data onto the map
+        blank_map = np.zeros_like(self.map)
+        blank_map = place_img_in_img(blank_map, curr_data, (-py, px))
+        self.map[blank_map == 1] = value
+
+    def visualize(self):
+        """Return an image representation of the map"""
+        # Must negate the y values, then rotate 90 degrees counter-clockwise
+        # to get the correct orientation
+        map_img = np.flipud(self.map)
+        return (map_img * 255).astype(np.uint8)
 
     def _get_visible_mask(self, depth: np.ndarray):
         """Using the FOV and depth, return the visible portion of the FOV."""
@@ -91,3 +112,33 @@ class ValueMap:
             -1,  # thickness
         )
         return cone_mask
+
+
+if __name__ == "__main__":
+    v = ValueMap(
+        fov=np.deg2rad(60),
+        max_depth=5.0,
+    )
+    depth = cv2.imread("depth.png", cv2.IMREAD_GRAYSCALE).astype(np.float32) / 255.0
+    img = v._get_visible_mask(depth)
+    cv2.imshow("img", img * 255)
+    cv2.waitKey(0)
+
+    num_points = 20
+
+    x = [0, 10, 10, 0]
+    y = [0, 0, 10, 10]
+    angles = [0, np.pi / 2, np.pi, 3 * np.pi / 2]
+
+    points = np.stack((x, y), axis=1)
+
+    for pt, angle in zip(points, angles):
+        tf = np.eye(4)
+        tf[:2, 3] = pt
+        tf[:2, :2] = get_rotation_matrix(angle)
+        v.update_map(depth, tf, 1)
+        img = v.visualize()
+        cv2.imshow("img", img)
+        key = cv2.waitKey(0)
+        if key == ord("q"):
+            break
