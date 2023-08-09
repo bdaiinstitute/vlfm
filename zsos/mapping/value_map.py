@@ -11,6 +11,8 @@ class ValueMap:
     """Generates a map representing how valuable explored regions of the environment
     are with respect to finding and navigating to the target object."""
 
+    _confidence_mask: np.ndarray = None
+
     def __init__(self, fov: float, max_depth: float):
         size = 700
         self.fov = fov
@@ -18,6 +20,7 @@ class ValueMap:
         self.map = np.ones((size, size)) * -1.0
         self.pixels_per_meter = 20
         self.episode_pixel_origin = np.array([size // 2, size // 2])
+        self.min_confidence = 0.25
 
     def update_map(
         self, depth: np.ndarray, tf_episodic_to_camera: np.ndarray, value: float
@@ -120,6 +123,42 @@ class ValueMap:
             -1,  # thickness
         )
         return cone_mask
+
+    def _get_confidence_mask(self) -> np.ndarray:
+        """Generate a FOV cone with central values weighted more heavily"""
+        if self._confidence_mask is not None:
+            return self._confidence_mask
+        cone_mask = self._get_blank_cone_mask()
+        adjusted_mask = np.zeros_like(cone_mask).astype(np.float32)
+        for row in range(adjusted_mask.shape[0]):
+            for col in range(adjusted_mask.shape[1]):
+                horizontal = abs(row - adjusted_mask.shape[0] // 2)
+                vertical = abs(col - adjusted_mask.shape[1] // 2)
+                angle = np.arctan2(vertical, horizontal)
+                angle = remap(angle, 0, self.fov / 2, 0, np.pi / 2)
+                confidence = np.cos(angle) ** 2
+                confidence = remap(confidence, 0, 1, self.min_confidence, 1)
+                adjusted_mask[row, col] = confidence
+        adjusted_mask = adjusted_mask * cone_mask
+        self._confidence_mask = adjusted_mask
+
+        return adjusted_mask
+
+
+def remap(value, from_low, from_high, to_low, to_high):
+    """Maps a value from one range to another.
+
+    Parameters:
+        value (float): The value to be mapped.
+        from_low (float): The lower bound of the input range.
+        from_high (float): The upper bound of the input range.
+        to_low (float): The lower bound of the output range.
+        to_high (float): The upper bound of the output range.
+
+    Returns:
+        float: The mapped value.
+    """
+    return (value - from_low) * (to_high - to_low) / (from_high - from_low) + to_low
 
 
 if __name__ == "__main__":
