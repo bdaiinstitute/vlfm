@@ -35,7 +35,7 @@ class ValueMap:
             fov: The field of view of the camera in degrees.
             max_depth: The desired maximum depth of the camera in meters.
         """
-        size = 700
+        size = 1000
         self.pixels_per_meter = 20
 
         self.fov = np.deg2rad(fov)
@@ -59,6 +59,10 @@ class ValueMap:
             # Create a blank .json file inside for now
             with open(JSON_PATH, "w") as f:
                 f.write("{}")
+
+    def reset(self):
+        self.value_map.fill(0)
+        self.confidence_map.fill(0)
 
     def update_map(
         self, depth: np.ndarray, tf_camera_to_episodic: np.ndarray, value: float
