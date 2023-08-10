@@ -4,20 +4,24 @@ import cv2
 import numpy as np
 
 
-def add_text_to_image(image: np.ndarray, text: str) -> np.ndarray:
+def add_text_to_image(image: np.ndarray, text: str, top: bool = False) -> np.ndarray:
     """
     Adds text to the given image.
 
     Args:
         image (np.ndarray): Input image.
         text (str): Text to be added.
+        top (bool, optional): Whether to add the text to the top or bottom of the image.
 
     Returns:
         np.ndarray: Image with text added.
     """
     width = image.shape[1]
     text_image = generate_text_image(width, text)
-    combined_image = np.vstack([image, text_image])
+    if top:
+        combined_image = np.vstack([text_image, image])
+    else:
+        combined_image = np.vstack([image, text_image])
 
     return combined_image
 
@@ -89,12 +93,16 @@ def generate_text_image(width: int, text: str) -> np.ndarray:
     return image
 
 
-def pad_images(images: List[np.ndarray]) -> List[np.ndarray]:
+def pad_images(
+    images: List[np.ndarray], pad_from_top: bool = False
+) -> List[np.ndarray]:
     """
     Pads a list of images with white pixels to make them have the same dimensions.
 
     Args:
         images (List[np.ndarray]): List of NumPy images.
+        pad_from_top (bool): If True, pad the images from the top; if False (default),
+            pad from the bottom.
 
     Returns:
         List[np.ndarray]: List of padded images.
@@ -108,9 +116,16 @@ def pad_images(images: List[np.ndarray]) -> List[np.ndarray]:
         height_diff = max_height - img.shape[0]
         width_diff = max_width - img.shape[1]
 
+        if pad_from_top:
+            pad_top = height_diff
+            pad_bottom = 0
+        else:
+            pad_top = 0
+            pad_bottom = height_diff
+
         padded_img = np.pad(
             img,
-            ((0, height_diff), (0, width_diff), (0, 0)),
+            ((pad_top, pad_bottom), (0, width_diff), (0, 0)),
             mode="constant",
             constant_values=255,
         )
