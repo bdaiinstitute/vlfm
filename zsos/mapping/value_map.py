@@ -129,13 +129,14 @@ class ValueMap:
         map_img = monochannel_to_inferno_rgb(map_img)
         # Revert all values that were originally zero to white
         map_img[zero_mask] = (255, 255, 255)
-        self.traj_vis.draw_trajectory(
-            map_img,
-            self._camera_positions,
-            self._last_camera_yaw,
-            self.episode_pixel_origin,
-            self.pixels_per_meter,
-        )
+        if len(self._camera_positions) > 0:
+            self.traj_vis.draw_trajectory(
+                map_img,
+                self._camera_positions,
+                self._last_camera_yaw,
+                self.episode_pixel_origin,
+                self.pixels_per_meter,
+            )
         return map_img
 
     def _get_visible_mask(self, depth: np.ndarray) -> np.ndarray:
