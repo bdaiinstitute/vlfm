@@ -98,7 +98,7 @@ class HabitatVis:
             self.cost_maps.append(self.cost_maps[-1])
 
         frames = []
-        for i in range(len(self.depth)):
+        for i in range(len(self.depth) - 1):  # last frame has images from next episode
             frame = self._create_frame(
                 self.depth[i],
                 self.rgb[i],
