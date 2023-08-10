@@ -1,6 +1,7 @@
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
 import torch
+from habitat.tasks.nav.nav import HeadingSensor
 from habitat.tasks.nav.object_nav_task import ObjectGoalSensor
 from habitat_baselines.common.baseline_registry import baseline_registry
 from habitat_baselines.common.tensor_dict import TensorDict
@@ -9,6 +10,7 @@ from torch import Tensor
 
 from frontier_exploration.base_explorer import BaseExplorer
 
+from ..vlm.detections import ObjectDetections
 from .base_objectnav_policy import BaseObjectNavPolicy
 from .itm_policy import ITMPolicy
 
@@ -28,6 +30,7 @@ class HabitatMixin:
         "couch": 0.15,
     }
     _stop_action: Tensor = TorchActionIDs.STOP
+    _start_yaw: Union[float, None] = None  # must be set by _reset() method
     # ObjectMap parameters
     min_depth: float = 0.5
     max_depth: float = 5.0
@@ -60,6 +63,22 @@ class HabitatMixin:
         """Turn left 30 degrees 12 times to get a 360 view at the beginning"""
         self.done_initializing = not self.num_steps < 11  # type: ignore
         return TorchActionIDs.TURN_LEFT
+
+    def _reset(self) -> None:
+        parent_cls: BaseObjectNavPolicy = super()  # type: ignore
+        parent_cls._reset()
+        self._start_yaw = None
+
+    def _get_policy_info(
+        self, observations: "TensorDict", detections: ObjectDetections
+    ) -> Dict[str, Any]:
+        """Get policy info for logging"""
+        parent_cls: BaseObjectNavPolicy = super()  # type: ignore
+        info = parent_cls._get_policy_info(observations, detections)
+        if self._start_yaw is None:
+            self._start_yaw = observations[HeadingSensor.cls_uuid][0].item()
+        info["start_yaw"] = self._start_yaw
+        return info
 
 
 @baseline_registry.register_policy

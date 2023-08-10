@@ -6,7 +6,13 @@ from habitat.utils.visualizations import maps
 from habitat.utils.visualizations.utils import overlay_frame
 from habitat_baselines.common.tensor_dict import TensorDict
 
-from zsos.utils.img_utils import resize_images
+from zsos.utils.img_utils import (
+    crop_white_border,
+    pad_larger_dim,
+    pad_to_square,
+    resize_images,
+    rotate_image,
+)
 from zsos.utils.visualization import add_text_to_image, pad_images
 
 
@@ -52,7 +58,22 @@ class HabitatVis:
         )
         self.maps.append(map)
         if "cost_map" in policy_info[0]:
-            self.cost_maps.append(policy_info[0]["cost_map"])
+            cost_map = policy_info[0]["cost_map"]
+            # Rotate the cost map to match the agent's orientation at the start
+            # of the episode
+            start_yaw = infos[0]["start_yaw"]
+            cost_map = rotate_image(cost_map, start_yaw, border_value=(255, 255, 255))
+            # Remove unnecessary white space around the edges
+            cost_map = crop_white_border(cost_map)
+            # Make the image at least 150 pixels tall or wide
+            cost_map = pad_larger_dim(cost_map, 150)
+            # Pad the shorter dimension to be the same size as the longer
+            cost_map = pad_to_square(cost_map, extra_pad=50)
+            # Pad the image border with some white space
+            cost_map = cv2.copyMakeBorder(
+                cost_map, 50, 50, 50, 50, cv2.BORDER_CONSTANT, value=(255, 255, 255)
+            )
+            self.cost_maps.append(cost_map)
             self.using_cost_map = True
         else:
             self.cost_maps.append(np.ones_like(self.maps[0]) * 255)
