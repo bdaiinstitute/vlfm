@@ -7,6 +7,8 @@ from habitat_baselines.common.tensor_dict import TensorDict
 from habitat_baselines.rl.ppo.policy import PolicyActionData
 from torch import Tensor
 
+from frontier_exploration.base_explorer import BaseExplorer
+
 from .base_objectnav_policy import BaseObjectNavPolicy
 from .itm_policy import ITMPolicy
 
@@ -58,6 +60,26 @@ class HabitatMixin:
         """Turn left 30 degrees 12 times to get a 360 view at the beginning"""
         self.done_initializing = not self.num_steps < 11  # type: ignore
         return TorchActionIDs.TURN_LEFT
+
+
+@baseline_registry.register_policy
+class OracleFBEPolicy(HabitatMixin, BaseObjectNavPolicy):
+    def _explore(self, observations: TensorDict) -> Tensor:
+        explorer_key = [k for k in observations.keys() if k.endswith("_explorer")][0]
+        pointnav_action = observations[explorer_key]
+        return pointnav_action
+
+
+@baseline_registry.register_policy
+class SuperOracleFBEPolicy(HabitatMixin, BaseObjectNavPolicy):
+    def act(
+        self, observations: TensorDict, rnn_hidden_states: Any, *args, **kwargs
+    ) -> PolicyActionData:
+        return PolicyActionData(
+            actions=observations[BaseExplorer.cls_uuid],
+            rnn_hidden_states=rnn_hidden_states,
+            policy_info=[self.policy_info],
+        )
 
 
 @baseline_registry.register_policy
