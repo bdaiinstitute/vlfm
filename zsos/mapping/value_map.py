@@ -114,7 +114,13 @@ class ValueMap:
         # Must negate the y values to get the correct orientation
         # map_img = np.flipud(self.confidence_map * self.value_map)
         map_img = np.flipud(self.value_map)
+        # Make all 0s in the value map equal to the max value, so they don't throw off
+        # the color mapping (will revert later)
+        zero_mask = map_img == 0
+        map_img[zero_mask] = np.max(map_img)
         map_img = monochannel_to_inferno_rgb(map_img)
+        # Revert all values that were originally zero to white
+        map_img[zero_mask] = (255, 255, 255)
         return map_img
 
     def _get_visible_mask(self, depth: np.ndarray) -> np.ndarray:
