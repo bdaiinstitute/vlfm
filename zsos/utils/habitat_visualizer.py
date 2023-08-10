@@ -18,6 +18,7 @@ class HabitatVis:
         self.cost_maps = []
         self.texts = []
         self.last_rgb = None
+        self.using_cost_map = False
 
     def reset(self):
         self.rgb = []
@@ -52,6 +53,7 @@ class HabitatVis:
         self.maps.append(map)
         if "cost_map" in policy_info[0]:
             self.cost_maps.append(policy_info[0]["cost_map"])
+            self.using_cost_map = True
         else:
             self.cost_maps.append(np.ones_like(self.maps[0]) * 255)
         text = [
@@ -64,10 +66,15 @@ class HabitatVis:
     def flush_frames(self) -> List[np.ndarray]:
         """Flush all frames and return them"""
         if self.last_rgb is not None:
-            # Because the rgb frames are actually on step delayed, pop the first one and
-            # add a black frame to the end
+            # Because the rgb frames are actually onw step delayed, pop the first one
+            # and add a black frame to the end
             self.rgb.pop(0)
             self.rgb.append(self.last_rgb)
+
+        if self.using_cost_map:
+            # Cost maps are also one step delayed
+            self.cost_maps.pop(0)
+            self.cost_maps.append(self.cost_maps[-1])
 
         frames = []
         for i in range(len(self.depth)):
