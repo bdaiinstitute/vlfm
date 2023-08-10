@@ -87,7 +87,7 @@ class HabitatVis:
     def flush_frames(self) -> List[np.ndarray]:
         """Flush all frames and return them"""
         if self.last_rgb is not None:
-            # Because the rgb frames are actually onw step delayed, pop the first one
+            # Because the rgb frames are actually one step delayed, pop the first one
             # and add a black frame to the end
             self.rgb.pop(0)
             self.rgb.append(self.last_rgb)
