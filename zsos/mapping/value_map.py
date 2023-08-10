@@ -4,10 +4,12 @@ import os
 import os.path as osp
 import shutil
 import warnings
+from typing import List
 
 import cv2
 import numpy as np
 
+from zsos.mapping.traj_visualizer import TrajectoryVisualizer
 from zsos.utils.geometry_utils import extract_yaw, get_rotation_matrix
 from zsos.utils.img_utils import (
     monochannel_to_inferno_rgb,
@@ -27,6 +29,8 @@ class ValueMap:
     are with respect to finding and navigating to the target object."""
 
     _confidence_mask: np.ndarray = None
+    _camera_positions: List[np.ndarray] = []
+    _last_camera_yaw: float = None
     use_max_confidence: bool = False
 
     def __init__(self, fov: float, max_depth: float):
@@ -45,6 +49,7 @@ class ValueMap:
         self.episode_pixel_origin = np.array([size // 2, size // 2])
         self.min_confidence = 0.25
         self.decision_threshold = 0.35
+        self.traj_vis = TrajectoryVisualizer()
 
         if RECORDING:
             if osp.isdir(RECORDING_DIR):
@@ -63,6 +68,7 @@ class ValueMap:
     def reset(self):
         self.value_map.fill(0)
         self.confidence_map.fill(0)
+        self._camera_positions = []
 
     def update_map(
         self, depth: np.ndarray, tf_camera_to_episodic: np.ndarray, value: float
@@ -80,10 +86,12 @@ class ValueMap:
         curr_data = self._get_visible_mask(depth)
 
         # Rotate this new data to match the camera's orientation
-        curr_data = rotate_image(curr_data, -extract_yaw(tf_camera_to_episodic))
+        self._last_camera_yaw = yaw = extract_yaw(tf_camera_to_episodic)
+        curr_data = rotate_image(curr_data, -yaw)
 
         # Determine where this mask should be overlaid
         cam_x, cam_y = tf_camera_to_episodic[:2, 3] / tf_camera_to_episodic[3, 3]
+        self._camera_positions.append(np.array([cam_x, cam_y]))
 
         # Convert to pixel units
         px = int(cam_x * self.pixels_per_meter) + self.episode_pixel_origin[0]
@@ -121,6 +129,13 @@ class ValueMap:
         map_img = monochannel_to_inferno_rgb(map_img)
         # Revert all values that were originally zero to white
         map_img[zero_mask] = (255, 255, 255)
+        self.traj_vis.draw_trajectory(
+            map_img,
+            self._camera_positions,
+            self._last_camera_yaw,
+            self.episode_pixel_origin,
+            self.pixels_per_meter,
+        )
         return map_img
 
     def _get_visible_mask(self, depth: np.ndarray) -> np.ndarray:
