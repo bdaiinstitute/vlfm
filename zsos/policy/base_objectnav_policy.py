@@ -116,9 +116,7 @@ class BaseObjectNavPolicy(BasePolicy):
             return None
 
     def _get_policy_info(
-        self,
-        observations: "TensorDict",
-        detections: ObjectDetections,
+        self, observations: "TensorDict", detections: ObjectDetections
     ) -> Dict[str, Any]:
         seen_objects = set(i.class_name for i in self.object_map.map)
         seen_objects_str = ", ".join(seen_objects)
