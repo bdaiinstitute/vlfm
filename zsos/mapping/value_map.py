@@ -69,6 +69,7 @@ class ValueMap:
         self.value_map.fill(0)
         self.confidence_map.fill(0)
         self._camera_positions = []
+        self.traj_vis.reset()
 
     def update_map(
         self, depth: np.ndarray, tf_camera_to_episodic: np.ndarray, value: float
@@ -223,7 +224,7 @@ class ValueMap:
                 confidence = remap(confidence, 0, 1, self.min_confidence, 1)
                 adjusted_mask[row, col] = confidence
         adjusted_mask = adjusted_mask * cone_mask
-        self._confidence_mask = adjusted_mask
+        self._confidence_mask = adjusted_mask.copy()
 
         return adjusted_mask
 
@@ -319,6 +320,7 @@ def replay_from_dir():
 
 if __name__ == "__main__":
     # replay_from_dir()
+    # quit()
 
     v = ValueMap(fov=79, max_depth=5.0)
     depth = cv2.imread("depth.png", cv2.IMREAD_GRAYSCALE).astype(np.float32) / 255.0
