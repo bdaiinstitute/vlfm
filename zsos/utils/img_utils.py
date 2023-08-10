@@ -60,3 +60,36 @@ def monochannel_to_inferno_rgb(image: np.ndarray) -> np.ndarray:
     )
 
     return inferno_colormap
+
+
+def resize_images(images, match_dimension="height"):
+    """
+    Resize images to match either their heights or their widths.
+
+    Args:
+        images (List[np.ndarray]): List of NumPy images.
+        match_dimension (str): Specify 'height' to match heights, or 'width' to match
+            widths.
+
+    Returns:
+        List[np.ndarray]: List of resized images.
+    """
+    if len(images) < 2:
+        raise ValueError("At least two images are required for resizing.")
+
+    if match_dimension == "height":
+        max_height = max(img.shape[0] for img in images)
+        resized_images = [
+            cv2.resize(img, (int(img.shape[1] * max_height / img.shape[0]), max_height))
+            for img in images
+        ]
+    elif match_dimension == "width":
+        max_width = max(img.shape[1] for img in images)
+        resized_images = [
+            cv2.resize(img, (max_width, int(img.shape[0] * max_width / img.shape[1])))
+            for img in images
+        ]
+    else:
+        raise ValueError("Invalid 'match_dimension' argument. Use 'height' or 'width'.")
+
+    return resized_images
