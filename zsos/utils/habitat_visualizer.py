@@ -16,6 +16,7 @@ class HabitatVis:
         self.maps = []
         self.cost_maps = []
         self.texts = []
+        self.last_rgb = None
 
     def reset(self):
         self.rgb = []
@@ -23,6 +24,7 @@ class HabitatVis:
         self.maps = []
         self.cost_maps = []
         self.texts = []
+        self.last_rgb = None
 
     def collect_data(
         self,
@@ -36,7 +38,8 @@ class HabitatVis:
         depth = cv2.cvtColor(depth, cv2.COLOR_GRAY2RGB)
         depth = overlay_frame(depth, infos[0])
         self.depth.append(depth)
-        self.rgb.append(observations["rgb"][0].cpu().numpy())
+        self.last_rgb = observations["rgb"][0].cpu().numpy()
+        self.rgb.append(policy_info[0]["visualized_detections"])
         self.maps.append(
             maps.colorize_draw_agent_and_fit_to_height(
                 infos[0]["top_down_map"], self.depth[0].shape[0]
@@ -56,6 +59,11 @@ class HabitatVis:
 
     def flush_frames(self) -> List[np.ndarray]:
         """Flush all frames and return them"""
+        # Because the rgb frames are actually on step delayed, pop the first one and
+        # add a black frame to the end
+        self.rgb.pop(0)
+        self.rgb.append(self.last_rgb)
+
         frames = []
         for i in range(len(self.depth)):
             frame = self._create_frame(
