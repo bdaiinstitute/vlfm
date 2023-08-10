@@ -153,7 +153,7 @@ def pad_to_square(
     larger_side = max(height, width)
     square_size = larger_side + extra_pad
     padded_img = np.ones((square_size, square_size, 3), dtype=np.uint8) * np.array(
-        padding_color
+        padding_color, dtype=np.uint8
     )
     center_x = square_size // 2
     center_y = square_size // 2
