@@ -1,10 +1,25 @@
+import glob
+import json
+import os
+import os.path as osp
+import shutil
+import warnings
+
 import cv2
 import numpy as np
 
 from zsos.utils.geometry_utils import extract_yaw, get_rotation_matrix
-from zsos.utils.img_utils import place_img_in_img, rotate_image
+from zsos.utils.img_utils import (
+    monochannel_to_inferno_rgb,
+    place_img_in_img,
+    rotate_image,
+)
 
 DEBUG = False
+RECORDING = False
+RECORDING_DIR = "value_map_recordings"
+JSON_PATH = osp.join(RECORDING_DIR, "data.json")
+ARGS_TXT = osp.join(RECORDING_DIR, "args.txt")
 
 
 class ValueMap:
@@ -12,15 +27,38 @@ class ValueMap:
     are with respect to finding and navigating to the target object."""
 
     _confidence_mask: np.ndarray = None
+    use_max_confidence: bool = False
 
     def __init__(self, fov: float, max_depth: float):
+        """
+        Args:
+            fov: The field of view of the camera in degrees.
+            max_depth: The desired maximum depth of the camera in meters.
+        """
         size = 700
-        self.fov = fov
-        self.max_depth = max_depth
-        self.map = np.ones((size, size)) * -1.0
         self.pixels_per_meter = 20
+
+        self.fov = np.deg2rad(fov)
+        self.max_depth = max_depth
+        self.value_map = np.zeros((size, size), np.float32)
+        self.confidence_map = np.zeros((size, size), np.float32)
         self.episode_pixel_origin = np.array([size // 2, size // 2])
         self.min_confidence = 0.25
+        self.decision_threshold = 0.35
+
+        if RECORDING:
+            if osp.isdir(RECORDING_DIR):
+                warnings.warn(
+                    f"Recording directory {RECORDING_DIR} already exists. Deleting it."
+                )
+                shutil.rmtree(RECORDING_DIR)
+            os.mkdir(RECORDING_DIR)
+            # Dump all args to a file
+            with open(ARGS_TXT, "w") as f:
+                f.write(f"{fov},{max_depth}")
+            # Create a blank .json file inside for now
+            with open(JSON_PATH, "w") as f:
+                f.write("{}")
 
     def update_map(
         self, depth: np.ndarray, tf_camera_to_episodic: np.ndarray, value: float
@@ -48,16 +86,32 @@ class ValueMap:
         py = int(cam_y * self.pixels_per_meter) + self.episode_pixel_origin[1]
 
         # Overlay the new data onto the map
-        blank_map = np.zeros_like(self.map)
+        blank_map = np.zeros_like(self.value_map)
         blank_map = place_img_in_img(blank_map, curr_data, (-py, px))
-        self.map[blank_map == 1] = value
+
+        # Fuse the new data with the existing data
+        self._fuse_new_data(blank_map, value)
+
+        if RECORDING:
+            idx = len(glob.glob(osp.join(RECORDING_DIR, "*.png")))
+            img_path = osp.join(RECORDING_DIR, f"{idx:04d}.png")
+            cv2.imwrite(img_path, (depth * 255).astype(np.uint8))
+            with open(JSON_PATH, "r") as f:
+                data = json.load(f)
+            data[img_path] = {
+                "tf_camera_to_episodic": tf_camera_to_episodic.tolist(),
+                "value": value,
+            }
+            with open(JSON_PATH, "w") as f:
+                json.dump(data, f)
 
     def visualize(self) -> np.ndarray:
         """Return an image representation of the map"""
-        # Must negate the y values, then rotate 90 degrees counter-clockwise
-        # to get the correct orientation
-        map_img = np.flipud(self.map)
-        return (map_img * 255).astype(np.uint8)
+        # Must negate the y values to get the correct orientation
+        # map_img = np.flipud(self.confidence_map * self.value_map)
+        map_img = np.flipud(self.value_map)
+        map_img = monochannel_to_inferno_rgb(map_img)
+        return map_img
 
     def _get_visible_mask(self, depth: np.ndarray) -> np.ndarray:
         """Using the FOV and depth, return the visible portion of the FOV.
@@ -69,6 +123,9 @@ class ValueMap:
         Returns:
             A mask of the visible portion of the FOV.
         """
+        # Squeeze out the channel dimension if depth is a 3D array
+        if len(depth.shape) == 3:
+            depth = depth.squeeze(2)
         # Squash depth image into one row with the max depth value for each column
         depth_row = np.max(depth, axis=0) * self.max_depth
 
@@ -127,7 +184,7 @@ class ValueMap:
     def _get_confidence_mask(self) -> np.ndarray:
         """Generate a FOV cone with central values weighted more heavily"""
         if self._confidence_mask is not None:
-            return self._confidence_mask
+            return self._confidence_mask.copy()
         cone_mask = self._get_blank_cone_mask()
         adjusted_mask = np.zeros_like(cone_mask).astype(np.float32)
         for row in range(adjusted_mask.shape[0]):
@@ -144,8 +201,56 @@ class ValueMap:
 
         return adjusted_mask
 
+    def _fuse_new_data(self, confidence: np.ndarray, value: float):
+        """Fuse the new data with the existing value and confidence map.
 
-def remap(value, from_low, from_high, to_low, to_high):
+        Args:
+            confidence: The new confidence map data to fuse. Confidences are between
+                0 and 1, with 1 being the most confident.
+            value: The value attributed to the new portion of the map.
+        """
+        # Any values in the given confidence map that are less confident than
+        # self.decision_threshold AND less than the confidence in the existing map
+        # will be re-assigned with a confidence of 0
+        confidence_mask = np.logical_and(
+            confidence < self.decision_threshold,
+            confidence < self.confidence_map,
+        )
+        confidence[confidence_mask] = 0
+
+        if self.use_max_confidence:
+            # For every pixel that has a higher confidence in the new map than the
+            # existing value map, replace the value in the existing value map with
+            # the new value
+            higher_confidence_mask = confidence > self.confidence_map
+            self.value_map[higher_confidence_mask] = value
+            # Update the confidence map with the new confidence values
+            self.confidence_map[higher_confidence_mask] = confidence[
+                higher_confidence_mask
+            ]
+        else:
+            # Each pixel in the existing value map will be updated with a weighted
+            # average of the existing value and the new value. The weight of each value
+            # is determined by the current and new confidence values. The confidence map
+            # will also be updated with using a weighted average in a similar manner.
+            confidence_denominator = self.confidence_map + confidence
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+                weight_1 = self.confidence_map / confidence_denominator
+                weight_2 = confidence / confidence_denominator
+
+            self.value_map = self.value_map * weight_1 + value * weight_2
+            self.confidence_map = self.confidence_map * weight_1 + confidence * weight_2
+
+            # Because confidence_denominator can have 0 values, any nans in either the
+            # value or confidence maps will be replaced with 0
+            self.value_map = np.nan_to_num(self.value_map)
+            self.confidence_map = np.nan_to_num(self.confidence_map)
+
+
+def remap(
+    value: float, from_low: float, from_high: float, to_low: float, to_high: float
+) -> float:
     """Maps a value from one range to another.
 
     Args:
@@ -161,14 +266,38 @@ def remap(value, from_low, from_high, to_low, to_high):
     return (value - from_low) * (to_high - to_low) / (from_high - from_low) + to_low
 
 
+def replay_from_dir():
+    with open(ARGS_TXT, "r") as f:
+        lines = f.readlines()
+        fov, max_depth = lines[0].split(",")
+        fov, max_depth = float(fov), float(max_depth)
+    with open(JSON_PATH, "r") as f:
+        data = json.load(f)
+
+    v = ValueMap(fov=fov, max_depth=max_depth)
+
+    sorted_keys = sorted(list(data.keys()))
+
+    for img_path in sorted_keys:
+        tf_camera_to_episodic = np.array(data[img_path]["tf_camera_to_episodic"])
+        value = data[img_path]["value"]
+        depth = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE).astype(np.float32) / 255.0
+        v.update_map(depth, tf_camera_to_episodic, value)
+
+        img = v.visualize()
+        cv2.imshow("img", img)
+        key = cv2.waitKey(0)
+        if key == ord("q"):
+            break
+
+
 if __name__ == "__main__":
-    v = ValueMap(
-        fov=np.deg2rad(60),
-        max_depth=5.0,
-    )
+    # replay_from_dir()
+
+    v = ValueMap(fov=79, max_depth=5.0)
     depth = cv2.imread("depth.png", cv2.IMREAD_GRAYSCALE).astype(np.float32) / 255.0
     img = v._get_visible_mask(depth)
-    cv2.imshow("img", img * 255)
+    cv2.imshow("img", (img * 255).astype(np.uint8))
     cv2.waitKey(0)
 
     num_points = 20
