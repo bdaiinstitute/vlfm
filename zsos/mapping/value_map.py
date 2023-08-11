@@ -4,7 +4,7 @@ import os
 import os.path as osp
 import shutil
 import warnings
-from typing import List
+from typing import List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -118,7 +118,10 @@ class ValueMap:
             with open(JSON_PATH, "w") as f:
                 json.dump(data, f)
 
-    def visualize(self) -> np.ndarray:
+    def visualize(
+        self,
+        color_coords: Optional[List[Tuple[np.ndarray, Tuple[int, int, int]]]] = None,
+    ) -> np.ndarray:
         """Return an image representation of the map"""
         # Must negate the y values to get the correct orientation
         # map_img = np.flipud(self.confidence_map * self.value_map)
@@ -138,6 +141,11 @@ class ValueMap:
                 self.episode_pixel_origin,
                 self.pixels_per_meter,
             )
+
+            if color_coords is not None:
+                for coord, color in color_coords:
+                    map_img = self.traj_vis.draw_color_point(map_img, coord, color)
+
         return map_img
 
     def _get_visible_mask(self, depth: np.ndarray) -> np.ndarray:

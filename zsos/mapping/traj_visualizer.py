@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Tuple, Union
 
 import cv2
 import numpy as np
@@ -92,6 +92,15 @@ class TrajectoryVisualizer:
             (0, 0, 0),
             self.agent_line_thickness,
         )
+
+        return img
+
+    def draw_color_point(
+        self, img: np.ndarray, position: np.ndarray, color: Tuple[int, int, int]
+    ) -> np.ndarray:
+        """Draws the point as a circle on the image and returns it"""
+        px_position = self._metric_to_pixel(position)
+        cv2.circle(img, tuple(px_position[::-1]), 5, color, 2)
 
         return img
 
