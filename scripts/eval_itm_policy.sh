@@ -5,7 +5,7 @@ python -um zsos.run \
   habitat_baselines.evaluate=True \
   habitat_baselines.eval_ckpt_path_dir=dummy_policy.pth \
   habitat_baselines.load_resume_state_config=False \
-  habitat_baselines.rl.policy.name=ITMPolicy \
+  habitat_baselines.rl.policy.name=HabitatITMPolicy \
   habitat.task.lab_sensors.base_explorer.turn_angle=30 \
   habitat_baselines.num_environments=1 \
   habitat_baselines.eval.split=val_50 \
