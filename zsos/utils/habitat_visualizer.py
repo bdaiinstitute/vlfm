@@ -116,11 +116,12 @@ class HabitatVis:
     @staticmethod
     def _create_frame(depth, rgb, map, cost_map, text):
         """Create a frame with depth, rgb, map, cost_map, and text"""
-        row_1 = np.concatenate([depth, rgb], axis=1)
+        row_1 = np.hstack([depth, rgb])
         map, cost_map = resize_images([map, cost_map], match_dimension="height")
-        row_2 = np.concatenate([map, cost_map], axis=1)
-        row_1, row_2 = resize_images([row_1, row_2], match_dimension="width")
-        frame = np.concatenate([row_1, row_2], axis=0)
+        row_2 = np.hstack([map, cost_map])
+        row_2_height_scaled = int(row_2.shape[0] * (row_1.shape[1] / row_2.shape[1]))
+        row_2_scaled = cv2.resize(row_2, (row_1.shape[1], row_2_height_scaled))
+        frame = np.vstack([row_1, row_2_scaled])
 
         # Add text to the top of the frame
         for t in text[::-1]:
