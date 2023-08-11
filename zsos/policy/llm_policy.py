@@ -14,7 +14,7 @@ from zsos.vlm.fiber import FIBERClient
 @baseline_registry.register_policy
 class LLMPolicy(BaseObjectNavPolicy):
     llm: BaseLLM = None
-    visualize: bool = True
+    _visualize: bool = True
 
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -26,7 +26,7 @@ class LLMPolicy(BaseObjectNavPolicy):
     def _explore(self, observations: TensorDict) -> Tensor:
         curr_pos = observations["gps"][0].cpu().numpy() * np.array([1, -1])
         baseline = True
-        if np.linalg.norm(self.last_goal - curr_pos) < 0.25:
+        if np.linalg.norm(self._last_goal - curr_pos) < 0.25:
             frontiers = observations["frontier_sensor"][0].cpu().numpy()
             if baseline:
                 goal = frontiers[0]
@@ -34,7 +34,7 @@ class LLMPolicy(BaseObjectNavPolicy):
                 # Ask LLM which waypoint to head to next
                 goal, _ = self._get_llm_goal(curr_pos, frontiers)
         else:
-            goal = self.last_goal
+            goal = self._last_goal
 
         pointnav_action = self._pointnav(
             observations, goal[:2], deterministic=True, stop=False
@@ -46,7 +46,7 @@ class LLMPolicy(BaseObjectNavPolicy):
         self, current_pos: np.ndarray, frontiers: np.ndarray
     ) -> Tuple[np.ndarray, str]:
         """
-        Asks LLM which object or frontier to go to next. self.object_map is used to
+        Asks LLM which object or frontier to go to next. self._object_map is used to
         generate the prompt for the LLM.
 
         Args:
@@ -58,8 +58,8 @@ class LLMPolicy(BaseObjectNavPolicy):
         Returns:
             Tuple[np.ndarray, str]: A tuple containing the goal and the LLM response.
         """
-        prompt, waypoints = self.object_map.get_textual_map_prompt(
-            self.target_object, current_pos, frontiers
+        prompt, waypoints = self._object_map.get_textual_map_prompt(
+            self._target_object, current_pos, frontiers
         )
         resp = self.llm.ask(prompt)
         int_resp = extract_integer(resp) - 1

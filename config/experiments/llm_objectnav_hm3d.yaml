@@ -11,6 +11,7 @@ defaults:
       - frontier_sensor
   - /habitat/task/measurements:
     - frontier_exploration_map
+  - /habitat_baselines/rl/policy: zsos_policy
   - _self_
 
 habitat:
