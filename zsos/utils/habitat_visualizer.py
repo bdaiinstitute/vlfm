@@ -67,6 +67,10 @@ class HabitatVis:
             cost_map = crop_white_border(cost_map)
             # Make the image at least 150 pixels tall or wide
             cost_map = pad_larger_dim(cost_map, 150)
+            # Rotate the image if the corresponding map is taller than it is wide
+            map = infos[0]["top_down_map"]["map"]
+            if map.shape[0] > map.shape[1]:
+                cost_map = np.rot90(cost_map, 1)
             # Pad the shorter dimension to be the same size as the longer
             cost_map = pad_to_square(cost_map, extra_pad=50)
             # Pad the image border with some white space
