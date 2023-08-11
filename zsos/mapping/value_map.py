@@ -4,7 +4,7 @@ import os
 import os.path as osp
 import shutil
 import warnings
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -49,7 +49,9 @@ class ValueMap:
         self.episode_pixel_origin = np.array([size // 2, size // 2])
         self.min_confidence = 0.25
         self.decision_threshold = 0.35
-        self.traj_vis = TrajectoryVisualizer()
+        self.traj_vis = TrajectoryVisualizer(
+            self.episode_pixel_origin, self.pixels_per_meter
+        )
 
         if RECORDING:
             if osp.isdir(RECORDING_DIR):
@@ -69,7 +71,9 @@ class ValueMap:
         self.value_map.fill(0)
         self.confidence_map.fill(0)
         self._camera_positions = []
-        self.traj_vis.reset()
+        self.traj_vis = TrajectoryVisualizer(
+            self.episode_pixel_origin, self.pixels_per_meter
+        )
 
     def update_map(
         self, depth: np.ndarray, tf_camera_to_episodic: np.ndarray, value: float
@@ -119,8 +123,7 @@ class ValueMap:
                 json.dump(data, f)
 
     def visualize(
-        self,
-        color_coords: Optional[List[Tuple[np.ndarray, Tuple[int, int, int]]]] = None,
+        self, markers: Optional[List[Tuple[np.ndarray, Dict[str, Any]]]] = None
     ) -> np.ndarray:
         """Return an image representation of the map"""
         # Must negate the y values to get the correct orientation
@@ -138,13 +141,11 @@ class ValueMap:
                 map_img,
                 self._camera_positions,
                 self._last_camera_yaw,
-                self.episode_pixel_origin,
-                self.pixels_per_meter,
             )
 
-            if color_coords is not None:
-                for coord, color in color_coords:
-                    map_img = self.traj_vis.draw_color_point(map_img, coord, color)
+            if markers is not None:
+                for pos, marker_kwargs in markers:
+                    map_img = self.traj_vis.draw_circle(map_img, pos, **marker_kwargs)
 
         return map_img
 

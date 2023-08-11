@@ -2,6 +2,7 @@ import os
 from typing import Any, Dict, Tuple, Union
 
 import cv2
+import numpy as np
 from torch import Tensor
 
 from zsos.mapping.frontier_map import FrontierMap
@@ -17,6 +18,12 @@ except ModuleNotFoundError:
 
 
 class ITMPolicy(BaseObjectNavPolicy):
+    target_object_color: Tuple[int, int, int] = (0, 255, 0)
+    selected_frontier_color: Tuple[int, int, int] = (0, 255, 255)
+    frontier_color: Tuple[int, int, int] = (0, 0, 255)
+    circle_marker_thickness: int = 2
+    circle_marker_radius: int = 5
+
     def __init__(self, *args, **kwargs):
         super().__init__()
         self.itm = BLIP2ITMClient()
@@ -44,12 +51,28 @@ class ITMPolicy(BaseObjectNavPolicy):
         detections: ObjectDetections,
     ) -> Dict[str, Any]:
         policy_info = super()._get_policy_info(observations, detections)
-        color_coords = []
-        for frontier in observations["frontier_sensor"][0].cpu().numpy():
-            color_coords.append((frontier[:2], (0, 0, 255)))
-        color_coords.append((self.last_goal, (0, 255, 0)))
+        markers = []
+
+        # Draw frontiers on to the cost map
+        base_kwargs = {
+            "radius": self.circle_marker_radius,
+            "thickness": self.circle_marker_thickness,
+        }
+        frontiers = observations["frontier_sensor"][0].cpu().numpy()
+        for frontier in frontiers:
+            marker_kwargs = {"color": self.frontier_color, **base_kwargs}
+            markers.append((frontier[:2], marker_kwargs))
+
+        if not np.array_equal(self.last_goal, np.zeros(2)):
+            # Draw the pointnav goal on to the cost map
+            if any(np.array_equal(self.last_goal, frontier) for frontier in frontiers):
+                color = self.selected_frontier_color
+            else:
+                color = self.target_object_color
+            marker_kwargs = {"color": color, **base_kwargs}
+            markers.append((self.last_goal, marker_kwargs))
         policy_info["cost_map"] = cv2.cvtColor(
-            self.value_map.visualize(color_coords), cv2.COLOR_RGB2BGR
+            self.value_map.visualize(markers), cv2.COLOR_BGR2RGB
         )
 
         return policy_info

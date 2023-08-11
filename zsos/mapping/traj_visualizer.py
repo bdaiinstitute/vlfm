@@ -1,4 +1,4 @@
-from typing import List, Tuple, Union
+from typing import List, Union
 
 import cv2
 import numpy as np
@@ -14,6 +14,10 @@ class TrajectoryVisualizer:
     path_color: tuple = (0, 255, 0)
     path_thickness: int = 3
 
+    def __init__(self, origin_in_img: np.ndarray, pixels_per_meter: float):
+        self._origin_in_img = origin_in_img
+        self._pixels_per_meter = pixels_per_meter
+
     def reset(self):
         self._num_drawn_points = 1
         self._cached_path_mask = None
@@ -23,12 +27,8 @@ class TrajectoryVisualizer:
         img: np.ndarray,
         camera_positions: Union[np.ndarray, List[np.ndarray]],
         camera_yaw: float,
-        origin_in_img: np.ndarray,
-        pixels_per_meter: float,
     ) -> np.ndarray:
         """Draws the trajectory on the image and returns it"""
-        self._origin_in_img = origin_in_img
-        self._pixels_per_meter = pixels_per_meter
         img = self._draw_path(img, camera_positions)
         img = self._draw_agent(img, camera_positions[-1], camera_yaw)
         return img
@@ -95,12 +95,12 @@ class TrajectoryVisualizer:
 
         return img
 
-    def draw_color_point(
-        self, img: np.ndarray, position: np.ndarray, color: Tuple[int, int, int]
+    def draw_circle(
+        self, img: np.ndarray, position: np.ndarray, **kwargs
     ) -> np.ndarray:
         """Draws the point as a circle on the image and returns it"""
         px_position = self._metric_to_pixel(position)
-        cv2.circle(img, tuple(px_position[::-1]), 5, color, 2)
+        cv2.circle(img, tuple(px_position[::-1]), **kwargs)
 
         return img
 
