@@ -61,6 +61,9 @@ class HabitatMixin:
         agent_config = config.habitat.simulator.agents.main_agent
         kwargs["camera_height"] = agent_config.sim_sensors.rgb_sensor.position[1]
 
+        # Only bother visualizing if we're actually going to save the video
+        kwargs["visualize"] = len(config.habitat_baselines.eval.video_option) > 0
+
         return cls(**kwargs)
 
     def act(
@@ -101,6 +104,10 @@ class HabitatMixin:
         """Get policy info for logging"""
         parent_cls: BaseObjectNavPolicy = super()  # type: ignore
         info = parent_cls._get_policy_info(observations, detections)
+
+        if not self._visualize:  # type: ignore
+            return info
+
         if self._start_yaw is None:
             self._start_yaw = observations[HeadingSensor.cls_uuid][0].item()
         info["start_yaw"] = self._start_yaw
@@ -168,7 +175,6 @@ class ZSOSPolicyConfig(PolicyConfig):
     value_map_max_depth: float = 5.0
     value_map_hfov: float = 79.0
     object_map_proximity_threshold: float = 1.5
-    visualize: bool = True
 
     @classmethod
     def arg_names(cls) -> List[str]:
@@ -184,7 +190,6 @@ class ZSOSPolicyConfig(PolicyConfig):
             "object_map_proximity_threshold",
             "value_map_max_depth",
             "value_map_hfov",
-            "visualize",
         ]
 
 

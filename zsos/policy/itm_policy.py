@@ -53,6 +53,10 @@ class ITMPolicy(BaseObjectNavPolicy):
         detections: ObjectDetections,
     ) -> Dict[str, Any]:
         policy_info = super()._get_policy_info(observations, detections)
+
+        if not self._visualize:
+            return policy_info
+
         markers = []
 
         # Draw frontiers on to the cost map
