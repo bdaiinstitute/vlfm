@@ -17,7 +17,7 @@ except ModuleNotFoundError:
     pass
 
 
-class ITMPolicy(BaseObjectNavPolicy):
+class BaseITMPolicy(BaseObjectNavPolicy):
     _target_object_color: Tuple[int, int, int] = (0, 255, 0)
     _selected__frontier_color: Tuple[int, int, int] = (0, 255, 255)
     _frontier_color: Tuple[int, int, int] = (0, 0, 255)
@@ -28,24 +28,14 @@ class ITMPolicy(BaseObjectNavPolicy):
         self, value_map_max_depth: float, value_map_hfov: float, *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
-        self.itm = BLIP2ITMClient()
-        self.frontier_map: FrontierMap = FrontierMap()
-        self.value_map: ValueMap = ValueMap(
+        self._itm = BLIP2ITMClient()
+        self._value_map: ValueMap = ValueMap(
             fov=value_map_hfov, max_depth=value_map_max_depth
         )
 
-    def act(self, observations: TensorDict, *args, **kwargs) -> Tuple[Tensor, Tensor]:
-        rgb, depth, tf_camera_to_episodic = self._get_object_camera_info(observations)
-        text = f"Seems like there is a {self._target_object} ahead."
-        curr_cosine = self.frontier_map._encode(rgb, text)
-        self.value_map.update_map(depth, tf_camera_to_episodic, curr_cosine)
-
-        return super().act(observations, *args, **kwargs)
-
     def _reset(self):
         super()._reset()
-        self.frontier_map.reset()
-        self.value_map.reset()
+        self._value_map.reset()
 
     def _get_policy_info(
         self,
@@ -78,10 +68,32 @@ class ITMPolicy(BaseObjectNavPolicy):
             marker_kwargs = {"color": color, **base_kwargs}
             markers.append((self._last_goal, marker_kwargs))
         policy_info["cost_map"] = cv2.cvtColor(
-            self.value_map.visualize(markers), cv2.COLOR_BGR2RGB
+            self._value_map.visualize(markers), cv2.COLOR_BGR2RGB
         )
 
         return policy_info
+
+    def _update_value_map(self, observations: "TensorDict"):
+        # This policy only uses the value map for visualization.
+        rgb, depth, tf_camera_to_episodic = self._get_object_camera_info(observations)
+        text = f"Seems like there is a {self._target_object} ahead."
+        curr_cosine = self._itm.cosine(rgb, text)
+        self._value_map.update_map(depth, tf_camera_to_episodic, curr_cosine)
+
+
+class ITMPolicy(BaseITMPolicy):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.frontier_map: FrontierMap = FrontierMap()
+
+    def act(self, observations: "TensorDict", *args, **kwargs) -> Tuple[Tensor, Tensor]:
+        if self._visualize:
+            self._update_value_map(observations)
+        return super().act(observations, *args, **kwargs)
+
+    def _reset(self):
+        super()._reset()
+        self.frontier_map.reset()
 
     def _explore(self, observations: Union[Dict[str, Tensor], "TensorDict"]) -> Tensor:
         frontiers = observations["frontier_sensor"][0].cpu().numpy()
@@ -93,6 +105,23 @@ class ITMPolicy(BaseObjectNavPolicy):
         print(f"Step: {self._num_steps} Best frontier: {cosine}")
         pointnav_action = self._pointnav(
             observations, goal[:2], deterministic=True, stop=False
+        )
+
+        return pointnav_action
+
+
+class ITMPolicyV2(BaseITMPolicy):
+    def act(self, observations: "TensorDict", *args, **kwargs) -> Tuple[Tensor, Tensor]:
+        self._update_value_map(observations)
+        return super().act(observations, *args, **kwargs)
+
+    def _explore(self, observations: Union[Dict[str, Tensor], "TensorDict"]) -> Tensor:
+        frontiers = observations["frontier_sensor"][0].cpu().numpy()
+        best_frontier, value = self._value_map.select_best_waypoint(frontiers, 0.5)
+        os.environ["DEBUG_INFO"] = f"Best value: {value*100:.2f}%"
+        print(f"Step: {self._num_steps} Best value: {value*100:.2f}%")
+        pointnav_action = self._pointnav(
+            observations, best_frontier, deterministic=True, stop=False
         )
 
         return pointnav_action

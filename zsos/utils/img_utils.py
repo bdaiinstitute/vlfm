@@ -1,7 +1,8 @@
-from typing import Tuple
+from typing import Tuple, Union
 
 import cv2
 import numpy as np
+from scipy.ndimage import maximum_filter
 
 
 def rotate_image(image: np.ndarray, radians: float, border_value=0) -> np.ndarray:
@@ -195,3 +196,31 @@ def pad_larger_dim(image: np.ndarray, target_dimension: int) -> np.ndarray:
         padded_image = image
 
     return padded_image
+
+
+def max_pixel_value_within_radius(
+    image: np.ndarray, pixel_location: Tuple[int, int], radius: int
+) -> Union[float, int]:
+    """Returns the maximum pixel value within a given radius of a specified pixel
+    location in the given image.
+
+    Args:
+        image (np.ndarray): The input image as a 2D numpy array.
+        pixel_location (Tuple[int, int]): The location of the pixel as a tuple (row,
+            column).
+        radius (int): The radius within which to find the maximum pixel value.
+
+    Returns:
+        Union[float, int]: The maximum pixel value within the given radius of the pixel
+            location.
+    """
+    # Create a circular mask with the given radius
+    mask = np.zeros((2 * radius + 1, 2 * radius + 1))
+    y, x = np.ogrid[-radius : radius + 1, -radius : radius + 1]
+    mask[x**2 + y**2 <= radius**2] = 1
+
+    # Apply the mask to the image using maximum filter
+    max_filtered = maximum_filter(image, footprint=mask)
+
+    # Return the maximum pixel value within the radius of the pixel location
+    return max_filtered[pixel_location]

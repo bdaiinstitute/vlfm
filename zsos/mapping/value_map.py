@@ -12,6 +12,7 @@ import numpy as np
 from zsos.mapping.traj_visualizer import TrajectoryVisualizer
 from zsos.utils.geometry_utils import extract_yaw, get_rotation_matrix
 from zsos.utils.img_utils import (
+    max_pixel_value_within_radius,
     monochannel_to_inferno_rgb,
     place_img_in_img,
     rotate_image,
@@ -121,6 +122,35 @@ class ValueMap:
             }
             with open(JSON_PATH, "w") as f:
                 json.dump(data, f)
+
+    def select_best_waypoint(
+        self, waypoints: np.ndarray, radius: float
+    ) -> Tuple[np.ndarray, float]:
+        """Selects the best waypoint from the given list of waypoints.
+
+        Args:
+            waypoints (np.ndarray): An array of 2D waypoints to choose from.
+
+        Returns:
+            Tuple[np.ndarray, float]: The best waypoint and its associated value.
+        """
+        radius_px = int(radius * self.pixels_per_meter)
+        best_idx, best_value = 0, -np.inf
+
+        for i, waypoint in enumerate(waypoints):
+            # Convert to pixel units
+            x, y = waypoint
+            px = int(-x * self.pixels_per_meter) + self.episode_pixel_origin[0]
+            py = int(-y * self.pixels_per_meter) + self.episode_pixel_origin[1]
+            waypoint_px = (self.value_map.shape[0] - px, py)
+            value = max_pixel_value_within_radius(
+                self.value_map, waypoint_px, radius_px
+            )
+
+            if value > best_value:
+                best_idx, best_value = i, value
+
+        return waypoints[best_idx], best_value
 
     def visualize(
         self, markers: Optional[List[Tuple[np.ndarray, Dict[str, Any]]]] = None

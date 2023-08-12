@@ -20,7 +20,7 @@ from zsos.utils.geometry_utils import xyz_yaw_to_tf_matrix
 from zsos.vlm.grounding_dino import ObjectDetections
 
 from .base_objectnav_policy import BaseObjectNavPolicy
-from .itm_policy import ITMPolicy
+from .itm_policy import ITMPolicy, ITMPolicyV2
 
 ID_TO_NAME = ["chair", "bed", "potted plant", "toilet", "tv", "couch"]
 
@@ -159,6 +159,11 @@ class SuperOracleFBEPolicy(HabitatMixin, BaseObjectNavPolicy):
 
 @baseline_registry.register_policy
 class HabitatITMPolicy(HabitatMixin, ITMPolicy):
+    pass
+
+
+@baseline_registry.register_policy
+class HabitatITMPolicyV2(HabitatMixin, ITMPolicyV2):
     pass
 
 
