@@ -181,6 +181,7 @@ class ZSOSPolicyConfig(PolicyConfig):
     value_map_hfov: float = 79.0
     object_map_proximity_threshold: float = 1.5
     use_max_confidence: bool = True
+    text_prompt: str = "Seems like there is a target_object ahead."
 
     @classmethod
     def arg_names(cls) -> List[str]:
@@ -197,6 +198,7 @@ class ZSOSPolicyConfig(PolicyConfig):
             "value_map_max_depth",
             "value_map_hfov",
             "use_max_confidence",
+            "text_prompt",
         ]
 
 

@@ -182,3 +182,30 @@ def xyz_yaw_to_tf_matrix(xyz: np.ndarray, yaw: float) -> np.ndarray:
         ]
     )
     return transformation_matrix
+
+
+def closest_point_within_threshold(
+    points_array: np.ndarray, target_point: np.ndarray, threshold: float
+) -> int:
+    """Find the point within the threshold distance that is closest to the target_point.
+
+    Args:
+        points_array (np.ndarray): An array of 2D points, where each point is a tuple
+            (x, y).
+        target_point (np.ndarray): The target 2D point (x, y).
+        threshold (float): The maximum distance threshold.
+
+    Returns:
+        int: The index of the closest point within the threshold distance.
+    """
+    distances = np.sqrt(
+        (points_array[:, 0] - target_point[0]) ** 2
+        + (points_array[:, 1] - target_point[1]) ** 2
+    )
+    within_threshold = distances <= threshold
+
+    if np.any(within_threshold):
+        closest_index = np.argmin(distances)
+        return int(closest_index)
+
+    return -1

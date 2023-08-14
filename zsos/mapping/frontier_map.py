@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 import numpy as np
 
@@ -68,27 +68,15 @@ class FrontierMap:
         """
         return self.encoder.cosine(image, text)
 
-    def get_best_frontier(
-        self, curr_pos: Optional[np.ndarray] = None
-    ) -> Tuple[np.ndarray, float]:
+    def sort_waypoints(self) -> Tuple[np.ndarray, List[float]]:
         """
         Returns the frontier with the highest cosine and the value of that cosine.
         """
-        if curr_pos is None:
-            best_frontier = max(self.frontiers, key=lambda frontier: frontier.cosine)
-        else:
-            # We need to add a cost to frontiers that are far away from the
-            # robot. This is to discourage the robot from visiting frontiers that are
-            # too far to be worth visiting in comparison to those that are closer yet
-            # have only a slightly lower cosine.
-            def cost(frontier_xyz: np.ndarray) -> float:
-                dist = np.linalg.norm(curr_pos - frontier_xyz)
-                penalty = 0.01 * max(dist, 3.0)
-                return penalty
+        # Use np.argsort to get the indices of the sorted cosines
+        cosines = [f.cosine for f in self.frontiers]
+        waypoints = [f.xyz for f in self.frontiers]
+        sorted_inds = np.argsort([-c for c in cosines])  # sort in descending order
+        sorted_values = [cosines[i] for i in sorted_inds]
+        sorted_frontiers = np.array([waypoints[i] for i in sorted_inds])
 
-            best_frontier = max(
-                self.frontiers,
-                key=lambda frontier: frontier.cosine - cost(frontier.xyz),
-            )
-
-        return best_frontier.xyz, best_frontier.cosine
+        return sorted_frontiers, sorted_values

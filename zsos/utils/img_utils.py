@@ -256,10 +256,10 @@ def pixel_value_within_radius(
         thickness=-1,
     )
     if reduction == "mean":
-        return np.mean(cropped_image[circle_mask > 0])
+        return np.mean(cropped_image[circle_mask > 0])  # type: ignore
     elif reduction == "max":
         return np.max(cropped_image[circle_mask > 0])
     elif reduction == "median":
-        return np.median(cropped_image[circle_mask > 0])
+        return np.median(cropped_image[circle_mask > 0])  # type: ignore
     else:
         raise ValueError(f"Invalid reduction method: {reduction}")

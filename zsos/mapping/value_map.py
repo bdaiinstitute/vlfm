@@ -127,14 +127,15 @@ class ValueMap:
 
     def sort_waypoints(
         self, waypoints: np.ndarray, radius: float
-    ) -> Tuple[List[np.ndarray], List[float]]:
+    ) -> Tuple[np.ndarray, List[float]]:
         """Selects the best waypoint from the given list of waypoints.
 
         Args:
             waypoints (np.ndarray): An array of 2D waypoints to choose from.
 
         Returns:
-            Tuple[List[np.ndarray], List[float]]: The best waypoint and its associated value.
+            Tuple[np.ndarray, List[float]]: A tuple of the sorted waypoints and
+                their corresponding values.
         """
         radius_px = int(radius * self.pixels_per_meter)
 
@@ -150,7 +151,7 @@ class ValueMap:
         # Use np.argsort to get the indices of the sorted values
         sorted_inds = np.argsort([-v for v in values])  # sort in descending order
         sorted_values = [values[i] for i in sorted_inds]
-        sorted_frontiers = [waypoints[i] for i in sorted_inds]
+        sorted_frontiers = np.array([waypoints[i] for i in sorted_inds])
 
         return sorted_frontiers, sorted_values
 
