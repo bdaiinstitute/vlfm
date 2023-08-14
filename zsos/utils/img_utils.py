@@ -213,8 +213,11 @@ def pad_larger_dim(image: np.ndarray, target_dimension: int) -> np.ndarray:
     return padded_image
 
 
-def max_pixel_value_within_radius(
-    image: np.ndarray, pixel_location: Tuple[int, int], radius: int
+def pixel_value_within_radius(
+    image: np.ndarray,
+    pixel_location: Tuple[int, int],
+    radius: int,
+    reduction: str = "median",
 ) -> Union[float, int]:
     """Returns the maximum pixel value within a given radius of a specified pixel
     location in the given image.
@@ -224,6 +227,8 @@ def max_pixel_value_within_radius(
         pixel_location (Tuple[int, int]): The location of the pixel as a tuple (row,
             column).
         radius (int): The radius within which to find the maximum pixel value.
+        reduction (str, optional): The method to use to reduce the cropped image to a
+            single value. Defaults to "median".
 
     Returns:
         Union[float, int]: The maximum pixel value within the given radius of the pixel
@@ -250,5 +255,11 @@ def max_pixel_value_within_radius(
         color=255,
         thickness=-1,
     )
-
-    return np.max(cropped_image[circle_mask > 0])
+    if reduction == "mean":
+        return np.mean(cropped_image[circle_mask > 0])
+    elif reduction == "max":
+        return np.max(cropped_image[circle_mask > 0])
+    elif reduction == "median":
+        return np.median(cropped_image[circle_mask > 0])
+    else:
+        raise ValueError(f"Invalid reduction method: {reduction}")

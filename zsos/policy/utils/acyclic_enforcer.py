@@ -9,7 +9,9 @@ class StateAction:
         self.action = action
 
     def __eq__(self, other: "StateAction") -> bool:
-        return self.__hash__() == other.__hash__()
+        dist1 = np.linalg.norm(self.position - other.position)
+        dist2 = np.linalg.norm(self.action - other.action)
+        return dist1 < 0.5 and dist2 < 0.5
 
     def __hash__(self) -> int:
         string_repr = f"{self.position}_{self.action}"

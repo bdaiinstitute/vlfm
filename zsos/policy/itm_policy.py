@@ -26,12 +26,19 @@ class BaseITMPolicy(BaseObjectNavPolicy):
     _circle_marker_radius: int = 5
 
     def __init__(
-        self, value_map_max_depth: float, value_map_hfov: float, *args, **kwargs
+        self,
+        value_map_max_depth: float,
+        value_map_hfov: float,
+        use_max_confidence: bool = True,
+        *args,
+        **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self._itm = BLIP2ITMClient()
         self._value_map: ValueMap = ValueMap(
-            fov=value_map_hfov, max_depth=value_map_max_depth
+            fov=value_map_hfov,
+            max_depth=value_map_max_depth,
+            use_max_confidence=use_max_confidence,
         )
 
     def _reset(self):

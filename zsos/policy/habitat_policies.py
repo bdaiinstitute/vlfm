@@ -180,6 +180,7 @@ class ZSOSPolicyConfig(PolicyConfig):
     value_map_max_depth: float = 5.0
     value_map_hfov: float = 79.0
     object_map_proximity_threshold: float = 1.5
+    use_max_confidence: bool = True
 
     @classmethod
     def arg_names(cls) -> List[str]:
@@ -195,6 +196,7 @@ class ZSOSPolicyConfig(PolicyConfig):
             "object_map_proximity_threshold",
             "value_map_max_depth",
             "value_map_hfov",
+            "use_max_confidence",
         ]
 
 

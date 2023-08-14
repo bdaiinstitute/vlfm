@@ -12,8 +12,8 @@ import numpy as np
 from zsos.mapping.traj_visualizer import TrajectoryVisualizer
 from zsos.utils.geometry_utils import extract_yaw, get_rotation_matrix
 from zsos.utils.img_utils import (
-    max_pixel_value_within_radius,
     monochannel_to_inferno_rgb,
+    pixel_value_within_radius,
     place_img_in_img,
     rotate_image,
 )
@@ -32,9 +32,9 @@ class ValueMap:
     _confidence_mask: np.ndarray = None
     _camera_positions: List[np.ndarray] = []
     _last_camera_yaw: float = None
-    use_max_confidence: bool = False
+    _use_max_confidence: bool = False
 
-    def __init__(self, fov: float, max_depth: float):
+    def __init__(self, fov: float, max_depth: float, use_max_confidence: bool = True):
         """
         Args:
             fov: The field of view of the camera in degrees.
@@ -45,6 +45,8 @@ class ValueMap:
 
         self.fov = np.deg2rad(fov)
         self.max_depth = max_depth
+        self.use_max_confidence = use_max_confidence
+
         self.value_map = np.zeros((size, size), np.float32)
         self.confidence_map = np.zeros((size, size), np.float32)
         self.episode_pixel_origin = np.array([size // 2, size // 2])
@@ -141,7 +143,7 @@ class ValueMap:
             px = int(-x * self.pixels_per_meter) + self.episode_pixel_origin[0]
             py = int(-y * self.pixels_per_meter) + self.episode_pixel_origin[1]
             point_px = (self.value_map.shape[0] - px, py)
-            value = max_pixel_value_within_radius(self.value_map, point_px, radius_px)
+            value = pixel_value_within_radius(self.value_map, point_px, radius_px)
             return value
 
         values = [get_value(point) for point in waypoints]
@@ -279,12 +281,11 @@ class ValueMap:
         # self.decision_threshold AND less than the confidence in the existing map
         # will be re-assigned with a confidence of 0
         confidence_mask = np.logical_and(
-            confidence < self.decision_threshold,
-            confidence < self.confidence_map,
+            confidence < self.decision_threshold, confidence < self.confidence_map
         )
         confidence[confidence_mask] = 0
 
-        if self.use_max_confidence:
+        if self._use_max_confidence:
             # For every pixel that has a higher confidence in the new map than the
             # existing value map, replace the value in the existing value map with
             # the new value
