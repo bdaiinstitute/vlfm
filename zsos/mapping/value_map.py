@@ -123,34 +123,34 @@ class ValueMap:
             with open(JSON_PATH, "w") as f:
                 json.dump(data, f)
 
-    def select_best_waypoint(
+    def sort_waypoints(
         self, waypoints: np.ndarray, radius: float
-    ) -> Tuple[np.ndarray, float]:
+    ) -> Tuple[List[np.ndarray], List[float]]:
         """Selects the best waypoint from the given list of waypoints.
 
         Args:
             waypoints (np.ndarray): An array of 2D waypoints to choose from.
 
         Returns:
-            Tuple[np.ndarray, float]: The best waypoint and its associated value.
+            Tuple[List[np.ndarray], List[float]]: The best waypoint and its associated value.
         """
         radius_px = int(radius * self.pixels_per_meter)
-        best_idx, best_value = 0, -np.inf
 
-        for i, waypoint in enumerate(waypoints):
-            # Convert to pixel units
-            x, y = waypoint
+        def get_value(point: np.ndarray) -> float:
+            x, y = point
             px = int(-x * self.pixels_per_meter) + self.episode_pixel_origin[0]
             py = int(-y * self.pixels_per_meter) + self.episode_pixel_origin[1]
-            waypoint_px = (self.value_map.shape[0] - px, py)
-            value = max_pixel_value_within_radius(
-                self.value_map, waypoint_px, radius_px
-            )
+            point_px = (self.value_map.shape[0] - px, py)
+            value = max_pixel_value_within_radius(self.value_map, point_px, radius_px)
+            return value
 
-            if value > best_value:
-                best_idx, best_value = i, value
+        values = [get_value(point) for point in waypoints]
+        # Use np.argsort to get the indices of the sorted values
+        sorted_inds = np.argsort([-v for v in values])  # sort in descending order
+        sorted_values = [values[i] for i in sorted_inds]
+        sorted_frontiers = [waypoints[i] for i in sorted_inds]
 
-        return waypoints[best_idx], best_value
+        return sorted_frontiers, sorted_values
 
     def visualize(
         self, markers: Optional[List[Tuple[np.ndarray, Dict[str, Any]]]] = None

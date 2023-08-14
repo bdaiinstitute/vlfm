@@ -8,6 +8,7 @@ from torch import Tensor
 from zsos.mapping.frontier_map import FrontierMap
 from zsos.mapping.value_map import ValueMap
 from zsos.policy.base_objectnav_policy import BaseObjectNavPolicy
+from zsos.policy.utils.acyclic_enforcer import AcyclicEnforcer
 from zsos.vlm.blip2itm import BLIP2ITMClient
 from zsos.vlm.detections import ObjectDetections
 
@@ -111,17 +112,62 @@ class ITMPolicy(BaseITMPolicy):
 
 
 class ITMPolicyV2(BaseITMPolicy):
+    _acyclic_enforcer: AcyclicEnforcer = None  # must be set by ._reset()
+
     def act(self, observations: "TensorDict", *args, **kwargs) -> Tuple[Tensor, Tensor]:
         self._update_value_map(observations)
         return super().act(observations, *args, **kwargs)
 
+    def _reset(self):
+        super()._reset()
+        self._acyclic_enforcer = AcyclicEnforcer()
+
     def _explore(self, observations: Union[Dict[str, Tensor], "TensorDict"]) -> Tensor:
         frontiers = observations["frontier_sensor"][0].cpu().numpy()
-        best_frontier, value = self._value_map.select_best_waypoint(frontiers, 0.5)
-        os.environ["DEBUG_INFO"] = f"Best value: {value*100:.2f}%"
-        print(f"Step: {self._num_steps} Best value: {value*100:.2f}%")
+        if np.array_equal(frontiers, np.zeros((1, 2))):
+            return self._stop_action
+        best_frontier, best_value = self._get_best_frontier(observations, frontiers)
+        os.environ["DEBUG_INFO"] = f"Best value: {best_value*100:.2f}%"
+        print(f"Step: {self._num_steps} Best value: {best_value*100:.2f}%")
         pointnav_action = self._pointnav(
             observations, best_frontier, deterministic=True, stop=False
         )
 
         return pointnav_action
+
+    def _get_best_frontier(
+        self,
+        observations: Union[Dict[str, Tensor], "TensorDict"],
+        frontiers: np.ndarray,
+    ) -> Tuple[np.ndarray, float]:
+        """Returns the best frontier and its value based on self._value_map.
+
+        Args:
+            observations (Union[Dict[str, Tensor], "TensorDict"]): The observations from
+                the environment. Must contain "gps"
+            frontiers (np.ndarray): The frontiers to choose from, array of 2D points.
+
+        Returns:
+            Tuple[np.ndarray, float]: The best frontier and its value.
+        """
+        sorted_pts, sorted_values = self._value_map.sort_waypoints(frontiers, 0.5)
+
+        position = observations["gps"].squeeze(1).cpu().numpy()[0]
+        best_frontier, best_value = None, None
+        for frontier, value in zip(sorted_pts, sorted_values):
+            cyclic = self._acyclic_enforcer.check_cyclic(position, frontier)
+            if not cyclic:
+                best_frontier, best_value = frontier, value
+                break
+
+        if best_frontier is None:
+            print("All frontiers are cyclic. Choosing the closest one.")
+            best_idx = max(
+                range(len(frontiers)),
+                key=lambda i: np.linalg.norm(frontiers[i] - position),
+            )
+            best_frontier, best_value = (frontiers[best_idx], sorted_values[best_idx])
+
+        self._acyclic_enforcer.add_state_action(position, best_frontier)
+
+        return best_frontier, best_value
