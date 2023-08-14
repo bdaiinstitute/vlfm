@@ -28,7 +28,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
     _acyclic_enforcer: AcyclicEnforcer = None  # must be set by ._reset()
     _last_value: float = float("-inf")
     _last_frontier: np.ndarray = np.zeros(2)
-    _second_best_thresh: float = 0.85
+    _second_best_thresh: float = 0.9
 
     def __init__(
         self,

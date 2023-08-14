@@ -112,7 +112,7 @@ class ObjectMap:
                 camera_coordinates,
                 camera_yaw,
                 self.hfov,
-                self.max_depth,
+                self.max_depth * 0.8,
                 obj.location,
             ):
                 obj.explored = True
