@@ -101,11 +101,11 @@ class ValueMap:
 
         # Convert to pixel units
         px = int(cam_x * self.pixels_per_meter) + self.episode_pixel_origin[0]
-        py = int(cam_y * self.pixels_per_meter) + self.episode_pixel_origin[1]
+        py = int(-cam_y * self.pixels_per_meter) + self.episode_pixel_origin[1]
 
         # Overlay the new data onto the map
         blank_map = np.zeros_like(self.value_map)
-        blank_map = place_img_in_img(blank_map, curr_data, (-py, px))
+        blank_map = place_img_in_img(blank_map, curr_data, px, py)
 
         # Fuse the new data with the existing data
         self._fuse_new_data(blank_map, value)

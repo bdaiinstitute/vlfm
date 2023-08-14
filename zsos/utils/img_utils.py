@@ -2,7 +2,6 @@ from typing import Tuple, Union
 
 import cv2
 import numpy as np
-from scipy.ndimage import maximum_filter
 
 
 def rotate_image(image: np.ndarray, radians: float, border_value=0) -> np.ndarray:
@@ -25,24 +24,42 @@ def rotate_image(image: np.ndarray, radians: float, border_value=0) -> np.ndarra
     return rotated_image
 
 
-def place_img_in_img(img1: np.ndarray, img2: np.ndarray, xy: tuple) -> np.ndarray:
+def place_img_in_img(
+    img1: np.ndarray, img2: np.ndarray, row: int, col: int
+) -> np.ndarray:
     """Place img2 in img1 such that img2's center is at the specified coordinates (xy)
     in img1.
 
     Args:
         img1 (numpy.ndarray): The base image.
         img2 (numpy.ndarray): The image to be placed.
-        xy (tuple): The (x, y) coordinates of the center of img2 in img1.
+
 
     Returns:
         numpy.ndarray: The updated base image with img2 placed.
     """
-    x, y = xy
-    x = int(x)
-    y = int(y)
-    x1, y1 = x - img2.shape[1] // 2, y - img2.shape[0] // 2
-    x2, y2 = x1 + img2.shape[1], y1 + img2.shape[0]
-    img1[y1:y2, x1:x2] = img2
+    assert (
+        0 <= row < img1.shape[0] and 0 <= col < img1.shape[1]
+    ), "Pixel location is outside the image."
+    top = row - img2.shape[0] // 2
+    left = col - img2.shape[1] // 2
+    bottom = top + img2.shape[0]
+    right = left + img2.shape[1]
+
+    img1_top = max(0, top)
+    img1_left = max(0, left)
+    img1_bottom = min(img1.shape[0], bottom)
+    img1_right = min(img1.shape[1], right)
+
+    img2_top = max(0, -top)
+    img2_left = max(0, -left)
+    img2_bottom = img2_top + (img1_bottom - img1_top)
+    img2_right = img2_left + (img1_right - img1_left)
+
+    img1[img1_top:img1_bottom, img1_left:img1_right] = img2[
+        img2_top:img2_bottom, img2_left:img2_right
+    ]
+
     return img1
 
 
@@ -156,9 +173,7 @@ def pad_to_square(
     padded_img = np.ones((square_size, square_size, 3), dtype=np.uint8) * np.array(
         padding_color, dtype=np.uint8
     )
-    center_x = square_size // 2
-    center_y = square_size // 2
-    padded_img = place_img_in_img(padded_img, img, (center_x, center_y))
+    padded_img = place_img_in_img(padded_img, img, square_size // 2, square_size // 2)
 
     return padded_img
 
@@ -214,13 +229,26 @@ def max_pixel_value_within_radius(
         Union[float, int]: The maximum pixel value within the given radius of the pixel
             location.
     """
-    # Create a circular mask with the given radius
-    mask = np.zeros((2 * radius + 1, 2 * radius + 1))
-    y, x = np.ogrid[-radius : radius + 1, -radius : radius + 1]
-    mask[x**2 + y**2 <= radius**2] = 1
+    # Ensure that the pixel location is within the image
+    assert (
+        0 <= pixel_location[0] < image.shape[0]
+        and 0 <= pixel_location[1] < image.shape[1]
+    ), "Pixel location is outside the image."
 
-    # Apply the mask to the image using maximum filter
-    max_filtered = maximum_filter(image, footprint=mask)
+    top_left_x = max(0, pixel_location[0] - radius)
+    top_left_y = max(0, pixel_location[1] - radius)
+    bottom_right_x = min(image.shape[0], pixel_location[0] + radius + 1)
+    bottom_right_y = min(image.shape[1], pixel_location[1] + radius + 1)
+    cropped_image = image[top_left_x:bottom_right_x, top_left_y:bottom_right_y]
 
-    # Return the maximum pixel value within the radius of the pixel location
-    return max_filtered[pixel_location]
+    # Draw a circular mask for the cropped image
+    circle_mask = np.zeros(cropped_image.shape[:2], dtype=np.uint8)
+    circle_mask = cv2.circle(
+        circle_mask,
+        (radius, radius),
+        radius,
+        color=255,
+        thickness=-1,
+    )
+
+    return np.max(cropped_image[circle_mask > 0])
