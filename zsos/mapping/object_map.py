@@ -74,6 +74,9 @@ class ObjectMap:
         new_object = Object(object_name, location, confidence, too_far)
         self._add_object(new_object)
 
+    def has_object(self, target_class: str) -> bool:
+        return any(obj.class_name == target_class for obj in self.map)
+
     def get_best_object(
         self, target_class: str, curr_position: np.ndarray
     ) -> np.ndarray:
@@ -91,24 +94,13 @@ class ObjectMap:
                 given object name [x, y, z].
         """
         matches = [obj for obj in self.map if obj.class_name == target_class]
-        if len(matches) == 0:
-            raise ValueError(
-                f"No object of type {target_class} found in the object map."
-            )
-
         ignore_too_far = any([not obj.too_far for obj in matches])
-        best_loc, best_dist = None, float("inf")
-        for object_inst in matches:
-            if ignore_too_far and object_inst.too_far:
-                continue
-            dist = np.linalg.norm(object_inst.location - curr_position)
-            if dist < best_dist:
-                best_loc = object_inst.location
-                best_dist = dist
-
-        assert best_loc is not None, "This error should never be reached."
-
-        return best_loc
+        if ignore_too_far:
+            # Filter out all objects that are too far away
+            matches = [obj for obj in matches if not obj.too_far]
+        dists = [np.linalg.norm(obj.location[:2] - curr_position) for obj in matches]
+        locs = [obj.location for obj in matches]
+        return locs[np.argmin(dists)]
 
     def update_explored(self, tf_camera_to_episodic: np.ndarray) -> None:
         camera_coordinates = tf_camera_to_episodic[:3, 3] / tf_camera_to_episodic[3, 3]

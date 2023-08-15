@@ -113,10 +113,9 @@ class BaseObjectNavPolicy(BasePolicy):
         raise NotImplementedError
 
     def _get_target_object_location(self, position) -> Union[None, np.ndarray]:
-        try:
+        if self._object_map.has_object(self._target_object):
             return self._object_map.get_best_object(self._target_object, position)
-        except ValueError:
-            # Target object has not been spotted
+        else:
             return None
 
     def _get_policy_info(
