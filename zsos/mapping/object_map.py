@@ -248,10 +248,6 @@ class ObjectMap:
         object_coord_global = tf_camera_to_episodic @ object_coord_agent
         object_coord_global = object_coord_global[:3] / object_coord_global[3]
         extract_yaw(tf_camera_to_episodic)
-        # print("tf_camera_to_episodic", tf_camera_to_episodic)
-        # print("camera_yaw", camera_yaw)
-        # print("object_coord_agent", object_coord_agent)
-        # print("object_coord_global", object_coord_global)
 
         return object_coord_global, too_far
 
