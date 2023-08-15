@@ -42,8 +42,11 @@ class ValueMap:
     ):
         """
         Args:
+            value_channels: The number of channels in the value map.
             fov: The field of view of the camera in degrees.
             max_depth: The desired maximum depth of the camera in meters.
+            use_max_confidence: Whether to use the maximum confidence value in the value
+                map or a weighted average confidence value.
         """
         size = 1000
         self.pixels_per_meter = 20
@@ -143,6 +146,9 @@ class ValueMap:
 
         Args:
             waypoints (np.ndarray): An array of 2D waypoints to choose from.
+            radius (float): The radius in meters to use for selecting the best waypoint.
+            reduce_fn (Callable, optional): The function to use for reducing the values
+                within the given radius. Defaults to np.max.
 
         Returns:
             Tuple[np.ndarray, List[float]]: A tuple of the sorted waypoints and
