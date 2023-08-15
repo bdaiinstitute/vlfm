@@ -74,13 +74,17 @@ class ObjectMap:
         new_object = Object(object_name, location, confidence, too_far)
         self._add_object(new_object)
 
-    def get_best_object(self, target_class: str) -> np.ndarray:
+    def get_best_object(
+        self, target_class: str, curr_position: np.ndarray
+    ) -> np.ndarray:
         """Returns the closest object to the agent that matches the given object name.
         It will ignore any detections of the target class if they are too far away,
         unless all the detections we have of the target class are too far away.
 
         Args:
             target_class (str): The name of the object class to search for.
+            curr_position (np.ndarray): The current position of the agent in the
+                episodic coordinate frame [x, y, z].
 
         Returns:
             np.ndarray: The location of the closest object to the agent that matches the
@@ -93,13 +97,14 @@ class ObjectMap:
             )
 
         ignore_too_far = any([not obj.too_far for obj in matches])
-        best_loc, best_conf = None, -float("inf")
+        best_loc, best_dist = None, float("inf")
         for object_inst in matches:
-            if object_inst.confidence > best_conf:
-                if ignore_too_far and object_inst.too_far:
-                    continue
+            if ignore_too_far and object_inst.too_far:
+                continue
+            dist = np.linalg.norm(object_inst.location - curr_position)
+            if dist < best_dist:
                 best_loc = object_inst.location
-                best_conf = object_inst.confidence
+                best_dist = dist
 
         assert best_loc is not None, "This error should never be reached."
 

@@ -89,7 +89,8 @@ class BaseObjectNavPolicy(BasePolicy):
 
         rgb, depth, tf_camera_to_episodic = self._get_object_camera_info(observations)
         detections = self._update_object_map(rgb, depth, tf_camera_to_episodic)
-        goal = self._get_target_object_location()
+        position = tf_camera_to_episodic[:2, 3] / tf_camera_to_episodic[3, 3]
+        goal = self._get_target_object_location(position)
 
         if not self._done_initializing:  # Initialize
             pointnav_action = self._initialize()
@@ -111,9 +112,9 @@ class BaseObjectNavPolicy(BasePolicy):
     def _explore(self, observations: "TensorDict") -> Tensor:
         raise NotImplementedError
 
-    def _get_target_object_location(self) -> Union[None, np.ndarray]:
+    def _get_target_object_location(self, position) -> Union[None, np.ndarray]:
         try:
-            return self._object_map.get_best_object(self._target_object)
+            return self._object_map.get_best_object(self._target_object, position)
         except ValueError:
             # Target object has not been spotted
             return None
