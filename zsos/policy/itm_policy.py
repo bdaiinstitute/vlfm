@@ -172,9 +172,11 @@ class BaseITMPolicy(BaseObjectNavPolicy):
 
     def _update_value_map(self, observations: "TensorDict"):
         rgb, depth, tf_camera_to_episodic = self._get_object_camera_info(observations)
-        text = self._text_prompt.replace("target_object", self._target_object)
-        curr_cosine = self._itm.cosine(rgb, text)
-        curr_cosine = np.array([curr_cosine])
+        curr_cosine = [
+            self._itm.cosine(rgb, p.replace("target_object", self._target_object))
+            for p in self._text_prompt.split("\n")
+        ]
+        curr_cosine = np.array(curr_cosine)
         self._value_map.update_map(depth, tf_camera_to_episodic, curr_cosine)
 
     def _sort_frontiers_by_value(
