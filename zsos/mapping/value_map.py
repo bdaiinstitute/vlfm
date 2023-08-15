@@ -330,12 +330,13 @@ class ValueMap:
                 warnings.filterwarnings("ignore", category=RuntimeWarning)
                 weight_1 = self.confidence_map / confidence_denominator
                 weight_2 = confidence / confidence_denominator
-                weight_1_channeled = np.repeat(
-                    np.expand_dims(weight_1, axis=2), self.value_channels, axis=2
-                )
-                weight_2_channeled = np.repeat(
-                    np.expand_dims(weight_2, axis=2), self.value_channels, axis=2
-                )
+
+            weight_1_channeled = np.repeat(
+                np.expand_dims(weight_1, axis=2), self.value_channels, axis=2
+            )
+            weight_2_channeled = np.repeat(
+                np.expand_dims(weight_2, axis=2), self.value_channels, axis=2
+            )
 
             self.value_map = (
                 self.value_map * weight_1_channeled + values * weight_2_channeled
