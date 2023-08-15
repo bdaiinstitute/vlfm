@@ -4,7 +4,7 @@ import os
 import os.path as osp
 import shutil
 import warnings
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -32,9 +32,14 @@ class ValueMap:
     _confidence_mask: np.ndarray = None
     _camera_positions: List[np.ndarray] = []
     _last_camera_yaw: float = None
-    _use_max_confidence: bool = False
 
-    def __init__(self, fov: float, max_depth: float, use_max_confidence: bool = True):
+    def __init__(
+        self,
+        value_channels: int,
+        fov: float,
+        max_depth: float,
+        use_max_confidence: bool = True,
+    ):
         """
         Args:
             fov: The field of view of the camera in degrees.
@@ -47,7 +52,8 @@ class ValueMap:
         self.max_depth = max_depth
         self.use_max_confidence = use_max_confidence
 
-        self.value_map = np.zeros((size, size), np.float32)
+        self.value_map = np.zeros((size, size, value_channels), np.float32)
+        self.value_channels = value_channels
         self.confidence_map = np.zeros((size, size), np.float32)
         self.episode_pixel_origin = np.array([size // 2, size // 2])
         self.min_confidence = 0.25
@@ -79,7 +85,7 @@ class ValueMap:
         )
 
     def update_map(
-        self, depth: np.ndarray, tf_camera_to_episodic: np.ndarray, value: float
+        self, depth: np.ndarray, tf_camera_to_episodic: np.ndarray, values: np.ndarray
     ):
         """Updates the value map with the given depth image, pose, and value to use.
 
@@ -88,8 +94,13 @@ class ValueMap:
                 normalized to the range [0, 1].
             tf_camera_to_episodic: The transformation matrix from the episodic frame to
                 the camera frame.
-            value: The value to use for updating the map.
+            values: The value to use for updating the map.
         """
+        assert len(values) == self.value_channels, (
+            "Incorrect number of values given "
+            f"({len(values)}). Expected {self.value_channels}."
+        )
+
         # Get new portion of the map
         curr_data = self._get_visible_mask(depth)
 
@@ -106,11 +117,11 @@ class ValueMap:
         py = int(-cam_y * self.pixels_per_meter) + self.episode_pixel_origin[1]
 
         # Overlay the new data onto the map
-        blank_map = np.zeros_like(self.value_map)
+        blank_map = np.zeros_like(self.value_map[..., 0])  # just use first channel
         blank_map = place_img_in_img(blank_map, curr_data, px, py)
 
         # Fuse the new data with the existing data
-        self._fuse_new_data(blank_map, value)
+        self._fuse_new_data(blank_map, values)
 
         if RECORDING:
             idx = len(glob.glob(osp.join(RECORDING_DIR, "*.png")))
@@ -120,13 +131,13 @@ class ValueMap:
                 data = json.load(f)
             data[img_path] = {
                 "tf_camera_to_episodic": tf_camera_to_episodic.tolist(),
-                "value": value,
+                "values": values,
             }
             with open(JSON_PATH, "w") as f:
                 json.dump(data, f)
 
     def sort_waypoints(
-        self, waypoints: np.ndarray, radius: float
+        self, waypoints: np.ndarray, radius: float, reduce_fn: Callable = np.max
     ) -> Tuple[np.ndarray, List[float]]:
         """Selects the best waypoint from the given list of waypoints.
 
@@ -144,7 +155,11 @@ class ValueMap:
             px = int(-x * self.pixels_per_meter) + self.episode_pixel_origin[0]
             py = int(-y * self.pixels_per_meter) + self.episode_pixel_origin[1]
             point_px = (self.value_map.shape[0] - px, py)
-            value = pixel_value_within_radius(self.value_map, point_px, radius_px)
+            all_values = [
+                pixel_value_within_radius(self.value_map[..., c], point_px, radius_px)
+                for c in range(self.value_channels)
+            ]
+            value = reduce_fn(all_values)
             return value
 
         values = [get_value(point) for point in waypoints]
@@ -156,12 +171,15 @@ class ValueMap:
         return sorted_frontiers, sorted_values
 
     def visualize(
-        self, markers: Optional[List[Tuple[np.ndarray, Dict[str, Any]]]] = None
+        self,
+        markers: Optional[List[Tuple[np.ndarray, Dict[str, Any]]]] = None,
+        reduce_fn: Callable = lambda i: np.max(i, axis=-1),
     ) -> np.ndarray:
         """Return an image representation of the map"""
         # Must negate the y values to get the correct orientation
         # map_img = np.flipud(self.confidence_map * self.value_map)
-        map_img = np.flipud(self.value_map)
+        reduced_map = reduce_fn(self.value_map)
+        map_img = np.flipud(reduced_map)
         # Make all 0s in the value map equal to the max value, so they don't throw off
         # the color mapping (will revert later)
         zero_mask = map_img == 0
@@ -270,13 +288,13 @@ class ValueMap:
 
         return adjusted_mask
 
-    def _fuse_new_data(self, confidence: np.ndarray, value: float):
+    def _fuse_new_data(self, confidence: np.ndarray, values: np.ndarray) -> None:
         """Fuse the new data with the existing value and confidence map.
 
         Args:
             confidence: The new confidence map data to fuse. Confidences are between
                 0 and 1, with 1 being the most confident.
-            value: The value attributed to the new portion of the map.
+            values: The values attributed to the new portion of the map.
         """
         # Any values in the given confidence map that are less confident than
         # self.decision_threshold AND less than the confidence in the existing map
@@ -286,12 +304,12 @@ class ValueMap:
         )
         confidence[confidence_mask] = 0
 
-        if self._use_max_confidence:
+        if self.use_max_confidence:
             # For every pixel that has a higher confidence in the new map than the
             # existing value map, replace the value in the existing value map with
             # the new value
             higher_confidence_mask = confidence > self.confidence_map
-            self.value_map[higher_confidence_mask] = value
+            self.value_map[higher_confidence_mask] = values
             # Update the confidence map with the new confidence values
             self.confidence_map[higher_confidence_mask] = confidence[
                 higher_confidence_mask
@@ -306,8 +324,16 @@ class ValueMap:
                 warnings.filterwarnings("ignore", category=RuntimeWarning)
                 weight_1 = self.confidence_map / confidence_denominator
                 weight_2 = confidence / confidence_denominator
+                weight_1_channeled = np.repeat(
+                    np.expand_dims(weight_1, axis=2), self.value_channels, axis=2
+                )
+                weight_2_channeled = np.repeat(
+                    np.expand_dims(weight_2, axis=2), self.value_channels, axis=2
+                )
 
-            self.value_map = self.value_map * weight_1 + value * weight_2
+            self.value_map = (
+                self.value_map * weight_1_channeled + values * weight_2_channeled
+            )
             self.confidence_map = self.confidence_map * weight_1 + confidence * weight_2
 
             # Because confidence_denominator can have 0 values, any nans in either the
