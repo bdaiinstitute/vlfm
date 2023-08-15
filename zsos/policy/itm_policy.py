@@ -29,7 +29,6 @@ class BaseITMPolicy(BaseObjectNavPolicy):
     _last_value: float = float("-inf")
     _last_frontier: np.ndarray = np.zeros(2)
     _second_best_thresh: float = 0.9
-    _value_channels: int = 1
 
     def __init__(
         self,
@@ -44,7 +43,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         self._itm = BLIP2ITMClient()
         self._text_prompt = text_prompt
         self._value_map: ValueMap = ValueMap(
-            value_channels=self._value_channels,
+            value_channels=len(text_prompt.split("\n")),
             fov=value_map_hfov,
             max_depth=value_map_max_depth,
             use_max_confidence=use_max_confidence,

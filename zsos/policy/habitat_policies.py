@@ -180,7 +180,7 @@ class ZSOSPolicyConfig(PolicyConfig):
     value_map_max_depth: float = 5.0
     value_map_hfov: float = 79.0
     object_map_proximity_threshold: float = 1.5
-    use_max_confidence: bool = True
+    use_max_confidence: bool = False
     text_prompt: str = "Seems like there is a target_object ahead."
 
     @classmethod
