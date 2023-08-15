@@ -46,9 +46,8 @@ class MobileSAM:
         """
         self.predictor.set_image(image)
         masks, _, _ = self.predictor.predict(box=np.array(bbox), multimask_output=False)
-        cropped_mask = masks[0][bbox[1] : bbox[3], bbox[0] : bbox[2]]
 
-        return cropped_mask
+        return masks[0]
 
 
 class MobileSAMClient:
@@ -58,9 +57,7 @@ class MobileSAMClient:
     def segment_bbox(self, image: np.ndarray, bbox: List[int]) -> np.ndarray:
         response = send_request(self.url, image=image, bbox=bbox)
         cropped_mask_str = response["cropped_mask"]
-
-        shape = (bbox[3] - bbox[1], bbox[2] - bbox[0])
-        cropped_mask = str_to_bool_arr(cropped_mask_str, shape=shape)
+        cropped_mask = str_to_bool_arr(cropped_mask_str, shape=tuple(image.shape[:2]))
 
         return cropped_mask
 

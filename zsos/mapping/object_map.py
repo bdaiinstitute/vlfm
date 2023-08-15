@@ -10,6 +10,7 @@ from zsos.utils.geometry_utils import (
     extract_yaw,
     within_fov_cone,
 )
+from zsos.vlm.sam import MobileSAMClient
 
 
 class Object:
@@ -46,6 +47,7 @@ class ObjectMap:
         self.hfov = np.deg2rad(hfov)
         self.proximity_threshold = proximity_threshold
         self.camera_history = []
+        self.mobile_sam = MobileSAMClient()
 
     @property
     def vfov(self) -> float:
@@ -59,6 +61,7 @@ class ObjectMap:
         self,
         object_name: str,
         bbox: np.ndarray,
+        rgb_img: np.ndarray,
         depth_img: np.ndarray,
         tf_camera_to_episodic: np.ndarray,
         confidence: float,
@@ -66,7 +69,7 @@ class ObjectMap:
         """Updates the object map with the latest information from the agent."""
         self.image_height, self.image_width = depth_img.shape[:2]
         location, too_far = self._estimate_object_location(
-            bbox, depth_img, tf_camera_to_episodic
+            bbox, rgb_img, depth_img, tf_camera_to_episodic
         )
         new_object = Object(object_name, location, confidence, too_far)
         self._add_object(new_object)
@@ -209,6 +212,7 @@ class ObjectMap:
     def _estimate_object_location(
         self,
         bounding_box: np.ndarray,
+        rgb_image: np.ndarray,
         depth_image: np.ndarray,
         tf_camera_to_episodic: np.ndarray,
     ) -> Tuple[np.ndarray, bool]:
@@ -231,7 +235,7 @@ class ObjectMap:
         """
         # Get the depth value of the object
         pixel_x, pixel_y, depth_value = self._get_object_depth(
-            depth_image, bounding_box
+            rgb_image, depth_image, bounding_box
         )
         too_far = depth_value >= self.max_depth
         object_coord_agent = calculate_3d_coordinates(
@@ -252,7 +256,7 @@ class ObjectMap:
         return object_coord_global, too_far
 
     def _get_object_depth(
-        self, depth: np.ndarray, object_bbox: np.ndarray
+        self, rgb: np.ndarray, depth: np.ndarray, object_bbox: np.ndarray
     ) -> Tuple[int, int, float]:
         """Gets the depth value of an object in the depth image.
 
@@ -275,24 +279,21 @@ class ObjectMap:
                 f" {object_bbox}"
             )
 
-        # In pixel space, calculate the center of the bounding box (integers)
-        pixel_x = int((x_min + x_max) / 2 * self.image_width)
-        pixel_y = int((y_min + y_max) / 2 * self.image_height)
-
-        # Scale the bounding box to the depth image size using self.image_width and
-        # self.image_height
-        x_min_int = int(x_min * self.image_width)
-        x_max_int = int(x_max * self.image_width)
-        y_min_int = int(y_min * self.image_height)
-        y_max_int = int(y_max * self.image_height)
-        depth_image_chip = depth[y_min_int:y_max_int, x_min_int:x_max_int]
-
-        # De-normalize the depth values
-        depth_image_chip = (
-            depth_image_chip * (self.max_depth - self.min_depth) + self.min_depth
+        # De-normalize the bounding box coordinates
+        x_min_denorm = int(x_min * self.image_width)
+        x_max_denorm = int(x_max * self.image_width)
+        y_min_denorm = int(y_min * self.image_height)
+        y_max_denorm = int(y_max * self.image_height)
+        bbox_denorm = [x_min_denorm, y_min_denorm, x_max_denorm, y_max_denorm]
+        object_mask = self.mobile_sam.segment_bbox(rgb, bbox_denorm)
+        valid_depth = depth.reshape(depth.shape[:2])  # remove channel dim
+        valid_depth[valid_depth == 0] = 1.0  # make invalid 0 values into 1
+        (pixel_y, pixel_x), lowest_depth_value = find_lowest_depth_point(
+            valid_depth, object_mask
         )
-
-        depth_value = float(np.median(depth_image_chip))
+        depth_value = (
+            lowest_depth_value * (self.max_depth - self.min_depth) + self.min_depth
+        )
 
         return pixel_x, pixel_y, depth_value
 
@@ -337,7 +338,7 @@ def calculate_3d_coordinates(
     pixel_y: int,
     vfov: Optional[float] = None,
 ) -> np.ndarray:
-    """Calculates the 3D coordinates (x, y, z) of a point in the image plane based on
+    """Calculates the 3D coordinates (x, y, z) of a point in the depth image based on
     the horizontal field of view (HFOV), the image width and height, the depth value,
     and the pixel x and y coordinates.
 
@@ -402,3 +403,23 @@ def obj_loc_to_str(arr: np.ndarray) -> str:
         decimal places.
     """
     return f"({arr[0]:.2f}, {arr[1]:.2f})"
+
+
+def find_lowest_depth_point(
+    depth_image: np.ndarray, mask: np.ndarray
+) -> Tuple[Tuple[int, int], float]:
+    # Ensure the mask is boolean
+    mask = mask.astype(bool)
+
+    # Apply the mask to the depth image
+    masked_depth_image = np.where(mask, depth_image, np.inf)
+
+    # Find the index of the minimum depth value
+    min_depth_index: Tuple[int, int] = np.unravel_index(  # type: ignore
+        np.argmin(masked_depth_image, axis=None), masked_depth_image.shape
+    )
+
+    # Get the lowest depth value using the min_depth_index
+    lowest_depth_value = masked_depth_image[min_depth_index]
+
+    return min_depth_index, lowest_depth_value

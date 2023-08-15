@@ -27,6 +27,7 @@ class BaseObjectNavPolicy(BasePolicy):
     _target_object: str = ""
     _policy_info: Dict[str, Any] = {}
     _id_to_padding: Dict[str, float] = {}
+    _detect_target_only: bool = True
     _stop_action: Tensor = None  # MUST BE SET BY SUBCLASS
 
     def __init__(
@@ -143,6 +144,8 @@ class BaseObjectNavPolicy(BasePolicy):
 
     def _get_object_detections(self, img: np.ndarray) -> ObjectDetections:
         detections = self._object_detector.predict(img, visualize=self._visualize)
+        if self._detect_target_only:
+            detections.filter_by_class([self._target_object])
         detections.filter_by_conf(self._det_conf_threshold)
 
         return detections
@@ -196,6 +199,7 @@ class BaseObjectNavPolicy(BasePolicy):
             self._object_map.update_map(
                 detections.phrases[idx],
                 detections.boxes[idx],
+                rgb,
                 depth,
                 tf_camera_to_episodic,
                 confidence,
