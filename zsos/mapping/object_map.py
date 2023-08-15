@@ -244,11 +244,9 @@ class ObjectMap:
             pixel_y,
             vfov=self.vfov,
         )
-        # Yaw from compass sensor must be negated to work properly
         object_coord_agent = np.append(object_coord_agent, 1)
         object_coord_global = tf_camera_to_episodic @ object_coord_agent
         object_coord_global = object_coord_global[:3] / object_coord_global[3]
-        extract_yaw(tf_camera_to_episodic)
 
         return object_coord_global, too_far
 
