@@ -29,6 +29,27 @@ def host_model(model: Any, name: str, port: int = 5000):
     app.run(host="localhost", port=port)
 
 
+def bool_arr_to_str(arr: np.ndarray) -> str:
+    """Converts a boolean array to a string."""
+    packed = np.packbits(arr)
+    packed_str = base64.b64encode(packed).decode()
+    return packed_str
+
+
+def str_to_bool_arr(s: str, shape: tuple) -> np.ndarray:
+    """Converts a string to a boolean array."""
+    # Convert the string back into bytes using base64 decoding
+    bytes_ = base64.b64decode(s)
+
+    # Convert bytes to np.uint8 array
+    bytes_array = np.frombuffer(bytes_, dtype=np.uint8)
+
+    # Unpack the bytes back into a boolean array
+    unpacked = np.unpackbits(bytes_array)
+    unpacked = unpacked.reshape(shape)
+    return unpacked
+
+
 def image_to_str(img_np, quality=90):
     encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
     retval, buffer = cv2.imencode(".jpg", img_np, encode_param)
