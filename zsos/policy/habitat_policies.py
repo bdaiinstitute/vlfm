@@ -39,10 +39,6 @@ class HabitatMixin:
     Habitat.
     """
 
-    _id_to_padding: Dict[str, float] = {
-        "bed": 0.3,
-        "couch": 0.15,
-    }
     _stop_action: Tensor = TorchActionIDs.STOP
     _start_yaw: Union[float, None] = None  # must be set by _reset() method
 
@@ -173,14 +169,14 @@ class ZSOSPolicyConfig(PolicyConfig):
     pointnav_policy_path: str = "data/pointnav_weights.pth"
     depth_image_shape: Tuple[int, int] = (244, 224)
     det_conf_threshold: float = 0.6
-    pointnav_stop_radius: float = 0.85
+    pointnav_stop_radius: float = 0.9
     object_map_min_depth: float = 0.5
     object_map_max_depth: float = 5.0
     object_map_hfov: float = 79.0
     value_map_max_depth: float = 5.0
     value_map_hfov: float = 79.0
     object_map_proximity_threshold: float = 1.5
-    use_max_confidence: bool = True
+    use_max_confidence: bool = False
     text_prompt: str = "Seems like there is a target_object ahead."
 
     @classmethod

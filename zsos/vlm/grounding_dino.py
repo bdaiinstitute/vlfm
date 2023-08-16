@@ -3,8 +3,8 @@ import os
 import numpy as np
 import torch
 import torchvision.transforms.functional as F
-from groundingdino.util.inference import load_model, predict
 
+from groundingdino.util.inference import load_model, predict
 from zsos.vlm.detections import ObjectDetections
 
 from .server_wrapper import ServerMixin, host_model, send_request, str_to_image
@@ -63,9 +63,7 @@ class GroundingDINO:
             box_threshold=self.box_threshold,
             text_threshold=self.text_threshold,
         )
-        detections = ObjectDetections(
-            boxes, logits, phrases, image_source=image, visualize=visualize
-        )
+        detections = ObjectDetections(boxes, logits, phrases, image_source=image)
 
         classes = self.classes.split(" . ")
         keep = torch.tensor(
@@ -90,9 +88,7 @@ class GroundingDINOClient:
         self, image_numpy: np.ndarray, visualize: bool = False
     ) -> ObjectDetections:
         response = send_request(self.url, image=image_numpy)
-        detections = ObjectDetections.from_json(
-            response, image_source=image_numpy, visualize=visualize
-        )
+        detections = ObjectDetections.from_json(response, image_source=image_numpy)
 
         return detections
 

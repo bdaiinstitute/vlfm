@@ -64,7 +64,6 @@ class FIBER:
             boxes=normalized_bbox,
             logits=result.extra_fields["scores"],
             phrases=[phrase],
-            visualize=visualize,
             fmt="xyxy",
         )
 
@@ -79,9 +78,7 @@ class FIBERClient:
         self, image: np.ndarray, phrase: str, visualize: bool = False
     ) -> ObjectDetections:
         response = send_request(self.url, image=image, phrase=phrase)["response"]
-        detections = ObjectDetections.from_json(
-            response, image_source=image, visualize=visualize
-        )
+        detections = ObjectDetections.from_json(response, image_source=image)
 
         return detections
 

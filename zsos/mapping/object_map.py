@@ -10,6 +10,7 @@ from zsos.utils.geometry_utils import (
     extract_yaw,
     within_fov_cone,
 )
+from zsos.vlm.sam import MobileSAMClient
 
 
 class Object:
@@ -46,6 +47,7 @@ class ObjectMap:
         self.hfov = np.deg2rad(hfov)
         self.proximity_threshold = proximity_threshold
         self.camera_history = []
+        self.mobile_sam = MobileSAMClient()
 
     @property
     def vfov(self) -> float:
@@ -59,6 +61,7 @@ class ObjectMap:
         self,
         object_name: str,
         bbox: np.ndarray,
+        rgb_img: np.ndarray,
         depth_img: np.ndarray,
         tf_camera_to_episodic: np.ndarray,
         confidence: float,
@@ -66,41 +69,38 @@ class ObjectMap:
         """Updates the object map with the latest information from the agent."""
         self.image_height, self.image_width = depth_img.shape[:2]
         location, too_far = self._estimate_object_location(
-            bbox, depth_img, tf_camera_to_episodic
+            bbox, rgb_img, depth_img, tf_camera_to_episodic
         )
         new_object = Object(object_name, location, confidence, too_far)
         self._add_object(new_object)
 
-    def get_best_object(self, target_class: str) -> np.ndarray:
+    def has_object(self, target_class: str) -> bool:
+        return any(obj.class_name == target_class for obj in self.map)
+
+    def get_best_object(
+        self, target_class: str, curr_position: np.ndarray
+    ) -> np.ndarray:
         """Returns the closest object to the agent that matches the given object name.
         It will ignore any detections of the target class if they are too far away,
         unless all the detections we have of the target class are too far away.
 
         Args:
             target_class (str): The name of the object class to search for.
+            curr_position (np.ndarray): The current position of the agent in the
+                episodic coordinate frame [x, y, z].
 
         Returns:
             np.ndarray: The location of the closest object to the agent that matches the
                 given object name [x, y, z].
         """
         matches = [obj for obj in self.map if obj.class_name == target_class]
-        if len(matches) == 0:
-            raise ValueError(
-                f"No object of type {target_class} found in the object map."
-            )
-
         ignore_too_far = any([not obj.too_far for obj in matches])
-        best_loc, best_conf = None, -float("inf")
-        for object_inst in matches:
-            if object_inst.confidence > best_conf:
-                if ignore_too_far and object_inst.too_far:
-                    continue
-                best_loc = object_inst.location
-                best_conf = object_inst.confidence
-
-        assert best_loc is not None, "This error should never be reached."
-
-        return best_loc
+        if ignore_too_far:
+            # Filter out all objects that are too far away
+            matches = [obj for obj in matches if not obj.too_far]
+        dists = [np.linalg.norm(obj.location[:2] - curr_position) for obj in matches]
+        locs = [obj.location for obj in matches]
+        return locs[np.argmin(dists)]
 
     def update_explored(self, tf_camera_to_episodic: np.ndarray) -> None:
         camera_coordinates = tf_camera_to_episodic[:3, 3] / tf_camera_to_episodic[3, 3]
@@ -209,6 +209,7 @@ class ObjectMap:
     def _estimate_object_location(
         self,
         bounding_box: np.ndarray,
+        rgb_image: np.ndarray,
         depth_image: np.ndarray,
         tf_camera_to_episodic: np.ndarray,
     ) -> Tuple[np.ndarray, bool]:
@@ -231,7 +232,7 @@ class ObjectMap:
         """
         # Get the depth value of the object
         pixel_x, pixel_y, depth_value = self._get_object_depth(
-            depth_image, bounding_box
+            rgb_image, depth_image, bounding_box
         )
         too_far = depth_value >= self.max_depth
         object_coord_agent = calculate_3d_coordinates(
@@ -243,20 +244,14 @@ class ObjectMap:
             pixel_y,
             vfov=self.vfov,
         )
-        # Yaw from compass sensor must be negated to work properly
         object_coord_agent = np.append(object_coord_agent, 1)
         object_coord_global = tf_camera_to_episodic @ object_coord_agent
         object_coord_global = object_coord_global[:3] / object_coord_global[3]
-        extract_yaw(tf_camera_to_episodic)
-        # print("tf_camera_to_episodic", tf_camera_to_episodic)
-        # print("camera_yaw", camera_yaw)
-        # print("object_coord_agent", object_coord_agent)
-        # print("object_coord_global", object_coord_global)
 
         return object_coord_global, too_far
 
     def _get_object_depth(
-        self, depth: np.ndarray, object_bbox: np.ndarray
+        self, rgb: np.ndarray, depth: np.ndarray, object_bbox: np.ndarray
     ) -> Tuple[int, int, float]:
         """Gets the depth value of an object in the depth image.
 
@@ -279,24 +274,21 @@ class ObjectMap:
                 f" {object_bbox}"
             )
 
-        # In pixel space, calculate the center of the bounding box (integers)
-        pixel_x = int((x_min + x_max) / 2 * self.image_width)
-        pixel_y = int((y_min + y_max) / 2 * self.image_height)
-
-        # Scale the bounding box to the depth image size using self.image_width and
-        # self.image_height
-        x_min_int = int(x_min * self.image_width)
-        x_max_int = int(x_max * self.image_width)
-        y_min_int = int(y_min * self.image_height)
-        y_max_int = int(y_max * self.image_height)
-        depth_image_chip = depth[y_min_int:y_max_int, x_min_int:x_max_int]
-
-        # De-normalize the depth values
-        depth_image_chip = (
-            depth_image_chip * (self.max_depth - self.min_depth) + self.min_depth
+        # De-normalize the bounding box coordinates
+        x_min_denorm = int(x_min * self.image_width)
+        x_max_denorm = int(x_max * self.image_width)
+        y_min_denorm = int(y_min * self.image_height)
+        y_max_denorm = int(y_max * self.image_height)
+        bbox_denorm = [x_min_denorm, y_min_denorm, x_max_denorm, y_max_denorm]
+        object_mask = self.mobile_sam.segment_bbox(rgb, bbox_denorm)
+        valid_depth = depth.reshape(depth.shape[:2])  # remove channel dim
+        valid_depth[valid_depth == 0] = 1.0  # make invalid 0 values into 1
+        (pixel_y, pixel_x), lowest_depth_value = find_lowest_depth_point(
+            valid_depth, object_mask
         )
-
-        depth_value = float(np.median(depth_image_chip))
+        depth_value = (
+            lowest_depth_value * (self.max_depth - self.min_depth) + self.min_depth
+        )
 
         return pixel_x, pixel_y, depth_value
 
@@ -341,7 +333,7 @@ def calculate_3d_coordinates(
     pixel_y: int,
     vfov: Optional[float] = None,
 ) -> np.ndarray:
-    """Calculates the 3D coordinates (x, y, z) of a point in the image plane based on
+    """Calculates the 3D coordinates (x, y, z) of a point in the depth image based on
     the horizontal field of view (HFOV), the image width and height, the depth value,
     and the pixel x and y coordinates.
 
@@ -406,3 +398,23 @@ def obj_loc_to_str(arr: np.ndarray) -> str:
         decimal places.
     """
     return f"({arr[0]:.2f}, {arr[1]:.2f})"
+
+
+def find_lowest_depth_point(
+    depth_image: np.ndarray, mask: np.ndarray
+) -> Tuple[Tuple[int, int], float]:
+    # Ensure the mask is boolean
+    mask = mask.astype(bool)
+
+    # Apply the mask to the depth image
+    masked_depth_image = np.where(mask, depth_image, np.inf)
+
+    # Find the index of the minimum depth value
+    min_depth_index: Tuple[int, int] = np.unravel_index(  # type: ignore
+        np.argmin(masked_depth_image, axis=None), masked_depth_image.shape
+    )
+
+    # Get the lowest depth value using the min_depth_index
+    lowest_depth_value = masked_depth_image[min_depth_index]
+
+    return min_depth_index, lowest_depth_value

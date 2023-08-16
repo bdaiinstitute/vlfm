@@ -18,22 +18,24 @@ class ObjectDetections:
         logits: torch.Tensor,
         phrases: List[str],
         image_source: Optional[np.ndarray] = None,
-        visualize: bool = False,
         fmt: str = "cxcywh",
     ):
         self.image_source = image_source
         self.boxes = box_convert(boxes=boxes, in_fmt=fmt, out_fmt="xyxy")
         self.logits = logits
         self.phrases = phrases
-        if visualize:
-            self.annotated_frame = annotate(
-                image_source=image_source,
+        self._annotated_frame: Optional[np.ndarray] = None
+
+    @property
+    def annotated_frame(self):
+        if self._annotated_frame is None:
+            self._annotated_frame = annotate(
+                image_source=self.image_source,
                 boxes=self.boxes,
-                logits=logits,
-                phrases=phrases,
+                logits=self.logits,
+                phrases=self.phrases,
             )
-        else:
-            self.annotated_frame = None
+        return self._annotated_frame
 
     def filter_by_conf(self, conf_thresh: float):
         """Filters detections by confidence threshold in-place.
@@ -41,21 +43,30 @@ class ObjectDetections:
         Args:
             conf_thresh (float): Confidence threshold to filter detections.
         """
-
         keep: torch.Tensor[bool] = torch.ge(self.logits, conf_thresh)  # >=
+        self._filter(keep)
+
+    def filter_by_class(self, classes: List[str]):
+        """Filters detections by class in-place.
+
+        Args:
+            classes (List[str]): List of classes to keep.
+        """
+        keep: torch.Tensor[bool] = torch.tensor(
+            [p in classes for p in self.phrases], dtype=torch.bool
+        )
+        self._filter(keep)
+
+    def _filter(self, keep: torch.Tensor) -> None:
+        """Filters detections in-place."""
+        # Return early if no detections to filter
+        if keep.all():
+            return
 
         self.boxes = self.boxes[keep]
         self.logits = self.logits[keep]
         self.phrases = [p for i, p in enumerate(self.phrases) if keep[i]]
-
-        if self.annotated_frame is not None:
-            # Re-visualize with filtered detections
-            self.annotated_frame = annotate(
-                image_source=self.image_source,
-                boxes=self.boxes,
-                logits=self.logits,
-                phrases=self.phrases,
-            )
+        self._annotated_frame = None
 
     def to_json(self) -> dict:
         """
@@ -75,7 +86,6 @@ class ObjectDetections:
         cls,
         json_dict: dict,
         image_source: Optional[np.ndarray] = None,
-        visualize: bool = False,
     ):
         """
         Converts the object detections from a JSON serializable format.
@@ -84,15 +94,12 @@ class ObjectDetections:
             json_dict (dict): A dictionary containing the object detections.
             image_source (Optional[np.ndarray], optional): Optionally provide the
                 original image source. Defaults to None.
-            visualize (bool, optional): A flag indicating whether to visualize the
-                output data. Defaults to False.
         """
         return cls(
             image_source=image_source,
             boxes=torch.tensor(json_dict["boxes"]),
             logits=torch.tensor(json_dict["logits"]),
             phrases=json_dict["phrases"],
-            visualize=visualize,
             fmt="xyxy",
         )
 
