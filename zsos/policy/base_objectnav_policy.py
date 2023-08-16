@@ -161,11 +161,11 @@ class BaseObjectNavPolicy(BasePolicy):
             observations ("TensorDict"): The observations from the current timestep.
         """
         masks = torch.tensor([self._num_steps != 0], dtype=torch.bool, device="cuda")
-        dist = np.linalg.norm(goal - self._last_goal)
-        if dist > 1.0:
+        if not np.array_equal(goal, self._last_goal):
+            if np.linalg.norm(goal - self._last_goal) > 0.1:
+                self._pointnav_policy.reset()
+                masks = torch.zeros_like(masks)
             self._last_goal = goal
-            self._pointnav_policy.reset()
-            masks = torch.zeros_like(masks)
         rho_theta = rho_theta_from_gps_compass_goal(observations, goal)
         obs_pointnav = {
             "depth": image_resize(
