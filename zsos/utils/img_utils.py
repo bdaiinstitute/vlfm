@@ -255,11 +255,14 @@ def pixel_value_within_radius(
         color=255,
         thickness=-1,
     )
+    overlap_values = cropped_image[circle_mask > 0]
+    # Filter out any values that are 0 (i.e. pixels that weren't seen yet)
+    overlap_values = overlap_values[overlap_values > 0]
     if reduction == "mean":
-        return np.mean(cropped_image[circle_mask > 0])  # type: ignore
+        return np.mean(overlap_values)  # type: ignore
     elif reduction == "max":
-        return np.max(cropped_image[circle_mask > 0])
+        return np.max(overlap_values)
     elif reduction == "median":
-        return np.median(cropped_image[circle_mask > 0])  # type: ignore
+        return np.median(overlap_values)  # type: ignore
     else:
         raise ValueError(f"Invalid reduction method: {reduction}")
