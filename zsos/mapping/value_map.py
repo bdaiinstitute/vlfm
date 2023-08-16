@@ -165,6 +165,8 @@ class ValueMap:
                 pixel_value_within_radius(self.value_map[..., c], point_px, radius_px)
                 for c in range(self.value_channels)
             ]
+            if len(all_values) == 1:
+                return all_values[0]
             value = reduce_fn(all_values)
             return value
 
