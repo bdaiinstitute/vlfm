@@ -13,12 +13,7 @@ class ObjectPointCloudMap:
     _image_height: int = None  # set upon execution of update_map method
     __vfov: float = None  # set upon execution of update_map method
 
-    def __init__(
-        self,
-        min_depth: float,
-        max_depth: float,
-        hfov: float,
-    ) -> None:
+    def __init__(self, min_depth: float, max_depth: float, hfov: float) -> None:
         self._min_depth = min_depth
         self._max_depth = max_depth
         self._hfov = np.deg2rad(hfov)
@@ -50,8 +45,16 @@ class ObjectPointCloudMap:
     ) -> None:
         """Updates the object map with the latest information from the agent."""
         self._image_height, self._image_width = depth_img.shape[:2]
-        local_cloud = self._extract_object_cloud(rgb_img, depth_img, bbox)
+        local_cloud, too_far = self._extract_object_cloud(rgb_img, depth_img, bbox)
         global_cloud = transform_points(tf_camera_to_episodic, local_cloud)
+
+        # Mark all clouds that are close enough by making a new column that is 0 or 1
+        # based on whether the point is within range or not
+        if too_far:
+            within_range = np.zeros((global_cloud.shape[0],))
+        else:
+            within_range = np.ones((global_cloud.shape[0],))
+        global_cloud = np.concatenate((global_cloud, within_range[:, None]), axis=1)
 
         if object_name in self._clouds:
             self._clouds[object_name] = np.concatenate(
@@ -63,12 +66,20 @@ class ObjectPointCloudMap:
     def get_best_object(
         self, target_class: str, curr_position: np.ndarray
     ) -> np.ndarray:
-        target_cloud = self._clouds[target_class]
+        target_cloud = self._clouds[target_class].copy()
+
+        # Determine whether any points are within range
+        within_range_exists: bool = np.any(target_cloud[:, -1] == 1)
+        if within_range_exists:
+            # Filter out all points that are not within range
+            target_cloud = target_cloud[target_cloud[:, -1] == 1]
+
         # Return the point that is closest to curr_position, which is 2D
         closest_point = target_cloud[
             np.argmin(np.linalg.norm(target_cloud[:, :2] - curr_position, axis=1))
         ]
         closest_point_2d = closest_point[:2]
+
         return closest_point_2d
 
     def update_explored(self, *args, **kwargs):
@@ -76,7 +87,7 @@ class ObjectPointCloudMap:
 
     def _extract_object_cloud(
         self, rgb: np.ndarray, depth: np.ndarray, object_bbox: np.ndarray
-    ) -> np.ndarray:
+    ) -> Tuple[np.ndarray, bool]:
         # Assert that all these values are in the range [0, 1]
         for i in object_bbox:
             assert -0.01 <= i <= 1.01, (
@@ -95,13 +106,27 @@ class ObjectPointCloudMap:
         )
         object_mask = self._mobile_sam.segment_bbox(rgb, bbox_denorm.tolist())
         valid_depth = depth.reshape(depth.shape[:2])
+
+        object_depths = valid_depth[object_mask]
+        far_pixels = np.sum(object_depths > 0.85)
+        total_pixels = object_depths.shape[0]
+        far_pixel_ratio = far_pixels / total_pixels
+        center_mask = np.zeros_like(object_mask)
+        # Make the middle 50% of center_mask True
+        center_mask[
+            int(0.25 * self._image_height) : int(0.75 * self._image_height),
+            int(0.25 * self._image_width) : int(0.75 * self._image_width),
+        ] = True
+        by_the_edges = np.sum(object_mask & center_mask) == 0
+        too_far = far_pixel_ratio > 0.2 or by_the_edges
+
         valid_depth[valid_depth == 0] = 1
         valid_depth = (
             valid_depth * (self._max_depth - self._min_depth) + self._min_depth
         )
         cloud = get_point_cloud(valid_depth, object_mask, self._hfov, self._vfov)
 
-        return cloud
+        return cloud, too_far
 
 
 def calculate_3d_coordinates_vectorized(
@@ -153,25 +178,6 @@ def calculate_3d_coordinates_vectorized(
     return np.column_stack((x_values, y_values, z_values))
 
 
-def extract_points_from_depth_mask(
-    depth_image: np.ndarray, mask: np.ndarray
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Calculates depth values, pixel x coordinates, and pixel y coordinates of points
-    in a depth image based on a binary mask.
-
-    Args:
-        depth_image (np.ndarray): 2D depth image.
-        mask (np.ndarray): 2D binary mask identifying relevant pixels.
-
-    Returns:
-        Tuple[np.ndarray, np.ndarray, np.ndarray]: Tuple containing depth values, pixel x
-        coordinates, and pixel y coordinates of the relevant points.
-    """
-    pixel_y_values, pixel_x_values = np.where(mask)
-    depth_values = depth_image[pixel_y_values, pixel_x_values]
-    return depth_values, pixel_x_values, pixel_y_values
-
-
 def get_point_cloud(
     depth_image: np.ndarray,
     mask: np.ndarray,
@@ -192,9 +198,8 @@ def get_point_cloud(
     Returns:
         np.ndarray: Array of 3D coordinates (x, y, z) of the points in the image plane.
     """
-    depth_values, pixel_x_values, pixel_y_values = extract_points_from_depth_mask(
-        depth_image, mask
-    )
+    pixel_y_values, pixel_x_values = np.where(mask)
+    depth_values = depth_image[pixel_y_values, pixel_x_values]
     cloud = calculate_3d_coordinates_vectorized(
         hfov,
         depth_image.shape[1],
