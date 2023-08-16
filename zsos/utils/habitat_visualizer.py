@@ -23,8 +23,9 @@ class HabitatVis:
         self.maps = []
         self.cost_maps = []
         self.texts = []
-        self.last_rgb = None
         self.using_cost_map = False
+        self.using_annotated_rgb = False
+        self.using_annotated_depth = False
 
     def reset(self):
         self.rgb = []
@@ -32,7 +33,8 @@ class HabitatVis:
         self.maps = []
         self.cost_maps = []
         self.texts = []
-        self.last_rgb = None
+        self.using_annotated_rgb = False
+        self.using_annotated_depth = False
 
     def collect_data(
         self,
@@ -42,17 +44,22 @@ class HabitatVis:
     ):
         assert len(infos) == 1, "Only support one environment for now"
 
-        depth = (observations["depth"][0].cpu().numpy() * 255.0).astype(np.uint8)
-        depth = cv2.cvtColor(depth, cv2.COLOR_GRAY2RGB)
+        if "annotated_depth" in policy_info[0]:
+            depth = policy_info[0]["annotated_depth"]
+            self.using_annotated_depth = True
+        else:
+            depth = (observations["depth"][0].cpu().numpy() * 255.0).astype(np.uint8)
+            depth = cv2.cvtColor(depth, cv2.COLOR_GRAY2RGB)
         depth = overlay_frame(depth, infos[0])
         self.depth.append(depth)
-        rgb = observations["rgb"][0].cpu().numpy()
-        if "visualized_detections" in policy_info[0]:
-            self.rgb.append(policy_info[0]["visualized_detections"])
-            self.last_rgb = rgb
+
+        if "annotated_rgb" in policy_info[0]:
+            rgb = policy_info[0]["annotated_rgb"]
+            self.using_annotated_rgb = True
         else:
-            self.rgb.append(rgb)
-            self.last_rgb = None
+            rgb = observations["rgb"][0].cpu().numpy()
+        self.rgb.append(rgb)
+
         map = maps.colorize_draw_agent_and_fit_to_height(
             infos[0]["top_down_map"], self.depth[0].shape[0]
         )
@@ -90,19 +97,18 @@ class HabitatVis:
 
     def flush_frames(self) -> List[np.ndarray]:
         """Flush all frames and return them"""
-        if self.last_rgb is not None:
-            # Because the rgb frames are actually one step delayed, pop the first one
-            # and add a black frame to the end
-            self.rgb.pop(0)
-            self.rgb.append(self.last_rgb)
-
-        if self.using_cost_map:
-            # Cost maps are also one step delayed
-            self.cost_maps.pop(0)
-            self.cost_maps.append(self.cost_maps[-1])
+        # Because the annotated frames are actually one step delayed, pop the first one
+        # and add a placeholder frame to the end (gets removed anyway)
+        if self.using_annotated_rgb is not None:
+            self.rgb.append(self.rgb.pop(0))
+        if self.using_annotated_depth is not None:
+            self.depth.append(self.depth.pop(0))
+        if self.using_cost_map:  # Cost maps are also one step delayed
+            self.cost_maps.append(self.cost_maps.pop(0))
 
         frames = []
-        for i in range(len(self.depth) - 1):  # last frame has images from next episode
+        num_frames = len(self.depth) - 1  # last frame is from next episode, remove it
+        for i in range(num_frames):
             frame = self._create_frame(
                 self.depth[i],
                 self.rgb[i],

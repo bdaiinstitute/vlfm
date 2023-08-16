@@ -4,7 +4,6 @@ import numpy as np
 import open3d as o3d
 
 from zsos.utils.geometry_utils import calculate_vfov, transform_points
-from zsos.vlm.sam import MobileSAMClient
 
 
 class ObjectPointCloudMap:
@@ -17,7 +16,6 @@ class ObjectPointCloudMap:
         self._min_depth = min_depth
         self._max_depth = max_depth
         self._hfov = np.deg2rad(hfov)
-        self._mobile_sam = MobileSAMClient()
 
     @property
     def _vfov(self) -> float:
@@ -36,16 +34,15 @@ class ObjectPointCloudMap:
     def update_map(
         self,
         object_name: str,
-        bbox: np.ndarray,
-        rgb_img: np.ndarray,
         depth_img: np.ndarray,
+        object_mask: np.ndarray,
         tf_camera_to_episodic: np.ndarray,
         *args,
         **kwargs,
     ) -> None:
         """Updates the object map with the latest information from the agent."""
         self._image_height, self._image_width = depth_img.shape[:2]
-        local_cloud, too_far = self._extract_object_cloud(rgb_img, depth_img, bbox)
+        local_cloud, too_far = self._extract_object_cloud(depth_img, object_mask)
         global_cloud = transform_points(tf_camera_to_episodic, local_cloud)
 
         # Mark all clouds that are close enough by making a new column that is 0 or 1
@@ -86,28 +83,12 @@ class ObjectPointCloudMap:
         pass
 
     def _extract_object_cloud(
-        self, rgb: np.ndarray, depth: np.ndarray, object_bbox: np.ndarray
+        self, depth: np.ndarray, object_mask: np.ndarray
     ) -> Tuple[np.ndarray, bool]:
-        # Assert that all these values are in the range [0, 1]
-        for i in object_bbox:
-            assert -0.01 <= i <= 1.01, (
-                "Bounding box coordinates must be in the range [0, 1], got:"
-                f" {object_bbox}"
-            )
-
-        # De-normalize the bounding box coordinates
-        bbox_denorm = object_bbox * np.array(
-            [
-                self._image_width,
-                self._image_height,
-                self._image_width,
-                self._image_height,
-            ]
-        )
-        object_mask = self._mobile_sam.segment_bbox(rgb, bbox_denorm.tolist())
         valid_depth = depth.reshape(depth.shape[:2])
-
         object_depths = valid_depth[object_mask]
+
+        # Determine whether the object is too far away or by the edges
         far_pixels = np.sum(object_depths > 0.85)
         total_pixels = object_depths.shape[0]
         far_pixel_ratio = far_pixels / total_pixels

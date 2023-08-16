@@ -1,6 +1,7 @@
 import os
 from typing import Any, Dict, Tuple, Union
 
+import cv2
 import numpy as np
 import torch
 from torch import Tensor
@@ -12,6 +13,7 @@ from zsos.policy.utils.pointnav_policy import (
     rho_theta_from_gps_compass_goal,
 )
 from zsos.vlm.grounding_dino import GroundingDINOClient, ObjectDetections
+from zsos.vlm.sam import MobileSAMClient
 
 try:
     from habitat_baselines.common.tensor_dict import TensorDict
@@ -28,6 +30,7 @@ class BaseObjectNavPolicy(BasePolicy):
     _policy_info: Dict[str, Any] = {}
     _id_to_padding: Dict[str, float] = {}
     _detect_target_only: bool = True
+    _object_masks: np.ndarray = None  # set by ._update_object_map()
     _stop_action: Tensor = None  # MUST BE SET BY SUBCLASS
 
     def __init__(
@@ -45,6 +48,7 @@ class BaseObjectNavPolicy(BasePolicy):
     ):
         super().__init__()
         self._object_detector = GroundingDINOClient()
+        self._mobile_sam = MobileSAMClient()
         self._pointnav_policy = WrappedPointNavResNetPolicy(pointnav_policy_path)
         self._object_map: ObjectPointCloudMap = ObjectPointCloudMap(
             min_depth=object_map_min_depth,
@@ -121,7 +125,6 @@ class BaseObjectNavPolicy(BasePolicy):
     ) -> Dict[str, Any]:
         policy_info = {
             "target_object": "target: " + self._target_object,
-            "visualized_detections": detections.annotated_frame,
             "gps": str(observations["gps"][0].cpu().numpy()),
             "yaw": np.rad2deg(observations["compass"][0].item()),
             # don't render these on egocentric images when making videos:
@@ -131,6 +134,31 @@ class BaseObjectNavPolicy(BasePolicy):
                 "seen_objects",
             ],
         }
+
+        if not self._visualize:
+            return policy_info
+
+        annotated_depth = observations["depth"][0].cpu().numpy() * 255
+        annotated_depth = cv2.cvtColor(
+            annotated_depth.astype(np.uint8), cv2.COLOR_GRAY2RGB
+        )
+        if self._object_masks.sum() > 0:
+            # If self._object_masks isn't all zero, get the object segmentations and
+            # draw them on the rgb and depth images
+            contours, _ = cv2.findContours(
+                self._object_masks, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
+            )
+            annotated_rgb = cv2.drawContours(
+                detections.annotated_frame, contours, -1, (255, 0, 0), 2
+            )
+            annotated_depth = cv2.drawContours(
+                annotated_depth, contours, -1, (255, 0, 0), 2
+            )
+        else:
+            annotated_rgb = observations["rgb"][0].cpu().numpy()
+        policy_info["annotated_rgb"] = annotated_rgb
+        policy_info["annotated_depth"] = annotated_depth
+
         if "DEBUG_INFO" in os.environ:
             policy_info["render_below_images"].append("debug")
             policy_info["debug"] = "debug: " + os.environ["DEBUG_INFO"]
@@ -190,13 +218,18 @@ class BaseObjectNavPolicy(BasePolicy):
         self, rgb: np.ndarray, depth: np.ndarray, tf_camera_to_episodic: np.ndarray
     ) -> ObjectDetections:
         detections = self._get_object_detections(rgb)
-
+        height, width = rgb.shape[:2]
+        self._object_masks = np.zeros((height, width), dtype=np.uint8)
         for idx, confidence in enumerate(detections.logits):
+            bbox_denorm = detections.boxes[idx] * np.array(
+                [width, height, width, height]
+            )
+            object_mask = self._mobile_sam.segment_bbox(rgb, bbox_denorm.tolist())
+            self._object_masks[object_mask > 0] = 1
             self._object_map.update_map(
                 detections.phrases[idx],
-                detections.boxes[idx],
-                rgb,
                 depth,
+                object_mask,
                 tf_camera_to_episodic,
                 confidence,
             )
