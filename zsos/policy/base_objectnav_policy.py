@@ -42,6 +42,7 @@ class BaseObjectNavPolicy(BasePolicy):
         object_map_min_depth: float,
         object_map_max_depth: float,
         object_map_hfov: float,
+        object_map_erosion_size: float,
         visualize: bool = True,
         *args,
         **kwargs,
@@ -54,6 +55,7 @@ class BaseObjectNavPolicy(BasePolicy):
             min_depth=object_map_min_depth,
             max_depth=object_map_max_depth,
             hfov=object_map_hfov,
+            erosion_size=object_map_erosion_size,
         )
         self._depth_image_shape = tuple(depth_image_shape)
         self._det_conf_threshold = det_conf_threshold
@@ -220,7 +222,7 @@ class BaseObjectNavPolicy(BasePolicy):
         detections = self._get_object_detections(rgb)
         height, width = rgb.shape[:2]
         self._object_masks = np.zeros((height, width), dtype=np.uint8)
-        for idx, confidence in enumerate(detections.logits):
+        for idx in range(len(detections.logits)):
             bbox_denorm = detections.boxes[idx] * np.array(
                 [width, height, width, height]
             )
@@ -231,7 +233,6 @@ class BaseObjectNavPolicy(BasePolicy):
                 depth,
                 object_mask,
                 tf_camera_to_episodic,
-                confidence,
             )
 
         self._object_map.update_explored(tf_camera_to_episodic)

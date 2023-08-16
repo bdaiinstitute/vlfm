@@ -1,5 +1,6 @@
 from typing import Dict, Optional, Tuple
 
+import cv2
 import numpy as np
 import open3d as o3d
 
@@ -12,10 +13,13 @@ class ObjectPointCloudMap:
     _image_height: int = None  # set upon execution of update_map method
     __vfov: float = None  # set upon execution of update_map method
 
-    def __init__(self, min_depth: float, max_depth: float, hfov: float) -> None:
+    def __init__(
+        self, min_depth: float, max_depth: float, hfov: float, erosion_size: float
+    ) -> None:
         self._min_depth = min_depth
         self._max_depth = max_depth
         self._hfov = np.deg2rad(hfov)
+        self._erosion_size = erosion_size
 
     @property
     def _vfov(self) -> float:
@@ -37,8 +41,6 @@ class ObjectPointCloudMap:
         depth_img: np.ndarray,
         object_mask: np.ndarray,
         tf_camera_to_episodic: np.ndarray,
-        *args,
-        **kwargs,
     ) -> None:
         """Updates the object map with the latest information from the agent."""
         self._image_height, self._image_width = depth_img.shape[:2]
@@ -85,10 +87,20 @@ class ObjectPointCloudMap:
     def _extract_object_cloud(
         self, depth: np.ndarray, object_mask: np.ndarray
     ) -> Tuple[np.ndarray, bool]:
+        final_mask = object_mask * 255
+        final_mask = cv2.blur(final_mask, (self._erosion_size, self._erosion_size))
+        # Threshold the blurred mask to get a binary mask
+        final_mask = cv2.threshold(final_mask, 254, 255, cv2.THRESH_BINARY)[1]
+
         valid_depth = depth.reshape(depth.shape[:2])
-        object_depths = valid_depth[object_mask]
+        valid_depth[valid_depth == 0] = 1  # set all holes (0) to just be far (1)
+        valid_depth = (
+            valid_depth * (self._max_depth - self._min_depth) + self._min_depth
+        )
+        cloud = get_point_cloud(valid_depth, final_mask, self._hfov, self._vfov)
 
         # Determine whether the object is too far away or by the edges
+        object_depths = valid_depth[final_mask != 0]
         far_pixels = np.sum(object_depths > 0.85)
         total_pixels = object_depths.shape[0]
         far_pixel_ratio = far_pixels / total_pixels
@@ -100,12 +112,6 @@ class ObjectPointCloudMap:
         ] = True
         by_the_edges = np.sum(object_mask & center_mask) == 0
         too_far = far_pixel_ratio > 0.2 or by_the_edges
-
-        valid_depth[valid_depth == 0] = 1
-        valid_depth = (
-            valid_depth * (self._max_depth - self._min_depth) + self._min_depth
-        )
-        cloud = get_point_cloud(valid_depth, object_mask, self._hfov, self._vfov)
 
         return cloud, too_far
 
