@@ -209,3 +209,16 @@ def closest_point_within_threshold(
         return int(closest_index)
 
     return -1
+
+
+def transform_points(
+    transformation_matrix: np.ndarray, points: np.ndarray
+) -> np.ndarray:
+    # Add a homogeneous coordinate of 1 to each point for matrix multiplication
+    homogeneous_points = np.hstack((points, np.ones((points.shape[0], 1))))
+
+    # Apply the transformation matrix to the points
+    transformed_points = np.dot(transformation_matrix, homogeneous_points.T).T
+
+    # Remove the added homogeneous coordinate and divide by the last coordinate
+    return transformed_points[:, :3] / transformed_points[:, 3:]

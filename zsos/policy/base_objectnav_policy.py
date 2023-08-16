@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from zsos.mapping.object_map import ObjectMap
+from zsos.mapping.object_point_cloud_map import ObjectPointCloudMap
 from zsos.obs_transformers.utils import image_resize
 from zsos.policy.utils.pointnav_policy import (
     WrappedPointNavResNetPolicy,
@@ -39,7 +39,6 @@ class BaseObjectNavPolicy(BasePolicy):
         object_map_min_depth: float,
         object_map_max_depth: float,
         object_map_hfov: float,
-        object_map_proximity_threshold: float,
         visualize: bool = True,
         *args,
         **kwargs,
@@ -47,11 +46,10 @@ class BaseObjectNavPolicy(BasePolicy):
         super().__init__()
         self._object_detector = GroundingDINOClient()
         self._pointnav_policy = WrappedPointNavResNetPolicy(pointnav_policy_path)
-        self._object_map: ObjectMap = ObjectMap(
+        self._object_map: ObjectPointCloudMap = ObjectPointCloudMap(
             min_depth=object_map_min_depth,
             max_depth=object_map_max_depth,
             hfov=object_map_hfov,
-            proximity_threshold=object_map_proximity_threshold,
         )
         self._depth_image_shape = tuple(depth_image_shape)
         self._det_conf_threshold = det_conf_threshold
@@ -121,12 +119,9 @@ class BaseObjectNavPolicy(BasePolicy):
     def _get_policy_info(
         self, observations: "TensorDict", detections: ObjectDetections
     ) -> Dict[str, Any]:
-        seen_objects = set(i.class_name for i in self._object_map.map)
-        seen_objects_str = ", ".join(seen_objects)
         policy_info = {
             "target_object": "target: " + self._target_object,
             "visualized_detections": detections.annotated_frame,
-            "seen_objects": seen_objects_str,
             "gps": str(observations["gps"][0].cpu().numpy()),
             "yaw": np.rad2deg(observations["compass"][0].item()),
             # don't render these on egocentric images when making videos:
@@ -166,7 +161,8 @@ class BaseObjectNavPolicy(BasePolicy):
             observations ("TensorDict"): The observations from the current timestep.
         """
         masks = torch.tensor([self._num_steps != 0], dtype=torch.bool, device="cuda")
-        if not np.array_equal(goal, self._last_goal):
+        dist = np.linalg.norm(goal - self._last_goal)
+        if dist > 1.0:
             self._last_goal = goal
             self._pointnav_policy.reset()
             masks = torch.zeros_like(masks)
