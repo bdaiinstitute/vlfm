@@ -1,17 +1,17 @@
-from typing import Dict, Optional, Tuple
+from typing import Dict
 
 import cv2
 import numpy as np
 import open3d as o3d
 
-from zsos.utils.geometry_utils import calculate_vfov, transform_points
+from zsos.utils.geometry_utils import transform_points
 
 
 class ObjectPointCloudMap:
     _clouds: Dict[str, np.ndarray] = {}
     _image_width: int = None  # set upon execution of update_map method
     _image_height: int = None  # set upon execution of update_map method
-    __vfov: float = None  # set upon execution of update_map method
+    __fx: float = None  # set upon execution of update_map method
 
     def __init__(
         self, min_depth: float, max_depth: float, hfov: float, erosion_size: float
@@ -22,12 +22,14 @@ class ObjectPointCloudMap:
         self._erosion_size = erosion_size
 
     @property
-    def _vfov(self) -> float:
-        if self.__vfov is None:
-            self.__vfov = calculate_vfov(
-                self._hfov, self._image_width, self._image_height
-            )
-        return self.__vfov
+    def _fx(self) -> float:
+        if self.__fx is None:
+            self.__fx = self._image_width / (2 * np.tan(self._hfov / 2))
+        return self.__fx
+
+    @property
+    def _fy(self) -> float:
+        return self._fx
 
     def reset(self):
         self._clouds = {}
@@ -44,15 +46,14 @@ class ObjectPointCloudMap:
     ) -> None:
         """Updates the object map with the latest information from the agent."""
         self._image_height, self._image_width = depth_img.shape[:2]
-        local_cloud, too_far = self._extract_object_cloud(depth_img, object_mask)
+        local_cloud = self._extract_object_cloud(depth_img, object_mask)
         global_cloud = transform_points(tf_camera_to_episodic, local_cloud)
 
-        # Mark all clouds that are close enough by making a new column that is 0 or 1
-        # based on whether the point is within range or not
-        if too_far:
-            within_range = np.zeros((global_cloud.shape[0],))
-        else:
-            within_range = np.ones((global_cloud.shape[0],))
+        # Mark all points of local_cloud whose distance from the camera is too far
+        # as being out of range
+        camera_position = tf_camera_to_episodic[:3, 3] / tf_camera_to_episodic[3, 3]
+        distances = np.linalg.norm(local_cloud - camera_position, axis=1)
+        within_range = distances <= self._max_depth * 0.9  # 10% margin
         global_cloud = np.concatenate((global_cloud, within_range[:, None]), axis=1)
 
         if object_name in self._clouds:
@@ -86,7 +87,7 @@ class ObjectPointCloudMap:
 
     def _extract_object_cloud(
         self, depth: np.ndarray, object_mask: np.ndarray
-    ) -> Tuple[np.ndarray, bool]:
+    ) -> np.ndarray:
         final_mask = object_mask * 255
         final_mask = cv2.blur(final_mask, (self._erosion_size, self._erosion_size))
         # Threshold the blurred mask to get a binary mask
@@ -97,79 +98,13 @@ class ObjectPointCloudMap:
         valid_depth = (
             valid_depth * (self._max_depth - self._min_depth) + self._min_depth
         )
-        cloud = get_point_cloud(valid_depth, final_mask, self._hfov, self._vfov)
+        cloud = get_point_cloud(valid_depth, final_mask, self._fx, self._fy)
 
-        # Determine whether the object is too far away or by the edges
-        object_depths = valid_depth[final_mask != 0]
-        far_pixels = np.sum(object_depths > 0.85)
-        total_pixels = object_depths.shape[0]
-        far_pixel_ratio = far_pixels / total_pixels
-        center_mask = np.zeros_like(object_mask)
-        # Make the middle 50% of center_mask True
-        center_mask[
-            int(0.25 * self._image_height) : int(0.75 * self._image_height),
-            int(0.25 * self._image_width) : int(0.75 * self._image_width),
-        ] = True
-        by_the_edges = np.sum(object_mask & center_mask) == 0
-        too_far = far_pixel_ratio > 0.2 or by_the_edges
-
-        return cloud, too_far
-
-
-def calculate_3d_coordinates_vectorized(
-    hfov: float,
-    image_width: int,
-    image_height: int,
-    depth_values: np.ndarray,
-    pixel_x_values: np.ndarray,
-    pixel_y_values: np.ndarray,
-    vfov: Optional[float] = None,
-) -> np.ndarray:
-    """Calculates the 3D coordinates (x, y, z) of points in the depth image based on
-    the horizontal field of view (HFOV), the image width and height, the depth values,
-    and the pixel x and y coordinates.
-
-    Args:
-        hfov (float): A float representing the HFOV in radians.
-        image_width (int): Width of the image sensor in pixels.
-        image_height (int): Height of the image sensor in pixels.
-        depth_values (np.ndarray): Array of distances of the points in the image plane
-            from the camera center.
-        pixel_x_values (np.ndarray): Array of x coordinates of the points in the image
-            plane.
-        pixel_y_values (np.ndarray): Array of y coordinates of the points in the image
-            plane.
-        vfov (Optional[float]): A float representing the VFOV in radians. If None, the
-            VFOV is calculated from the HFOV, image width, and image height.
-
-    Returns:
-        np.ndarray: Array of 3D coordinates (x, y, z) of the points in the image plane.
-    """
-    # Calculate angle per pixel in the horizontal and vertical directions
-    if vfov is None:
-        vfov = calculate_vfov(hfov, image_width, image_height)
-
-    hangle_per_pixel = hfov / image_width
-    vangle_per_pixel = vfov / image_height
-
-    # Calculate the horizontal and vertical angles from the center to the given pixels
-    theta_values = hangle_per_pixel * (pixel_x_values - image_width / 2)
-    phi_values = vangle_per_pixel * (pixel_y_values - image_height / 2)
-
-    hor_distances = depth_values * np.cos(phi_values)
-    x_values = hor_distances * np.cos(theta_values)
-    y_values = -hor_distances * np.sin(theta_values)
-    ver_distances = depth_values * np.sin(theta_values)
-    z_values = ver_distances * np.sin(phi_values)
-
-    return np.column_stack((x_values, y_values, z_values))
+        return cloud
 
 
 def get_point_cloud(
-    depth_image: np.ndarray,
-    mask: np.ndarray,
-    hfov: float,
-    vfov: Optional[float] = None,
+    depth_image: np.ndarray, mask: np.ndarray, fx: float, fy: float
 ) -> np.ndarray:
     """Calculates the 3D coordinates (x, y, z) of points in the depth image based on
     the horizontal field of view (HFOV), the image width and height, the depth values,
@@ -178,36 +113,26 @@ def get_point_cloud(
     Args:
         depth_image (np.ndarray): 2D depth image.
         mask (np.ndarray): 2D binary mask identifying relevant pixels.
-        hfov (float): A float representing the HFOV in radians.
-        vfov (Optional[float]): A float representing the VFOV in radians. If None, the
-            VFOV is calculated from the HFOV, image width, and image height.
+        fx (float): Focal length in the x direction.
+        fy (float): Focal length in the y direction.
 
     Returns:
         np.ndarray: Array of 3D coordinates (x, y, z) of the points in the image plane.
     """
-    pixel_y_values, pixel_x_values = np.where(mask)
-    depth_values = depth_image[pixel_y_values, pixel_x_values]
-    cloud = calculate_3d_coordinates_vectorized(
-        hfov,
-        depth_image.shape[1],
-        depth_image.shape[0],
-        depth_values,
-        pixel_x_values,
-        pixel_y_values,
-        vfov,
-    )
+    v, u = np.where(mask)
+    z = depth_image[v, u]
+    x = (u - depth_image.shape[1] // 2) * z / fx
+    y = (v - depth_image.shape[0] // 2) * z / fy
+    cloud = np.stack((z, -x, y), axis=-1)
     cloud = open3d_statistical_outlier_removal(cloud)
 
     return cloud
 
 
-def open3d_statistical_outlier_removal(points, nb_neighbors=20, std_ratio=0.5):
+def open3d_statistical_outlier_removal(points, nb_points=120, radius=0.2):
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
-
-    pcd, _ = pcd.remove_statistical_outlier(
-        nb_neighbors=nb_neighbors, std_ratio=std_ratio
-    )
+    pcd, _ = pcd.remove_radius_outlier(nb_points, radius)
 
     return np.asarray(pcd.points)
 
