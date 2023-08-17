@@ -3,6 +3,7 @@ import json
 import os
 import os.path as osp
 import shutil
+import time
 import warnings
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -19,6 +20,7 @@ from zsos.utils.img_utils import (
 )
 
 DEBUG = False
+SAVE_VISUALIZATIONS = False
 RECORDING = False
 RECORDING_DIR = "value_map_recordings"
 JSON_PATH = osp.join(RECORDING_DIR, "data.json")
@@ -185,7 +187,6 @@ class ValueMap:
     ) -> np.ndarray:
         """Return an image representation of the map"""
         # Must negate the y values to get the correct orientation
-        # map_img = np.flipud(self.confidence_map * self.value_map)
         reduced_map = reduce_fn(self.value_map)
         map_img = np.flipud(reduced_map)
         # Make all 0s in the value map equal to the max value, so they don't throw off
@@ -255,8 +256,30 @@ class ValueMap:
             cv2.drawContours(vis, [contour], -1, (0, 0, 255), -1)
             for point in contour:
                 vis[point[1], point[0]] = (0, 255, 0)
-            cv2.imshow("obstacle mask", vis)
-            cv2.waitKey(0)
+            if SAVE_VISUALIZATIONS:
+                # Create visualizations directory if it doesn't exist
+                if not os.path.exists("visualizations"):
+                    os.makedirs("visualizations")
+                # Expand the depth_row back into a full image
+                depth_row_full = np.repeat(
+                    depth_row.reshape(1, -1), depth.shape[0], axis=0
+                )
+                # Stack the depth images with the visible mask
+                depth_rgb = cv2.cvtColor(
+                    (depth * 255).astype(np.uint8), cv2.COLOR_GRAY2RGB
+                )
+                depth_row_full = cv2.cvtColor(
+                    (depth_row_full * 255).astype(np.uint8), cv2.COLOR_GRAY2RGB
+                )
+                vis = np.flipud(vis)
+                new_width = int(vis.shape[1] * (depth_rgb.shape[0] / vis.shape[0]))
+                vis_resized = cv2.resize(vis, (new_width, depth_rgb.shape[0]))
+                vis = np.hstack((depth_rgb, depth_row_full, vis_resized))
+                time_id = int(time.time() * 1000)
+                cv2.imwrite(f"visualizations/{time_id}.png", vis)
+            else:
+                cv2.imshow("obstacle mask", vis)
+                cv2.waitKey(0)
 
         return visible_mask
 
@@ -377,13 +400,17 @@ def replay_from_dir():
     with open(JSON_PATH, "r") as f:
         data = json.load(f)
 
-    v = ValueMap(fov=fov, max_depth=max_depth)
+    v = ValueMap(
+        fov=fov, max_depth=max_depth, value_channels=1, use_max_confidence=False
+    )
 
     sorted_keys = sorted(list(data.keys()))
 
     for img_path in sorted_keys:
         tf_camera_to_episodic = np.array(data[img_path]["tf_camera_to_episodic"])
         value = data[img_path]["value"]
+        if isinstance(value, float):
+            value = np.array([value])
         depth = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE).astype(np.float32) / 255.0
         v.update_map(depth, tf_camera_to_episodic, value)
 
@@ -398,7 +425,7 @@ if __name__ == "__main__":
     # replay_from_dir()
     # quit()
 
-    v = ValueMap(fov=79, max_depth=5.0)
+    v = ValueMap(fov=79, max_depth=5.0, value_channels=1)
     depth = cv2.imread("depth.png", cv2.IMREAD_GRAYSCALE).astype(np.float32) / 255.0
     img = v._get_visible_mask(depth)
     cv2.imshow("img", (img * 255).astype(np.uint8))
