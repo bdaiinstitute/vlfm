@@ -28,7 +28,6 @@ except ModuleNotFoundError:
 class BaseObjectNavPolicy(BasePolicy):
     _target_object: str = ""
     _policy_info: Dict[str, Any] = {}
-    _id_to_padding: Dict[str, float] = {}
     _detect_target_only: bool = True
     _object_masks: np.ndarray = None  # set by ._update_object_map()
     _stop_action: Tensor = None  # MUST BE SET BY SUBCLASS
@@ -206,10 +205,7 @@ class BaseObjectNavPolicy(BasePolicy):
             ),
             "pointgoal_with_gps_compass": rho_theta.unsqueeze(0),
         }
-        stop_dist = self._pointnav_stop_radius + self._id_to_padding.get(
-            self._target_object, 0.0
-        )
-        if rho_theta[0] < stop_dist and stop:
+        if rho_theta[0] < self._pointnav_stop_radius and stop:
             return self._stop_action
         action = self._pointnav_policy.act(
             obs_pointnav, masks, deterministic=deterministic

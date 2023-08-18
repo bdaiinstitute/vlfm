@@ -89,9 +89,7 @@ class ObjectPointCloudMap:
         self, depth: np.ndarray, object_mask: np.ndarray
     ) -> np.ndarray:
         final_mask = object_mask * 255
-        final_mask = cv2.blur(final_mask, (self._erosion_size, self._erosion_size))
-        # Threshold the blurred mask to get a binary mask
-        final_mask = cv2.threshold(final_mask, 254, 255, cv2.THRESH_BINARY)[1]
+        final_mask = cv2.erode(final_mask, None, iterations=self._erosion_size)
 
         valid_depth = depth.reshape(depth.shape[:2])
         valid_depth[valid_depth == 0] = 1  # set all holes (0) to just be far (1)
@@ -124,17 +122,41 @@ def get_point_cloud(
     x = (u - depth_image.shape[1] // 2) * z / fx
     y = (v - depth_image.shape[0] // 2) * z / fy
     cloud = np.stack((z, -x, y), axis=-1)
-    cloud = open3d_statistical_outlier_removal(cloud)
+    cloud = open3d_dbscan_filtering(cloud)
 
     return cloud
 
 
-def open3d_statistical_outlier_removal(points, nb_points=120, radius=0.2):
+def open3d_dbscan_filtering(
+    points, eps: float = 0.2, min_points: int = 100
+) -> np.ndarray:
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
-    pcd, _ = pcd.remove_radius_outlier(nb_points, radius)
 
-    return np.asarray(pcd.points)
+    # Perform DBSCAN clustering
+    labels = np.array(pcd.cluster_dbscan(eps, min_points))
+
+    # Count the points in each cluster
+    unique_labels, label_counts = np.unique(labels, return_counts=True)
+
+    # Exclude noise points, which are given the label -1
+    non_noise_labels_mask = unique_labels != -1
+    non_noise_labels = unique_labels[non_noise_labels_mask]
+    non_noise_label_counts = label_counts[non_noise_labels_mask]
+
+    if len(non_noise_labels) == 0:  # only noise was detected
+        return np.array([])
+
+    # Find the label of the largest non-noise cluster
+    largest_cluster_label = non_noise_labels[np.argmax(non_noise_label_counts)]
+
+    # Get the indices of points in the largest non-noise cluster
+    largest_cluster_indices = np.where(labels == largest_cluster_label)[0]
+
+    # Get the points in the largest non-noise cluster
+    largest_cluster_points = points[largest_cluster_indices]
+
+    return largest_cluster_points
 
 
 def visualize_and_save_point_cloud(point_cloud: np.ndarray, save_path: str):
