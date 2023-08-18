@@ -230,8 +230,8 @@ class ValueMap:
 
         # Assign each value in the row with an x, y coordinate depending on 'angles'
         # and the max depth value for that column
-        x = depth_row * np.cos(angles)
-        y = depth_row * np.sin(angles)
+        x = depth_row
+        y = depth_row * np.tan(angles)
 
         # Get blank cone mask
         cone_mask = self._get_confidence_mask()
