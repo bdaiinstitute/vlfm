@@ -54,8 +54,12 @@ class HabitatMixin:
         }
 
         # In habitat, we need the height of the camera to generate the camera transform
-        agent_config = config.habitat.simulator.agents.main_agent
-        kwargs["camera_height"] = agent_config.sim_sensors.rgb_sensor.position[1]
+        sim_sensors_cfg = config.habitat.simulator.agents.main_agent.sim_sensors
+        kwargs["camera_height"] = sim_sensors_cfg.rgb_sensor.position[1]
+
+        # Synchronize the mapping min/max depth values with the habitat config
+        kwargs["value_map_min_depth"] = sim_sensors_cfg.depth_sensor.min_depth
+        kwargs["value_map_max_depth"] = sim_sensors_cfg.depth_sensor.max_depth
 
         # Only bother visualizing if we're actually going to save the video
         kwargs["visualize"] = len(config.habitat_baselines.eval.video_option) > 0
@@ -173,7 +177,6 @@ class ZSOSPolicyConfig(PolicyConfig):
     object_map_min_depth: float = 0.5
     object_map_max_depth: float = 5.0
     object_map_hfov: float = 79.0
-    value_map_max_depth: float = 5.0
     value_map_hfov: float = 79.0
     object_map_proximity_threshold: float = 1.5
     use_max_confidence: bool = False
@@ -192,7 +195,6 @@ class ZSOSPolicyConfig(PolicyConfig):
             "object_map_max_depth",
             "object_map_hfov",
             "object_map_proximity_threshold",
-            "value_map_max_depth",
             "value_map_hfov",
             "use_max_confidence",
             "object_map_erosion_size",

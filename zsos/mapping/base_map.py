@@ -14,10 +14,12 @@ class BaseMap:
     _confidence_mask: np.ndarray = None
     _camera_positions: List[np.ndarray] = []
     _last_camera_yaw: float = None
+    _map_dtype: np.dtype = np.float32
 
     def __init__(
         self,
         fov: float,
+        min_depth: float,
         max_depth: float,
         size: int = 1000,
         *args,
@@ -34,9 +36,10 @@ class BaseMap:
         self.pixels_per_meter = 20
 
         self._fov = np.deg2rad(fov)
+        self._min_depth = min_depth
         self._max_depth = max_depth
 
-        self._map = np.zeros((size, size), np.float32)
+        self._map = np.zeros((size, size), dtype=self._map_dtype)
         self._episode_pixel_origin = np.array([size // 2, size // 2])
         self._traj_vis = TrajectoryVisualizer(
             self._episode_pixel_origin, self.pixels_per_meter
@@ -53,7 +56,7 @@ class BaseMap:
         self, depth: np.ndarray, tf_camera_to_episodic: np.ndarray
     ) -> np.ndarray:
         # Get new portion of the map
-        curr_data = self._process_local_data(depth)
+        curr_data = self._process_local_data(depth, tf_camera_to_episodic)
 
         # Rotate this new data to match the camera's orientation
         self._last_camera_yaw = yaw = extract_yaw(tf_camera_to_episodic)
@@ -73,6 +76,8 @@ class BaseMap:
 
         return curr_map
 
-    def _process_local_data(self, depth: np.ndarray) -> np.ndarray:
+    def _process_local_data(
+        self, depth: np.ndarray, tf_camera_to_episodic: np.ndarray
+    ) -> np.ndarray:
         """Processes the local data (depth image) to be used for updating the map."""
         raise NotImplementedError

@@ -33,6 +33,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
     def __init__(
         self,
         text_prompt: str,
+        value_map_min_depth: float,
         value_map_max_depth: float,
         value_map_hfov: float,
         use_max_confidence: bool = True,
@@ -45,6 +46,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         self._value_map: ValueMap = ValueMap(
             value_channels=len(text_prompt.split("\n")),
             fov=value_map_hfov,
+            min_depth=value_map_min_depth,
             max_depth=value_map_max_depth,
             use_max_confidence=use_max_confidence,
         )

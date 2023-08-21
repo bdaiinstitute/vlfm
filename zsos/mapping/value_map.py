@@ -39,6 +39,7 @@ class ValueMap(BaseMap):
         self,
         value_channels: int,
         fov: float,
+        min_depth: float,
         max_depth: float,
         size: int = 1000,
         use_max_confidence: bool = True,
@@ -51,7 +52,7 @@ class ValueMap(BaseMap):
             use_max_confidence: Whether to use the maximum confidence value in the value
                 map or a weighted average confidence value.
         """
-        super().__init__(fov, max_depth, size)
+        super().__init__(fov, min_depth, max_depth, size)
         self._value_map = np.zeros((size, size, value_channels), np.float32)
         self._value_channels = value_channels
         self._use_max_confidence = use_max_confidence
@@ -177,13 +178,15 @@ class ValueMap(BaseMap):
 
         return map_img
 
-    def _process_local_data(self, depth: np.ndarray) -> np.ndarray:
+    def _process_local_data(
+        self, depth: np.ndarray, tf_camera_to_episodic: np.ndarray = None
+    ) -> np.ndarray:
         """Using the FOV and depth, return the visible portion of the FOV.
 
         Args:
             depth: The depth image to use for determining the visible portion of the
                 FOV.
-
+            tf_camera_to_episodic: Currently unused for this subclass.
         Returns:
             A mask of the visible portion of the FOV.
         """
@@ -191,7 +194,10 @@ class ValueMap(BaseMap):
         if len(depth.shape) == 3:
             depth = depth.squeeze(2)
         # Squash depth image into one row with the max depth value for each column
-        depth_row = np.max(depth, axis=0) * self._max_depth
+        depth_row = (
+            np.max(depth, axis=0) * (self._max_depth - self._min_depth)
+            + self._min_depth
+        )
 
         # Create a linspace of the same length as the depth row from -fov/2 to fov/2
         angles = np.linspace(-self._fov / 2, self._fov / 2, len(depth_row))
