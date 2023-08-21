@@ -10,13 +10,11 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import cv2
 import numpy as np
 
-from zsos.mapping.traj_visualizer import TrajectoryVisualizer
-from zsos.utils.geometry_utils import extract_yaw, get_rotation_matrix
+from zsos.mapping.base_map import BaseMap
+from zsos.utils.geometry_utils import get_rotation_matrix
 from zsos.utils.img_utils import (
     monochannel_to_inferno_rgb,
     pixel_value_within_radius,
-    place_img_in_img,
-    rotate_image,
 )
 
 DEBUG = False
@@ -25,88 +23,6 @@ RECORDING = False
 RECORDING_DIR = "value_map_recordings"
 JSON_PATH = osp.join(RECORDING_DIR, "data.json")
 ARGS_TXT = osp.join(RECORDING_DIR, "args.txt")
-
-
-class BaseMap:
-    _confidence_mask: np.ndarray = None
-    _camera_positions: List[np.ndarray] = []
-    _last_camera_yaw: float = None
-
-    def __init__(
-        self,
-        fov: float,
-        max_depth: float,
-        size: int = 1000,
-        *args,
-        **kwargs,
-    ):
-        """
-        Args:
-            num_channels: The number of channels in the value map.
-            fov: The field of view of the camera in degrees.
-            max_depth: The desired maximum depth of the camera in meters.
-            use_max_confidence: Whether to use the maximum confidence value in the value
-                map or a weighted average confidence value.
-        """
-        self.pixels_per_meter = 20
-
-        self._fov = np.deg2rad(fov)
-        self._max_depth = max_depth
-
-        self._map = np.zeros((size, size), np.float32)
-        self._episode_pixel_origin = np.array([size // 2, size // 2])
-        self._traj_vis = TrajectoryVisualizer(
-            self._episode_pixel_origin, self.pixels_per_meter
-        )
-
-        if RECORDING:
-            if osp.isdir(RECORDING_DIR):
-                warnings.warn(
-                    f"Recording directory {RECORDING_DIR} already exists. Deleting it."
-                )
-                shutil.rmtree(RECORDING_DIR)
-            os.mkdir(RECORDING_DIR)
-            # Dump all args to a file
-            with open(ARGS_TXT, "w") as f:
-                f.write(f"{fov},{max_depth}")
-            # Create a blank .json file inside for now
-            with open(JSON_PATH, "w") as f:
-                f.write("{}")
-
-    def reset(self):
-        self._map.fill(0)
-        self._camera_positions = []
-        self._traj_vis = TrajectoryVisualizer(
-            self._episode_pixel_origin, self.pixels_per_meter
-        )
-
-    def _localize_new_data(
-        self, depth: np.ndarray, tf_camera_to_episodic: np.ndarray
-    ) -> np.ndarray:
-        # Get new portion of the map
-        curr_data = self._process_local_data(depth)
-
-        # Rotate this new data to match the camera's orientation
-        self._last_camera_yaw = yaw = extract_yaw(tf_camera_to_episodic)
-        curr_data = rotate_image(curr_data, -yaw)
-
-        # Determine where this mask should be overlaid
-        cam_x, cam_y = tf_camera_to_episodic[:2, 3] / tf_camera_to_episodic[3, 3]
-        self._camera_positions.append(np.array([cam_x, cam_y]))
-
-        # Convert to pixel units
-        px = int(cam_x * self.pixels_per_meter) + self._episode_pixel_origin[0]
-        py = int(-cam_y * self.pixels_per_meter) + self._episode_pixel_origin[1]
-
-        # Overlay the new data onto the map
-        curr_map = np.zeros_like(self._map)
-        curr_map = place_img_in_img(curr_map, curr_data, px, py)
-
-        return curr_map
-
-    def _process_local_data(self, depth: np.ndarray) -> np.ndarray:
-        """Processes the local data (depth image) to be used for updating the map."""
-        raise NotImplementedError
 
 
 class ValueMap(BaseMap):
@@ -139,6 +55,20 @@ class ValueMap(BaseMap):
         self._value_map = np.zeros((size, size, value_channels), np.float32)
         self._value_channels = value_channels
         self._use_max_confidence = use_max_confidence
+
+        if RECORDING:
+            if osp.isdir(RECORDING_DIR):
+                warnings.warn(
+                    f"Recording directory {RECORDING_DIR} already exists. Deleting it."
+                )
+                shutil.rmtree(RECORDING_DIR)
+            os.mkdir(RECORDING_DIR)
+            # Dump all args to a file
+            with open(ARGS_TXT, "w") as f:
+                f.write(f"{fov},{max_depth}")
+            # Create a blank .json file inside for now
+            with open(JSON_PATH, "w") as f:
+                f.write("{}")
 
     def reset(self):
         super().reset()
