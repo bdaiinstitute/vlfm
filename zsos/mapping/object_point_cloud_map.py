@@ -8,7 +8,7 @@ from zsos.utils.geometry_utils import transform_points
 
 
 class ObjectPointCloudMap:
-    _clouds: Dict[str, np.ndarray] = {}
+    clouds: Dict[str, np.ndarray] = {}
     _image_width: int = None  # set upon execution of update_map method
     _image_height: int = None  # set upon execution of update_map method
     __fx: float = None  # set upon execution of update_map method
@@ -32,10 +32,10 @@ class ObjectPointCloudMap:
         return self._fx
 
     def reset(self):
-        self._clouds = {}
+        self.clouds = {}
 
     def has_object(self, target_class: str) -> bool:
-        return target_class in self._clouds
+        return target_class in self.clouds
 
     def update_map(
         self,
@@ -56,23 +56,17 @@ class ObjectPointCloudMap:
         within_range = distances <= self._max_depth * 0.9  # 10% margin
         global_cloud = np.concatenate((global_cloud, within_range[:, None]), axis=1)
 
-        if object_name in self._clouds:
-            self._clouds[object_name] = np.concatenate(
-                (self._clouds[object_name], global_cloud), axis=0
+        if object_name in self.clouds:
+            self.clouds[object_name] = np.concatenate(
+                (self.clouds[object_name], global_cloud), axis=0
             )
         else:
-            self._clouds[object_name] = global_cloud
+            self.clouds[object_name] = global_cloud
 
     def get_best_object(
         self, target_class: str, curr_position: np.ndarray
     ) -> np.ndarray:
-        target_cloud = self._clouds[target_class].copy()
-
-        # Determine whether any points are within range
-        within_range_exists: bool = np.any(target_cloud[:, -1] == 1)
-        if within_range_exists:
-            # Filter out all points that are not within range
-            target_cloud = target_cloud[target_cloud[:, -1] == 1]
+        target_cloud = self.get_target_cloud(target_class)
 
         # Return the point that is closest to curr_position, which is 2D
         closest_point = target_cloud[
@@ -84,6 +78,15 @@ class ObjectPointCloudMap:
 
     def update_explored(self, *args, **kwargs):
         pass
+
+    def get_target_cloud(self, target_class: str) -> np.ndarray:
+        target_cloud = self.clouds[target_class].copy()
+        # Determine whether any points are within range
+        within_range_exists: bool = np.any(target_cloud[:, -1] == 1)
+        if within_range_exists:
+            # Filter out all points that are not within range
+            target_cloud = target_cloud[target_cloud[:, -1] == 1]
+        return target_cloud
 
     def _extract_object_cloud(
         self, depth: np.ndarray, object_mask: np.ndarray

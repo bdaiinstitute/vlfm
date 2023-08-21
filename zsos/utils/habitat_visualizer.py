@@ -1,11 +1,14 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import cv2
 import numpy as np
 from habitat.utils.visualizations import maps
+from habitat.utils.visualizations.maps import MAP_TARGET_POINT_INDICATOR
 from habitat.utils.visualizations.utils import overlay_frame
 from habitat_baselines.common.tensor_dict import TensorDict
 
+from frontier_exploration.utils.general_utils import xyz_to_habitat
+from zsos.utils.geometry_utils import transform_points
 from zsos.utils.img_utils import (
     crop_white_border,
     pad_larger_dim,
@@ -59,6 +62,9 @@ class HabitatVis:
         else:
             rgb = observations["rgb"][0].cpu().numpy()
         self.rgb.append(rgb)
+
+        # Visualize target point cloud on the map
+        color_point_cloud_on_map(infos, policy_info)
 
         map = maps.colorize_draw_agent_and_fit_to_height(
             infos[0]["top_down_map"], self.depth[0].shape[0]
@@ -138,3 +144,67 @@ class HabitatVis:
             frame = add_text_to_image(frame, t, top=True)
 
         return frame
+
+
+def sim_xy_to_grid_xy(
+    upper_bound: Tuple[int, int],
+    lower_bound: Tuple[int, int],
+    grid_resolution: Tuple[int, int],
+    sim_xy: np.ndarray,
+    remove_duplicates: bool = True,
+) -> np.ndarray:
+    """Converts simulation coordinates to grid coordinates.
+
+    Args:
+        upper_bound (Tuple[int, int]): The upper bound of the grid.
+        lower_bound (Tuple[int, int]): The lower bound of the grid.
+        grid_resolution (Tuple[int, int]): The resolution of the grid.
+        sim_xy (np.ndarray): A numpy array of 2D simulation coordinates.
+        remove_duplicates (bool): Whether to remove duplicate grid coordinates.
+
+    Returns:
+        np.ndarray: A numpy array of 2D grid coordinates.
+    """
+    grid_size = np.array(
+        [
+            abs(upper_bound[1] - lower_bound[1]) / grid_resolution[0],
+            abs(upper_bound[0] - lower_bound[0]) / grid_resolution[1],
+        ]
+    )
+    grid_xy = ((sim_xy - lower_bound[::-1]) / grid_size).astype(int)
+
+    if remove_duplicates:
+        grid_xy = np.unique(grid_xy, axis=0)
+
+    return grid_xy
+
+
+def color_point_cloud_on_map(infos, policy_info):
+    if len(policy_info[0]["target_point_cloud"]) == 0:
+        return
+
+    upper_bound = infos[0]["top_down_map"]["upper_bound"]
+    lower_bound = infos[0]["top_down_map"]["lower_bound"]
+    grid_resolution = infos[0]["top_down_map"]["grid_resolution"]
+    tf_episodic_to_global = infos[0]["top_down_map"]["tf_episodic_to_global"]
+
+    cloud_episodic_frame = policy_info[0]["target_point_cloud"][:, :3]
+    cloud_global_frame_xyz = transform_points(
+        tf_episodic_to_global, cloud_episodic_frame
+    )
+    cloud_global_frame_habitat = xyz_to_habitat(cloud_global_frame_xyz)
+    cloud_global_frame_habitat_xy = cloud_global_frame_habitat[:, [2, 0]]
+
+    grid_xy = sim_xy_to_grid_xy(
+        upper_bound,
+        lower_bound,
+        grid_resolution,
+        cloud_global_frame_habitat_xy,
+        remove_duplicates=True,
+    )
+
+    new_map = infos[0]["top_down_map"]["map"].copy()
+    for x, y in grid_xy:
+        new_map[x, y] = MAP_TARGET_POINT_INDICATOR
+
+    infos[0]["top_down_map"]["map"] = new_map

@@ -64,6 +64,7 @@ class BaseObjectNavPolicy(BasePolicy):
         self._num_steps = 0
         self._last_goal = np.zeros(2)
         self._done_initializing = False
+        self._target_detected = False
 
     def _reset(self):
         self._target_object = ""
@@ -72,6 +73,7 @@ class BaseObjectNavPolicy(BasePolicy):
         self._last_goal = np.zeros(2)
         self._num_steps = 0
         self._done_initializing = False
+        self._target_detected = False
 
     def act(
         self, observations, rnn_hidden_states, prev_actions, masks, deterministic=False
@@ -117,6 +119,7 @@ class BaseObjectNavPolicy(BasePolicy):
 
     def _get_target_object_location(self, position) -> Union[None, np.ndarray]:
         if self._object_map.has_object(self._target_object):
+            self._target_detected = True
             return self._object_map.get_best_object(self._target_object, position)
         else:
             return None
@@ -124,15 +127,19 @@ class BaseObjectNavPolicy(BasePolicy):
     def _get_policy_info(
         self, observations: "TensorDict", detections: ObjectDetections
     ) -> Dict[str, Any]:
+        if self._target_object in self._object_map.clouds:
+            target_point_cloud = self._object_map.get_target_cloud(self._target_object)
+        else:
+            target_point_cloud = np.array([])
         policy_info = {
             "target_object": "target: " + self._target_object,
             "gps": str(observations["gps"][0].cpu().numpy()),
             "yaw": np.rad2deg(observations["compass"][0].item()),
+            "target_detected": self._target_detected,
+            "target_point_cloud": target_point_cloud,
             # don't render these on egocentric images when making videos:
             "render_below_images": [
                 "target_object",
-                "llm_response",
-                "seen_objects",
             ],
         }
 
