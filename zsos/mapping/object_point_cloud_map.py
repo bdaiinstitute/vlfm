@@ -100,6 +100,7 @@ class ObjectPointCloudMap:
             valid_depth * (self._max_depth - self._min_depth) + self._min_depth
         )
         cloud = get_point_cloud(valid_depth, final_mask, self._fx, self._fy)
+        cloud = open3d_dbscan_filtering(cloud)
 
         return cloud
 
