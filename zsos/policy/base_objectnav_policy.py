@@ -94,6 +94,8 @@ class BaseObjectNavPolicy(BasePolicy):
         self._num_steps = 0
         self._done_initializing = False
         self._target_detected = False
+        if self._compute_frontiers:
+            self._obstacle_map.reset()
 
     def act(
         self, observations, rnn_hidden_states, prev_actions, masks, deterministic=False
@@ -190,6 +192,11 @@ class BaseObjectNavPolicy(BasePolicy):
             annotated_rgb = observations["rgb"][0].cpu().numpy()
         policy_info["annotated_rgb"] = annotated_rgb
         policy_info["annotated_depth"] = annotated_depth
+
+        if self._compute_frontiers:
+            policy_info["obstacle_map"] = cv2.cvtColor(
+                self._obstacle_map.visualize(), cv2.COLOR_BGR2RGB
+            )
 
         if "DEBUG_INFO" in os.environ:
             policy_info["render_below_images"].append("debug")

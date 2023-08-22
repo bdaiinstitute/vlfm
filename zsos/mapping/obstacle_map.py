@@ -40,7 +40,7 @@ class ObstacleMap(BaseMap):
         self._max_height = max_height
         self._area_thresh_in_pixels = area_thresh * (self.pixels_per_meter**2)
         self.__fx = None
-        kernel_size = self.pixels_per_meter * agent_radius
+        kernel_size = self.pixels_per_meter * agent_radius * 2
         # round kernel_size to nearest odd number
         kernel_size = int(kernel_size) + (int(kernel_size) % 2 == 0)
         self._navigable_kernel = np.ones((kernel_size, kernel_size), np.uint8)

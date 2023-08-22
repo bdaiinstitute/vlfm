@@ -100,8 +100,8 @@ def resize_images(images, match_dimension="height"):
     Returns:
         List[np.ndarray]: List of resized images.
     """
-    if len(images) < 2:
-        raise ValueError("At least two images are required for resizing.")
+    if len(images) == 1:
+        return images
 
     if match_dimension == "height":
         max_height = max(img.shape[0] for img in images)
