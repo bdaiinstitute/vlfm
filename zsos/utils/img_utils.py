@@ -100,8 +100,8 @@ def resize_images(images, match_dimension="height"):
     Returns:
         List[np.ndarray]: List of resized images.
     """
-    if len(images) < 2:
-        raise ValueError("At least two images are required for resizing.")
+    if len(images) == 1:
+        return images
 
     if match_dimension == "height":
         max_height = max(img.shape[0] for img in images)
@@ -266,3 +266,33 @@ def pixel_value_within_radius(
         return np.median(overlap_values)  # type: ignore
     else:
         raise ValueError(f"Invalid reduction method: {reduction}")
+
+
+def median_blur_normalized_depth_image(
+    depth_image: np.ndarray, ksize: int
+) -> np.ndarray:
+    """Applies a median blur to a normalized depth image.
+
+    This function first converts the normalized depth image to a uint8 image,
+    then applies a median blur, and finally converts the blurred image back
+    to a normalized float32 image.
+
+    Args:
+        depth_image (np.ndarray): The input depth image. This should be a
+            normalized float32 image.
+        ksize (int): The size of the kernel to be used in the median blur.
+            This should be an odd number greater than 1.
+
+    Returns:
+        np.ndarray: The blurred depth image. This is a normalized float32 image.
+    """
+    # Convert the normalized depth image to a uint8 image
+    depth_image_uint8 = (depth_image * 255).astype(np.uint8)
+
+    # Apply median blur
+    blurred_depth_image_uint8 = cv2.medianBlur(depth_image_uint8, ksize)
+
+    # Convert the blurred image back to a normalized float32 image
+    blurred_depth_image = blurred_depth_image_uint8.astype(np.float32) / 255
+
+    return blurred_depth_image

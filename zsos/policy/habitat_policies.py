@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 import torch
+from depth_camera_filtering import filter_depth
 from habitat.tasks.nav.nav import HeadingSensor
 from habitat.tasks.nav.object_nav_task import ObjectGoalSensor
 from habitat_baselines.common.baseline_registry import baseline_registry
@@ -54,8 +55,12 @@ class HabitatMixin:
         }
 
         # In habitat, we need the height of the camera to generate the camera transform
-        agent_config = config.habitat.simulator.agents.main_agent
-        kwargs["camera_height"] = agent_config.sim_sensors.rgb_sensor.position[1]
+        sim_sensors_cfg = config.habitat.simulator.agents.main_agent.sim_sensors
+        kwargs["camera_height"] = sim_sensors_cfg.rgb_sensor.position[1]
+
+        # Synchronize the mapping min/max depth values with the habitat config
+        kwargs["value_map_min_depth"] = sim_sensors_cfg.depth_sensor.min_depth
+        kwargs["value_map_max_depth"] = sim_sensors_cfg.depth_sensor.max_depth
 
         # Only bother visualizing if we're actually going to save the video
         kwargs["visualize"] = len(config.habitat_baselines.eval.video_option) > 0
@@ -109,9 +114,9 @@ class HabitatMixin:
         info["start_yaw"] = self._start_yaw
         return info
 
-    def _get_object_camera_info(
-        self, observations: TensorDict
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _extract_from_obs(
+        self: Union["HabitatMixin", BaseObjectNavPolicy], observations: TensorDict
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Extracts the rgb, depth, and camera transform from the observations.
 
         Args:
@@ -127,10 +132,21 @@ class HabitatMixin:
         depth = observations["depth"][0].cpu().numpy()
         x, y = observations["gps"][0].cpu().numpy()
         camera_yaw = observations["compass"][0].cpu().item()
+        depth_2d = filter_depth(depth.reshape(depth.shape[:2]), blur_type=None)
+        depth = np.expand_dims(depth_2d, axis=-1)
         # Habitat GPS makes west negative, so flip y
         camera_position = np.array([x, -y, self._camera_height])
         tf_camera_to_episodic = xyz_yaw_to_tf_matrix(camera_position, camera_yaw)
-        return rgb, depth, tf_camera_to_episodic
+        if self._compute_frontiers:
+            self._obstacle_map.update_map(depth_2d, tf_camera_to_episodic)
+            frontiers = self._obstacle_map.frontiers
+        else:
+            if "frontier_sensor" in observations:
+                frontiers = observations["frontier_sensor"][0].cpu().numpy()
+            else:
+                frontiers = np.array([])
+
+        return rgb, depth, tf_camera_to_episodic, frontiers
 
 
 @baseline_registry.register_policy
@@ -173,11 +189,11 @@ class ZSOSPolicyConfig(PolicyConfig):
     object_map_min_depth: float = 0.5
     object_map_max_depth: float = 5.0
     object_map_hfov: float = 79.0
-    value_map_max_depth: float = 5.0
     value_map_hfov: float = 79.0
     object_map_proximity_threshold: float = 1.5
     use_max_confidence: bool = False
     object_map_erosion_size: int = 5
+    obstacle_map_area_threshold: float = 1.5  # in square meters
     text_prompt: str = "Seems like there is a target_object ahead."
 
     @classmethod
@@ -192,10 +208,10 @@ class ZSOSPolicyConfig(PolicyConfig):
             "object_map_max_depth",
             "object_map_hfov",
             "object_map_proximity_threshold",
-            "value_map_max_depth",
             "value_map_hfov",
             "use_max_confidence",
             "object_map_erosion_size",
+            "obstacle_map_area_threshold",
             "text_prompt",
         ]
 

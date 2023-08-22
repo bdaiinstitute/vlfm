@@ -222,3 +222,28 @@ def transform_points(
 
     # Remove the added homogeneous coordinate and divide by the last coordinate
     return transformed_points[:, :3] / transformed_points[:, 3:]
+
+
+def get_point_cloud(
+    depth_image: np.ndarray, mask: np.ndarray, fx: float, fy: float
+) -> np.ndarray:
+    """Calculates the 3D coordinates (x, y, z) of points in the depth image based on
+    the horizontal field of view (HFOV), the image width and height, the depth values,
+    and the pixel x and y coordinates.
+
+    Args:
+        depth_image (np.ndarray): 2D depth image.
+        mask (np.ndarray): 2D binary mask identifying relevant pixels.
+        fx (float): Focal length in the x direction.
+        fy (float): Focal length in the y direction.
+
+    Returns:
+        np.ndarray: Array of 3D coordinates (x, y, z) of the points in the image plane.
+    """
+    v, u = np.where(mask)
+    z = depth_image[v, u]
+    x = (u - depth_image.shape[1] // 2) * z / fx
+    y = (v - depth_image.shape[0] // 2) * z / fy
+    cloud = np.stack((z, -x, -y), axis=-1)
+
+    return cloud

@@ -7,6 +7,7 @@ import torch
 from torch import Tensor
 
 from zsos.mapping.object_point_cloud_map import ObjectPointCloudMap
+from zsos.mapping.obstacle_map import ObstacleMap
 from zsos.obs_transformers.utils import image_resize
 from zsos.policy.utils.pointnav_policy import (
     WrappedPointNavResNetPolicy,
@@ -31,6 +32,9 @@ class BaseObjectNavPolicy(BasePolicy):
     _detect_target_only: bool = True
     _object_masks: np.ndarray = None  # set by ._update_object_map()
     _stop_action: Tensor = None  # MUST BE SET BY SUBCLASS
+    _observations_cache: Union[
+        Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray], None
+    ] = None
 
     def __init__(
         self,
@@ -43,6 +47,11 @@ class BaseObjectNavPolicy(BasePolicy):
         object_map_hfov: float,
         object_map_erosion_size: float,
         visualize: bool = True,
+        compute_frontiers: bool = True,
+        min_obstacle_height: float = 0.15,
+        max_obstacle_height: float = 0.88,
+        agent_radius: float = 0.18,
+        obstacle_map_area_threshold: float = 1.5,
         *args,
         **kwargs,
     ):
@@ -65,6 +74,17 @@ class BaseObjectNavPolicy(BasePolicy):
         self._last_goal = np.zeros(2)
         self._done_initializing = False
         self._target_detected = False
+        self._compute_frontiers = compute_frontiers
+        if compute_frontiers:
+            self._obstacle_map = ObstacleMap(
+                fov=object_map_hfov,
+                min_height=min_obstacle_height,
+                max_height=max_obstacle_height,
+                min_depth=object_map_min_depth,
+                max_depth=object_map_max_depth,
+                area_thresh=obstacle_map_area_threshold,
+                agent_radius=agent_radius,
+            )
 
     def _reset(self):
         self._target_object = ""
@@ -74,6 +94,8 @@ class BaseObjectNavPolicy(BasePolicy):
         self._num_steps = 0
         self._done_initializing = False
         self._target_detected = False
+        if self._compute_frontiers:
+            self._obstacle_map.reset()
 
     def act(
         self, observations, rnn_hidden_states, prev_actions, masks, deterministic=False
@@ -92,7 +114,9 @@ class BaseObjectNavPolicy(BasePolicy):
 
         self._policy_info = {}
 
-        rgb, depth, tf_camera_to_episodic = self._get_object_camera_info(observations)
+        rgb, depth, tf_camera_to_episodic, _ = self._get_object_camera_info(
+            observations
+        )
         detections = self._update_object_map(rgb, depth, tf_camera_to_episodic)
         position = tf_camera_to_episodic[:2, 3] / tf_camera_to_episodic[3, 3]
         goal = self._get_target_object_location(position)
@@ -108,6 +132,8 @@ class BaseObjectNavPolicy(BasePolicy):
 
         self._policy_info = self._get_policy_info(observations, detections)
         self._num_steps += 1
+
+        self._observations_cache = None
 
         return pointnav_action, rnn_hidden_states
 
@@ -166,6 +192,11 @@ class BaseObjectNavPolicy(BasePolicy):
             annotated_rgb = observations["rgb"][0].cpu().numpy()
         policy_info["annotated_rgb"] = annotated_rgb
         policy_info["annotated_depth"] = annotated_depth
+
+        if self._compute_frontiers:
+            policy_info["obstacle_map"] = cv2.cvtColor(
+                self._obstacle_map.visualize(), cv2.COLOR_BGR2RGB
+            )
 
         if "DEBUG_INFO" in os.environ:
             policy_info["render_below_images"].append("debug")
@@ -244,7 +275,7 @@ class BaseObjectNavPolicy(BasePolicy):
 
     def _get_object_camera_info(
         self, observations: "TensorDict"
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Extracts the rgb, depth, and camera transform from the observations.
 
         Args:
@@ -256,4 +287,12 @@ class BaseObjectNavPolicy(BasePolicy):
                 The camera transform is the transform from the camera to the episodic
                 frame, a 4x4 transformation matrix.
         """
+        if self._observations_cache is None:
+            self._observations_cache = self._extract_from_obs(observations)
+
+        return self._observations_cache
+
+    def _extract_from_obs(
+        self, observations: "TensorDict"
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         raise NotImplementedError

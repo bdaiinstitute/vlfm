@@ -24,9 +24,9 @@ class HabitatVis:
         self.rgb = []
         self.depth = []
         self.maps = []
-        self.cost_maps = []
+        self.vis_maps = []
         self.texts = []
-        self.using_cost_map = False
+        self.using_vis_maps = False
         self.using_annotated_rgb = False
         self.using_annotated_depth = False
 
@@ -34,7 +34,7 @@ class HabitatVis:
         self.rgb = []
         self.depth = []
         self.maps = []
-        self.cost_maps = []
+        self.vis_maps = []
         self.texts = []
         self.using_annotated_rgb = False
         self.using_annotated_depth = False
@@ -70,30 +70,14 @@ class HabitatVis:
             infos[0]["top_down_map"], self.depth[0].shape[0]
         )
         self.maps.append(map)
-        if "cost_map" in policy_info[0]:
-            cost_map = policy_info[0]["cost_map"]
-            # Rotate the cost map to match the agent's orientation at the start
-            # of the episode
-            start_yaw = infos[0]["start_yaw"]
-            cost_map = rotate_image(cost_map, start_yaw, border_value=(255, 255, 255))
-            # Remove unnecessary white space around the edges
-            cost_map = crop_white_border(cost_map)
-            # Make the image at least 150 pixels tall or wide
-            cost_map = pad_larger_dim(cost_map, 150)
-            # Rotate the image if the corresponding map is taller than it is wide
-            map = infos[0]["top_down_map"]["map"]
-            if map.shape[0] > map.shape[1]:
-                cost_map = np.rot90(cost_map, 1)
-            # Pad the shorter dimension to be the same size as the longer
-            cost_map = pad_to_square(cost_map, extra_pad=50)
-            # Pad the image border with some white space
-            cost_map = cv2.copyMakeBorder(
-                cost_map, 50, 50, 50, 50, cv2.BORDER_CONSTANT, value=(255, 255, 255)
-            )
-            self.cost_maps.append(cost_map)
-            self.using_cost_map = True
-        else:
-            self.cost_maps.append(np.ones_like(self.maps[0]) * 255)
+        vis_map_imgs = [
+            reorient_rescale_map(infos, policy_info[0][vkey])
+            for vkey in ["obstacle_map", "value_map"]
+            if vkey in policy_info[0]
+        ]
+        if vis_map_imgs:
+            self.using_vis_maps = True
+            self.vis_maps.append(vis_map_imgs)
         text = [
             policy_info[0][text_key]
             for text_key in policy_info[0].get("render_below_images", [])
@@ -109,8 +93,8 @@ class HabitatVis:
             self.rgb.append(self.rgb.pop(0))
         if self.using_annotated_depth is not None:
             self.depth.append(self.depth.pop(0))
-        if self.using_cost_map:  # Cost maps are also one step delayed
-            self.cost_maps.append(self.cost_maps.pop(0))
+        if self.using_vis_maps:  # Cost maps are also one step delayed
+            self.vis_maps.append(self.vis_maps.pop(0))
 
         frames = []
         num_frames = len(self.depth) - 1  # last frame is from next episode, remove it
@@ -119,7 +103,7 @@ class HabitatVis:
                 self.depth[i],
                 self.rgb[i],
                 self.maps[i],
-                self.cost_maps[i],
+                self.vis_maps[i],
                 self.texts[i],
             )
             frames.append(frame)
@@ -130,20 +114,81 @@ class HabitatVis:
         return frames
 
     @staticmethod
-    def _create_frame(depth, rgb, map, cost_map, text):
-        """Create a frame with depth, rgb, map, cost_map, and text"""
-        row_1 = np.hstack([depth, rgb])
-        map, cost_map = resize_images([map, cost_map], match_dimension="height")
-        row_2 = np.hstack([map, cost_map])
-        row_2_height_scaled = int(row_2.shape[0] * (row_1.shape[1] / row_2.shape[1]))
-        row_2_scaled = cv2.resize(row_2, (row_1.shape[1], row_2_height_scaled))
-        frame = np.vstack([row_1, row_2_scaled])
+    def _create_frame(
+        depth: np.ndarray,
+        rgb: np.ndarray,
+        map: np.ndarray,
+        vis_map_imgs: List[np.ndarray],
+        text: List[str],
+    ) -> np.ndarray:
+        """Create a frame using all the given images.
+
+        First, the depth and rgb images are stacked vertically. Then, all the maps are
+        combined as a separate images. Then these two images should be stitched together
+        horizontally (depth-rgb on the left, maps on the right).
+
+        The combined map image contains two rows of images and at least one column.
+        First, the 'map' argument is at the top left, then the first element of the
+        'vis_map_imgs' argument is at the bottom left. If there are more than one
+        element in 'vis_map_imgs', then the second element is at the top right, the
+        third element is at the bottom right, and so on.
+
+        Args:
+            depth: The depth image (H, W, 3).
+            rgb: The rgb image (H, W, 3).
+            map: The map image, a 3-channel rgb image, but can have different shape from
+                depth and rgb.
+            vis_map_imgs: A list of other map images. Each are 3-channel rgb images, but
+                can have different sizes.
+            text: A list of strings to be rendered above the images.
+        Returns:
+            np.ndarray: The combined frame image.
+        """
+        # Stack depth and rgb images vertically
+        depth_rgb = np.vstack((depth, rgb))
+
+        # Prepare the list of images to be combined
+        map_imgs = [map] + vis_map_imgs
+        if len(map_imgs) % 2 == 1:
+            # If there are odd number of images, add a placeholder image
+            map_imgs.append(np.ones_like(map_imgs[-1]) * 255)
+
+        even_index_imgs = map_imgs[::2]
+        odd_index_imgs = map_imgs[1::2]
+        top_row = np.hstack(resize_images(even_index_imgs, match_dimension="height"))
+        bottom_row = np.hstack(resize_images(odd_index_imgs, match_dimension="height"))
+
+        frame = np.vstack(resize_images([top_row, bottom_row], match_dimension="width"))
+        depth_rgb, frame = resize_images([depth_rgb, frame], match_dimension="height")
+        frame = np.hstack((depth_rgb, frame))
 
         # Add text to the top of the frame
         for t in text[::-1]:
             frame = add_text_to_image(frame, t, top=True)
 
         return frame
+
+
+def reorient_rescale_map(infos, vis_map_img):
+    # Rotate the cost map to match the agent's orientation at the start
+    # of the episode
+    start_yaw = infos[0]["start_yaw"]
+    vis_map_img = rotate_image(vis_map_img, start_yaw, border_value=(255, 255, 255))
+    # Remove unnecessary white space around the edges
+    vis_map_img = crop_white_border(vis_map_img)
+    # Make the image at least 150 pixels tall or wide
+    vis_map_img = pad_larger_dim(vis_map_img, 150)
+    # Rotate the image if the corresponding map is taller than it is wide
+    map = infos[0]["top_down_map"]["map"]
+    if map.shape[0] > map.shape[1]:
+        vis_map_img = np.rot90(vis_map_img, 1)
+    # Pad the shorter dimension to be the same size as the longer
+    vis_map_img = pad_to_square(vis_map_img, extra_pad=50)
+    # Pad the image border with some white space
+    vis_map_img = cv2.copyMakeBorder(
+        vis_map_img, 50, 50, 50, 50, cv2.BORDER_CONSTANT, value=(255, 255, 255)
+    )
+    return vis_map_img
 
 
 def sim_xy_to_grid_xy(

@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import open3d as o3d
 
-from zsos.utils.geometry_utils import transform_points
+from zsos.utils.geometry_utils import get_point_cloud, transform_points
 
 
 class ObjectPointCloudMap:
@@ -100,34 +100,9 @@ class ObjectPointCloudMap:
             valid_depth * (self._max_depth - self._min_depth) + self._min_depth
         )
         cloud = get_point_cloud(valid_depth, final_mask, self._fx, self._fy)
+        cloud = open3d_dbscan_filtering(cloud)
 
         return cloud
-
-
-def get_point_cloud(
-    depth_image: np.ndarray, mask: np.ndarray, fx: float, fy: float
-) -> np.ndarray:
-    """Calculates the 3D coordinates (x, y, z) of points in the depth image based on
-    the horizontal field of view (HFOV), the image width and height, the depth values,
-    and the pixel x and y coordinates.
-
-    Args:
-        depth_image (np.ndarray): 2D depth image.
-        mask (np.ndarray): 2D binary mask identifying relevant pixels.
-        fx (float): Focal length in the x direction.
-        fy (float): Focal length in the y direction.
-
-    Returns:
-        np.ndarray: Array of 3D coordinates (x, y, z) of the points in the image plane.
-    """
-    v, u = np.where(mask)
-    z = depth_image[v, u]
-    x = (u - depth_image.shape[1] // 2) * z / fx
-    y = (v - depth_image.shape[0] // 2) * z / fy
-    cloud = np.stack((z, -x, y), axis=-1)
-    cloud = open3d_dbscan_filtering(cloud)
-
-    return cloud
 
 
 def open3d_dbscan_filtering(
