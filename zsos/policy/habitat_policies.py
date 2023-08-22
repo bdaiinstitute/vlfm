@@ -115,7 +115,7 @@ class HabitatMixin:
         return info
 
     def _extract_from_obs(
-        self, observations: TensorDict
+        self: Union["HabitatMixin", BaseObjectNavPolicy], observations: TensorDict
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Extracts the rgb, depth, and camera transform from the observations.
 
@@ -132,15 +132,19 @@ class HabitatMixin:
         depth = observations["depth"][0].cpu().numpy()
         x, y = observations["gps"][0].cpu().numpy()
         camera_yaw = observations["compass"][0].cpu().item()
-        depth = filter_depth(depth.reshape(depth.shape[:2]), blur_type=None)
-        depth = np.expand_dims(depth, axis=-1)
+        depth_2d = filter_depth(depth.reshape(depth.shape[:2]), blur_type=None)
+        depth = np.expand_dims(depth_2d, axis=-1)
         # Habitat GPS makes west negative, so flip y
         camera_position = np.array([x, -y, self._camera_height])
         tf_camera_to_episodic = xyz_yaw_to_tf_matrix(camera_position, camera_yaw)
-        if "frontier_sensor" in observations:
-            frontiers = observations["frontier_sensor"][0].cpu().numpy()
+        if self._compute_frontiers:
+            self._obstacle_map.update_map(depth_2d, tf_camera_to_episodic)
+            frontiers = self._obstacle_map.frontiers
         else:
-            frontiers = np.array([])
+            if "frontier_sensor" in observations:
+                frontiers = observations["frontier_sensor"][0].cpu().numpy()
+            else:
+                frontiers = np.array([])
 
         return rgb, depth, tf_camera_to_episodic, frontiers
 
@@ -189,6 +193,7 @@ class ZSOSPolicyConfig(PolicyConfig):
     object_map_proximity_threshold: float = 1.5
     use_max_confidence: bool = False
     object_map_erosion_size: int = 5
+    obstacle_map_area_threshold: float = 1.5  # in square meters
     text_prompt: str = "Seems like there is a target_object ahead."
 
     @classmethod
@@ -206,6 +211,7 @@ class ZSOSPolicyConfig(PolicyConfig):
             "value_map_hfov",
             "use_max_confidence",
             "object_map_erosion_size",
+            "obstacle_map_area_threshold",
             "text_prompt",
         ]
 

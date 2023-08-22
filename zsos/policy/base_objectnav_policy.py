@@ -7,6 +7,7 @@ import torch
 from torch import Tensor
 
 from zsos.mapping.object_point_cloud_map import ObjectPointCloudMap
+from zsos.mapping.obstacle_map import ObstacleMap
 from zsos.obs_transformers.utils import image_resize
 from zsos.policy.utils.pointnav_policy import (
     WrappedPointNavResNetPolicy,
@@ -46,6 +47,11 @@ class BaseObjectNavPolicy(BasePolicy):
         object_map_hfov: float,
         object_map_erosion_size: float,
         visualize: bool = True,
+        compute_frontiers: bool = True,
+        min_obstacle_height: float = 0.15,
+        max_obstacle_height: float = 0.88,
+        agent_radius: float = 0.18,
+        obstacle_map_area_threshold: float = 1.5,
         *args,
         **kwargs,
     ):
@@ -68,6 +74,17 @@ class BaseObjectNavPolicy(BasePolicy):
         self._last_goal = np.zeros(2)
         self._done_initializing = False
         self._target_detected = False
+        self._compute_frontiers = compute_frontiers
+        if compute_frontiers:
+            self._obstacle_map = ObstacleMap(
+                fov=object_map_hfov,
+                min_height=min_obstacle_height,
+                max_height=max_obstacle_height,
+                min_depth=object_map_min_depth,
+                max_depth=object_map_max_depth,
+                area_thresh=obstacle_map_area_threshold,
+                agent_radius=agent_radius,
+            )
 
     def _reset(self):
         self._target_object = ""

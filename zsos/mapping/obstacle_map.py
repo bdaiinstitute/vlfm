@@ -28,7 +28,7 @@ class ObstacleMap(BaseMap):
         min_height: float,
         max_height: float,
         agent_radius: float,
-        area_thresh_in_pixels: int = 100,
+        area_thresh: float = 3.0,  # square meters
         size: int = 1000,
     ):
         super().__init__(fov, min_depth, max_depth, size)
@@ -38,7 +38,7 @@ class ObstacleMap(BaseMap):
         self._hfov = np.deg2rad(fov)
         self._min_height = min_height
         self._max_height = max_height
-        self._area_thresh_in_pixels = area_thresh_in_pixels
+        self._area_thresh_in_pixels = area_thresh * (self.pixels_per_meter**2)
         self.__fx = None
         kernel_size = self.pixels_per_meter * agent_radius
         # round kernel_size to nearest odd number
