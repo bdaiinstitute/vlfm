@@ -387,8 +387,8 @@ def replay_from_dir():
 
     v = ValueMap(
         fov=kwargs["fov"],
-        min_depth=kwargs["min_depth"],
-        max_depth=kwargs["max_depth"],
+        min_depth=float(kwargs.get("min_depth", 0.0)),
+        max_depth=float(kwargs["max_depth"]),
         value_channels=kwargs["value_channels"],
         size=kwargs["size"],
         use_max_confidence=kwargs["use_max_confidence"],

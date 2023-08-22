@@ -3,10 +3,12 @@ from typing import Tuple
 
 import cv2
 import numpy as np
+from depth_camera_filtering import filter_depth
 
+from frontier_exploration.utils.fog_of_war import reveal_fog_of_war
 from zsos.mapping.base_map import BaseMap
 from zsos.mapping.value_map import JSON_PATH, KWARGS_JSON
-from zsos.utils.geometry_utils import get_point_cloud, transform_points
+from zsos.utils.geometry_utils import extract_yaw, get_point_cloud, transform_points
 
 
 class ObstacleMap(BaseMap):
@@ -30,6 +32,7 @@ class ObstacleMap(BaseMap):
         super().__init__(fov, min_depth, max_depth, size)
         self._obstacle_map = np.zeros((size, size), dtype=bool)
         self._navigable_map = np.zeros((size, size), dtype=bool)
+        self._explored_area = np.zeros((size, size), dtype=bool)
         self._hfov = np.deg2rad(fov)
         self._min_height = min_height
         self._max_height = max_height
@@ -69,11 +72,32 @@ class ObstacleMap(BaseMap):
             self.pixels_per_meter,
         )
 
+        # Update the navigable area, which is an inverse of the obstacle map after a
+        # dilation operation to accomodate the robot's radius.
         self._navigable_map = 1 - cv2.dilate(
             self._obstacle_map.astype(np.uint8),
             self._navigable_kernel,
             iterations=1,
         ).astype(bool)
+
+        # Update the explored area
+        agent_xy_location = tf_camera_to_episodic[:2, 3]
+        self._camera_positions.append(agent_xy_location)
+        agent_pixel_location = xy_to_px(
+            agent_xy_location.reshape(1, 2),
+            self.pixels_per_meter,
+            self._episode_pixel_origin,
+            self._obstacle_map.shape[0],
+        )[0]
+        self._last_camera_yaw = extract_yaw(tf_camera_to_episodic)
+        self._explored_area = reveal_fog_of_war(
+            top_down_map=self._navigable_map.astype(np.uint8),
+            current_fog_of_war_mask=self._explored_area.astype(np.uint8),
+            current_point=agent_pixel_location[::-1],
+            current_angle=-self._last_camera_yaw,
+            fov=np.rad2deg(self._hfov),
+            max_line_len=self._max_depth * self.pixels_per_meter,
+        )
 
     def get_frontiers(self):
         """Returns the frontiers of the map."""
@@ -84,10 +108,21 @@ class ObstacleMap(BaseMap):
         vis_img = np.ones((*self._obstacle_map.shape[:2], 3), dtype=np.uint8) * 255
         vis_obstacle_map = np.flipud(self._obstacle_map)
         vis_navigable_map = np.flipud(self._navigable_map)
+        vis_explored_area = np.flipud(self._explored_area)
+        # Draw explored area in light green
+        vis_img[vis_explored_area == 1] = (200, 255, 200)
         # Draw unnavigable areas in gray
         vis_img[vis_navigable_map == 0] = (100, 100, 100)
         # Draw obstacles in black
         vis_img[vis_obstacle_map == 1] = (0, 0, 0)
+
+        if len(self._camera_positions) > 0:
+            self._traj_vis.draw_trajectory(
+                vis_img,
+                self._camera_positions,
+                self._last_camera_yaw,
+            )
+
         return vis_img
 
     def _process_local_data(
@@ -109,10 +144,9 @@ class ObstacleMap(BaseMap):
         raise NotImplementedError
 
     def _get_local_point_cloud(self, depth: np.ndarray) -> np.ndarray:
-        scaled_depth = depth.copy()
-        scaled_depth[depth == 0] = 1.0
+        filtered_depth = filter_depth(depth.copy(), blur_type=None)
         scaled_depth = (
-            scaled_depth * (self._max_depth - self._min_depth) + self._min_depth
+            filtered_depth * (self._max_depth - self._min_depth) + self._min_depth
         )
         mask = scaled_depth < self._max_depth
         point_cloud = get_point_cloud(scaled_depth, mask, self._fx, self._fy)
