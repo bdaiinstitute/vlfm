@@ -81,3 +81,33 @@ class BaseMap:
     ) -> np.ndarray:
         """Processes the local data (depth image) to be used for updating the map."""
         raise NotImplementedError
+
+    def _xy_to_px(self, points: np.ndarray) -> np.ndarray:
+        """Converts an array of (x, y) coordinates to pixel coordinates.
+
+        Args:
+            points: The array of (x, y) coordinates to convert.
+
+        Returns:
+            The array of (x, y) pixel coordinates.
+        """
+        px = (
+            np.rint(points[:, ::-1] * self.pixels_per_meter)
+            + self._episode_pixel_origin
+        )
+        px[:, 0] = self._map.shape[0] - px[:, 0]
+        return px.astype(int)
+
+    def _px_to_xy(self, px: np.ndarray) -> np.ndarray:
+        """Converts an array of pixel coordinates to (x, y) coordinates.
+
+        Args:
+            px: The array of pixel coordinates to convert.
+
+        Returns:
+            The array of (x, y) coordinates.
+        """
+        px_copy = px.copy()
+        px_copy[:, 0] = self._map.shape[0] - px_copy[:, 0]
+        points = (px_copy - self._episode_pixel_origin) / self.pixels_per_meter
+        return points[:, ::-1]

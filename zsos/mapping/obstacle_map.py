@@ -1,10 +1,10 @@
 import json
-from typing import Tuple
 
 import cv2
 import numpy as np
 from depth_camera_filtering import filter_depth
 
+from frontier_exploration.frontier_detection import detect_frontier_waypoints
 from frontier_exploration.utils.fog_of_war import reveal_fog_of_war
 from zsos.mapping.base_map import BaseMap
 from zsos.mapping.value_map import JSON_PATH, KWARGS_JSON
@@ -18,6 +18,8 @@ class ObstacleMap(BaseMap):
 
     _map_dtype: np.dtype = bool
     _image_width: int = None  # set upon execution of update_map method
+    _frontiers_px: np.ndarray = np.array([])
+    frontiers: np.ndarray = np.array([])
 
     def __init__(
         self,
@@ -27,20 +29,29 @@ class ObstacleMap(BaseMap):
         min_height: float,
         max_height: float,
         agent_radius: float,
+        area_thresh_in_pixels: int = 100,
         size: int = 1000,
     ):
         super().__init__(fov, min_depth, max_depth, size)
-        self._obstacle_map = np.zeros((size, size), dtype=bool)
+        self._map = np.zeros((size, size), dtype=bool)
         self._navigable_map = np.zeros((size, size), dtype=bool)
         self._explored_area = np.zeros((size, size), dtype=bool)
         self._hfov = np.deg2rad(fov)
         self._min_height = min_height
         self._max_height = max_height
+        self._area_thresh_in_pixels = area_thresh_in_pixels
         self.__fx = None
         kernel_size = self.pixels_per_meter * agent_radius
         # round kernel_size to nearest odd number
         kernel_size = int(kernel_size) + (int(kernel_size) % 2 == 0)
         self._navigable_kernel = np.ones((kernel_size, kernel_size), np.uint8)
+
+    def reset(self):
+        super().reset()
+        self._navigable_map.fill(0)
+        self._explored_area.fill(0)
+        self._frontiers_px = np.array([])
+        self.frontiers = np.array([])
 
     @property
     def _fx(self) -> float:
@@ -65,17 +76,16 @@ class ObstacleMap(BaseMap):
         obstacle_cloud = filter_points_by_height(
             point_cloud_episodic_frame, self._min_height, self._max_height
         )
-        cloud_to_grid(
-            obstacle_cloud,
-            self._obstacle_map,
-            self._episode_pixel_origin,
-            self.pixels_per_meter,
-        )
+
+        # Populate topdown map with obstacle locations
+        xy_points = obstacle_cloud[:, :2]
+        pixel_points = self._xy_to_px(xy_points)
+        self._map[pixel_points[:, 1], pixel_points[:, 0]] = 1
 
         # Update the navigable area, which is an inverse of the obstacle map after a
         # dilation operation to accomodate the robot's radius.
         self._navigable_map = 1 - cv2.dilate(
-            self._obstacle_map.astype(np.uint8),
+            self._map.astype(np.uint8),
             self._navigable_kernel,
             iterations=1,
         ).astype(bool)
@@ -83,12 +93,7 @@ class ObstacleMap(BaseMap):
         # Update the explored area
         agent_xy_location = tf_camera_to_episodic[:2, 3]
         self._camera_positions.append(agent_xy_location)
-        agent_pixel_location = xy_to_px(
-            agent_xy_location.reshape(1, 2),
-            self.pixels_per_meter,
-            self._episode_pixel_origin,
-            self._obstacle_map.shape[0],
-        )[0]
+        agent_pixel_location = self._xy_to_px(agent_xy_location.reshape(1, 2))[0]
         self._last_camera_yaw = extract_yaw(tf_camera_to_episodic)
         self._explored_area = reveal_fog_of_war(
             top_down_map=self._navigable_map.astype(np.uint8),
@@ -99,22 +104,40 @@ class ObstacleMap(BaseMap):
             max_line_len=self._max_depth * self.pixels_per_meter,
         )
 
-    def get_frontiers(self):
+        # Compute frontier locations
+        self._frontiers_px = self._get_frontiers()
+        self.frontiers = self._px_to_xy(self._frontiers_px)
+
+    def _get_frontiers(self):
         """Returns the frontiers of the map."""
-        raise NotImplementedError
+        # Dilate the explored area slightly to prevent small gaps between the explored
+        # area and the unnavigable area from being detected as frontiers.
+        explored_area = cv2.dilate(
+            self._explored_area.astype(np.uint8),
+            np.ones((5, 5), np.uint8),
+            iterations=1,
+        )
+        frontiers = detect_frontier_waypoints(
+            self._navigable_map.astype(np.uint8),
+            explored_area,
+            self._area_thresh_in_pixels,
+        )
+        return frontiers
 
     def visualize(self):
         """Visualizes the map."""
-        vis_img = np.ones((*self._obstacle_map.shape[:2], 3), dtype=np.uint8) * 255
-        vis_obstacle_map = np.flipud(self._obstacle_map)
-        vis_navigable_map = np.flipud(self._navigable_map)
-        vis_explored_area = np.flipud(self._explored_area)
+        vis_img = np.ones((*self._map.shape[:2], 3), dtype=np.uint8) * 255
         # Draw explored area in light green
-        vis_img[vis_explored_area == 1] = (200, 255, 200)
+        vis_img[self._explored_area == 1] = (200, 255, 200)
         # Draw unnavigable areas in gray
-        vis_img[vis_navigable_map == 0] = (100, 100, 100)
+        vis_img[self._navigable_map == 0] = (100, 100, 100)
         # Draw obstacles in black
-        vis_img[vis_obstacle_map == 1] = (0, 0, 0)
+        vis_img[self._map == 1] = (0, 0, 0)
+        # Draw frontiers in blue (200, 0, 0)
+        for frontier in self._frontiers_px:
+            cv2.circle(vis_img, tuple([int(i) for i in frontier]), 5, (200, 0, 0), 2)
+
+        vis_img = cv2.flip(vis_img, 0)
 
         if len(self._camera_positions) > 0:
             self._traj_vis.draw_trajectory(
@@ -124,24 +147,6 @@ class ObstacleMap(BaseMap):
             )
 
         return vis_img
-
-    def _process_local_data(
-        self, depth: np.ndarray, tf_camera_to_episodic: np.ndarray = None
-    ) -> np.ndarray:
-        """Using the FOV and depth, return the 2D top down map of obstacles within the
-        FOV.
-
-        Args:
-            depth: The depth image to use for determining the visible portion of the
-                FOV.
-            tf_camera_to_episodic: Currently unused for this subclass.
-        Returns:
-            A mask of the visible portion of the FOV.
-        """
-
-    def _fuse_new_data(self, curr_map: np.ndarray):
-        """Fuses the new data with the existing data."""
-        raise NotImplementedError
 
     def _get_local_point_cloud(self, depth: np.ndarray) -> np.ndarray:
         filtered_depth = filter_depth(depth.copy(), blur_type=None)
@@ -157,56 +162,6 @@ def filter_points_by_height(
     points: np.ndarray, min_height: float, max_height: float
 ) -> np.ndarray:
     return points[(points[:, 2] >= min_height) & (points[:, 2] <= max_height)]
-
-
-def xy_to_px(
-    points: np.ndarray,
-    pixels_per_meter: float,
-    episode_pixel_origin: Tuple[int, int],
-    grid_height: int,
-) -> np.ndarray:
-    """Converts an array of (x, y) coordinates to pixel coordinates.
-
-    Args:
-        points: The array of (x, y) coordinates to convert.
-
-    Returns:
-        The array of (x, y) pixel coordinates.
-    """
-    px = np.rint(points[:, ::-1] * pixels_per_meter) + episode_pixel_origin
-    px[:, 0] = grid_height - px[:, 0]
-    return px.astype(int)
-
-
-def cloud_to_grid(
-    point_cloud: np.ndarray,
-    grid: np.ndarray,
-    episode_origin: Tuple[int, int],
-    pixels_per_meter: float,
-):
-    """Flattens a point cloud into a topdown grid.
-
-    Args:
-        point_cloud (np.ndarray): A point cloud in the form of a numpy array of shape
-            (N, 3) where N is the number of points in the cloud. The first two columns
-            are the x and y coordinates of the points in meters, and the third column
-            is the z coordinate in meters, which will not be used.
-        grid (np.ndarray): A numpy array of shape (H, W) where H and W are the height.
-            The xy_to_px function will be used to convert the x and y coordinates of
-            the points in the cloud to pixel coordinates, and the pixel values at those
-            coordinates will be set to 1.
-        episode_origin (Tuple[int, int]): The pixel coordinates of the origin of the
-            episode.
-        pixels_per_meter (float): The number of pixels per meter.
-    """
-    # Extract the x and y coordinates of the points in the cloud
-    xy_points = point_cloud[:, :2]
-
-    # Convert the x and y coordinates to pixel coordinates
-    pixel_points = xy_to_px(xy_points, pixels_per_meter, episode_origin, grid.shape[0])
-
-    # Set the pixel values at the pixel coordinates to 1
-    grid[pixel_points[:, 1], pixel_points[:, 0]] = 1
 
 
 def replay_from_dir():
