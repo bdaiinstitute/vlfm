@@ -24,14 +24,20 @@ class ObstacleMap(BaseMap):
         max_depth: float,
         min_height: float,
         max_height: float,
+        agent_radius: float,
         size: int = 1000,
     ):
         super().__init__(fov, min_depth, max_depth, size)
         self._obstacle_map = np.zeros((size, size), dtype=bool)
+        self._navigable_map = np.zeros((size, size), dtype=bool)
         self._hfov = np.deg2rad(fov)
         self._min_height = min_height
         self._max_height = max_height
         self.__fx = None
+        kernel_size = self.pixels_per_meter * agent_radius
+        # round kernel_size to nearest odd number
+        kernel_size = int(kernel_size) + (int(kernel_size) % 2 == 0)
+        self._navigable_kernel = np.ones((kernel_size, kernel_size), np.uint8)
 
     @property
     def _fx(self) -> float:
@@ -63,15 +69,26 @@ class ObstacleMap(BaseMap):
             self.pixels_per_meter,
         )
 
+        self._navigable_map = 1 - cv2.dilate(
+            self._obstacle_map.astype(np.uint8),
+            self._navigable_kernel,
+            iterations=1,
+        ).astype(bool)
+
     def get_frontiers(self):
         """Returns the frontiers of the map."""
         raise NotImplementedError
 
     def visualize(self):
         """Visualizes the map."""
-        vis_map = np.flipud((self._obstacle_map * 255).astype(np.uint8))
-        vis_map = 255 - vis_map
-        return vis_map
+        vis_img = np.ones((*self._obstacle_map.shape[:2], 3), dtype=np.uint8) * 255
+        vis_obstacle_map = np.flipud(self._obstacle_map)
+        vis_navigable_map = np.flipud(self._navigable_map)
+        # Draw unnavigable areas in gray
+        vis_img[vis_navigable_map == 0] = (100, 100, 100)
+        # Draw obstacles in black
+        vis_img[vis_obstacle_map == 1] = (0, 0, 0)
+        return vis_img
 
     def _process_local_data(
         self, depth: np.ndarray, tf_camera_to_episodic: np.ndarray = None
@@ -150,7 +167,6 @@ def cloud_to_grid(
     """
     # Extract the x and y coordinates of the points in the cloud
     xy_points = point_cloud[:, :2]
-    # xy_points = -xy_points[:, ::-1]
 
     # Convert the x and y coordinates to pixel coordinates
     pixel_points = xy_to_px(xy_points, pixels_per_meter, episode_origin, grid.shape[0])
@@ -171,6 +187,7 @@ def replay_from_dir():
         max_height=float(kwargs.get("max_height", 0.88)),
         min_depth=kwargs["min_depth"],
         max_depth=kwargs["max_depth"],
+        agent_radius=float(kwargs.get("agent_radius", 0.18)),
         size=kwargs["size"],
     )
 
