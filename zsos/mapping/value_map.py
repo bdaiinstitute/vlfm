@@ -22,7 +22,7 @@ SAVE_VISUALIZATIONS = False
 RECORDING = False
 RECORDING_DIR = "value_map_recordings"
 JSON_PATH = osp.join(RECORDING_DIR, "data.json")
-ARGS_TXT = osp.join(RECORDING_DIR, "args.txt")
+KWARGS_JSON = osp.join(RECORDING_DIR, "kwargs.json")
 
 
 class ValueMap(BaseMap):
@@ -37,10 +37,10 @@ class ValueMap(BaseMap):
 
     def __init__(
         self,
-        value_channels: int,
         fov: float,
         min_depth: float,
         max_depth: float,
+        value_channels: int,
         size: int = 1000,
         use_max_confidence: bool = True,
     ):
@@ -65,8 +65,18 @@ class ValueMap(BaseMap):
                 shutil.rmtree(RECORDING_DIR)
             os.mkdir(RECORDING_DIR)
             # Dump all args to a file
-            with open(ARGS_TXT, "w") as f:
-                f.write(f"{fov},{max_depth}")
+            with open(KWARGS_JSON, "w") as f:
+                json.dump(
+                    {
+                        "fov": fov,
+                        "min_depth": min_depth,
+                        "max_depth": max_depth,
+                        "value_channels": value_channels,
+                        "size": size,
+                        "use_max_confidence": use_max_confidence,
+                    },
+                    f,
+                )
             # Create a blank .json file inside for now
             with open(JSON_PATH, "w") as f:
                 f.write("{}")
@@ -105,7 +115,7 @@ class ValueMap(BaseMap):
                 data = json.load(f)
             data[img_path] = {
                 "tf_camera_to_episodic": tf_camera_to_episodic.tolist(),
-                "values": values,
+                "values": values.tolist(),
             }
             with open(JSON_PATH, "w") as f:
                 json.dump(data, f)
@@ -370,24 +380,25 @@ def remap(
 
 
 def replay_from_dir():
-    with open(ARGS_TXT, "r") as f:
-        lines = f.readlines()
-        fov, max_depth = lines[0].split(",")
-        fov, max_depth = float(fov), float(max_depth)
+    with open(KWARGS_JSON, "r") as f:
+        kwargs = json.load(f)
     with open(JSON_PATH, "r") as f:
         data = json.load(f)
 
     v = ValueMap(
-        fov=fov, max_depth=max_depth, value_channels=1, use_max_confidence=False
+        fov=kwargs["fov"],
+        min_depth=kwargs["min_depth"],
+        max_depth=kwargs["max_depth"],
+        value_channels=kwargs["value_channels"],
+        size=kwargs["size"],
+        use_max_confidence=kwargs["use_max_confidence"],
     )
 
     sorted_keys = sorted(list(data.keys()))
 
     for img_path in sorted_keys:
         tf_camera_to_episodic = np.array(data[img_path]["tf_camera_to_episodic"])
-        value = data[img_path]["value"]
-        if isinstance(value, float):
-            value = np.array([value])
+        value = np.array(data[img_path]["values"])
         depth = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE).astype(np.float32) / 255.0
         v.update_map(depth, tf_camera_to_episodic, value)
 
