@@ -2,7 +2,6 @@ import json
 
 import cv2
 import numpy as np
-from depth_camera_filtering import filter_depth
 
 from frontier_exploration.frontier_detection import detect_frontier_waypoints
 from frontier_exploration.utils.fog_of_war import reveal_fog_of_war
@@ -149,10 +148,7 @@ class ObstacleMap(BaseMap):
         return vis_img
 
     def _get_local_point_cloud(self, depth: np.ndarray) -> np.ndarray:
-        filtered_depth = filter_depth(depth.copy(), blur_type=None)
-        scaled_depth = (
-            filtered_depth * (self._max_depth - self._min_depth) + self._min_depth
-        )
+        scaled_depth = depth * (self._max_depth - self._min_depth) + self._min_depth
         mask = scaled_depth < self._max_depth
         point_cloud = get_point_cloud(scaled_depth, mask, self._fx, self._fy)
         return point_cloud

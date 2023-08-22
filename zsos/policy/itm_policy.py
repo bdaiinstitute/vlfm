@@ -44,10 +44,10 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         self._itm = BLIP2ITMClient()
         self._text_prompt = text_prompt
         self._value_map: ValueMap = ValueMap(
-            value_channels=len(text_prompt.split("\n")),
             fov=value_map_hfov,
             min_depth=value_map_min_depth,
             max_depth=value_map_max_depth,
+            value_channels=len(text_prompt.split("\n")),
             use_max_confidence=use_max_confidence,
         )
 
@@ -59,7 +59,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         self._last_frontier = np.zeros(2)
 
     def _explore(self, observations: Union[Dict[str, Tensor], "TensorDict"]) -> Tensor:
-        frontiers = observations["frontier_sensor"][0].cpu().numpy()
+        _, _, _, frontiers = self._get_object_camera_info(observations)
         if np.array_equal(frontiers, np.zeros((1, 2))):
             return self._stop_action
         best_frontier, best_value = self._get_best_frontier(observations, frontiers)
@@ -91,7 +91,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         )
         best_frontier, best_value = None, None
 
-        _, _, tf_camera_to_episodic = self._get_object_camera_info(observations)
+        _, _, tf_camera_to_episodic, _ = self._get_object_camera_info(observations)
         position = tf_camera_to_episodic[:2, 3] / tf_camera_to_episodic[3, 3]
 
         if self._last_value > 0.0:
@@ -153,7 +153,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
             "radius": self._circle_marker_radius,
             "thickness": self._circle_marker_thickness,
         }
-        frontiers = observations["frontier_sensor"][0].cpu().numpy()
+        _, _, _, frontiers = self._get_object_camera_info(observations)
         for frontier in frontiers:
             marker_kwargs = {"color": self._frontier_color, **base_kwargs}
             markers.append((frontier[:2], marker_kwargs))
@@ -173,7 +173,9 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         return policy_info
 
     def _update_value_map(self, observations: "TensorDict"):
-        rgb, depth, tf_camera_to_episodic = self._get_object_camera_info(observations)
+        rgb, depth, tf_camera_to_episodic, _ = self._get_object_camera_info(
+            observations
+        )
         curr_cosine = [
             self._itm.cosine(rgb, p.replace("target_object", self._target_object))
             for p in self._text_prompt.split("\n")

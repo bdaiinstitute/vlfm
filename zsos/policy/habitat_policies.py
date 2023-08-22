@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 import torch
+from depth_camera_filtering import filter_depth
 from habitat.tasks.nav.nav import HeadingSensor
 from habitat.tasks.nav.object_nav_task import ObjectGoalSensor
 from habitat_baselines.common.baseline_registry import baseline_registry
@@ -113,9 +114,9 @@ class HabitatMixin:
         info["start_yaw"] = self._start_yaw
         return info
 
-    def _get_object_camera_info(
+    def _extract_from_obs(
         self, observations: TensorDict
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Extracts the rgb, depth, and camera transform from the observations.
 
         Args:
@@ -131,10 +132,17 @@ class HabitatMixin:
         depth = observations["depth"][0].cpu().numpy()
         x, y = observations["gps"][0].cpu().numpy()
         camera_yaw = observations["compass"][0].cpu().item()
+        depth = filter_depth(depth.reshape(depth.shape[:2]), blur_type=None)
+        depth = np.expand_dims(depth, axis=-1)
         # Habitat GPS makes west negative, so flip y
         camera_position = np.array([x, -y, self._camera_height])
         tf_camera_to_episodic = xyz_yaw_to_tf_matrix(camera_position, camera_yaw)
-        return rgb, depth, tf_camera_to_episodic
+        if "frontier_sensor" in observations:
+            frontiers = observations["frontier_sensor"][0].cpu().numpy()
+        else:
+            frontiers = np.array([])
+
+        return rgb, depth, tf_camera_to_episodic, frontiers
 
 
 @baseline_registry.register_policy

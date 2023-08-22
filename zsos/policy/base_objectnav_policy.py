@@ -31,6 +31,9 @@ class BaseObjectNavPolicy(BasePolicy):
     _detect_target_only: bool = True
     _object_masks: np.ndarray = None  # set by ._update_object_map()
     _stop_action: Tensor = None  # MUST BE SET BY SUBCLASS
+    _observations_cache: Union[
+        Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray], None
+    ] = None
 
     def __init__(
         self,
@@ -92,7 +95,9 @@ class BaseObjectNavPolicy(BasePolicy):
 
         self._policy_info = {}
 
-        rgb, depth, tf_camera_to_episodic = self._get_object_camera_info(observations)
+        rgb, depth, tf_camera_to_episodic, _ = self._get_object_camera_info(
+            observations
+        )
         detections = self._update_object_map(rgb, depth, tf_camera_to_episodic)
         position = tf_camera_to_episodic[:2, 3] / tf_camera_to_episodic[3, 3]
         goal = self._get_target_object_location(position)
@@ -108,6 +113,8 @@ class BaseObjectNavPolicy(BasePolicy):
 
         self._policy_info = self._get_policy_info(observations, detections)
         self._num_steps += 1
+
+        self._observations_cache = None
 
         return pointnav_action, rnn_hidden_states
 
@@ -244,7 +251,7 @@ class BaseObjectNavPolicy(BasePolicy):
 
     def _get_object_camera_info(
         self, observations: "TensorDict"
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Extracts the rgb, depth, and camera transform from the observations.
 
         Args:
@@ -256,4 +263,12 @@ class BaseObjectNavPolicy(BasePolicy):
                 The camera transform is the transform from the camera to the episodic
                 frame, a 4x4 transformation matrix.
         """
+        if self._observations_cache is None:
+            self._observations_cache = self._extract_from_obs(observations)
+
+        return self._observations_cache
+
+    def _extract_from_obs(
+        self, observations: "TensorDict"
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         raise NotImplementedError
