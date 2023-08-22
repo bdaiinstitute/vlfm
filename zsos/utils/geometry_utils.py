@@ -244,6 +244,6 @@ def get_point_cloud(
     z = depth_image[v, u]
     x = (u - depth_image.shape[1] // 2) * z / fx
     y = (v - depth_image.shape[0] // 2) * z / fy
-    cloud = np.stack((z, -x, y), axis=-1)
+    cloud = np.stack((z, -x, -y), axis=-1)
 
     return cloud
