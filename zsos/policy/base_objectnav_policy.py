@@ -112,13 +112,12 @@ class BaseObjectNavPolicy(BasePolicy):
 
         self._policy_info = {}
 
-        rgb, depth, tf_camera_to_episodic = [
-            self._observations_cache[k]
-            for k in ["rgb", "depth_numpy", "tf_camera_to_episodic"]
+        detections = [
+            self._update_object_map(rgb, depth, tf)
+            for rgb, depth, tf in self._observations_cache["object_map_rgbd"]
         ]
-        detections = self._update_object_map(rgb, depth, tf_camera_to_episodic)
-        position = tf_camera_to_episodic[:2, 3] / tf_camera_to_episodic[3, 3]
-        goal = self._get_target_object_location(position)
+        robot_xy = self._observations_cache["robot_xy"]
+        goal = self._get_target_object_location(robot_xy)
 
         if not self._done_initializing:  # Initialize
             pointnav_action = self._initialize()
@@ -129,7 +128,7 @@ class BaseObjectNavPolicy(BasePolicy):
                 goal[:2], deterministic=deterministic, stop=True
             )
 
-        self._policy_info = self._get_policy_info(detections)
+        self._policy_info = self._get_policy_info(detections[0])  # a little hacky
         self._num_steps += 1
 
         self._observations_cache = {}
@@ -150,7 +149,7 @@ class BaseObjectNavPolicy(BasePolicy):
             return None
 
     def _get_policy_info(self, detections: ObjectDetections) -> Dict[str, Any]:
-        if self._target_object in self._object_map.clouds:
+        if self._object_map.has_object(self._target_object):
             target_point_cloud = self._object_map.get_target_cloud(self._target_object)
         else:
             target_point_cloud = np.array([])
@@ -169,7 +168,7 @@ class BaseObjectNavPolicy(BasePolicy):
         if not self._visualize:
             return policy_info
 
-        annotated_depth = self._observations_cache["depth_numpy"] * 255
+        annotated_depth = self._observations_cache["object_map_rgbd"][0][1] * 255
         annotated_depth = cv2.cvtColor(
             annotated_depth.astype(np.uint8), cv2.COLOR_GRAY2RGB
         )
@@ -186,7 +185,7 @@ class BaseObjectNavPolicy(BasePolicy):
                 annotated_depth, contours, -1, (255, 0, 0), 2
             )
         else:
-            annotated_rgb = self._observations_cache["rgb"]
+            annotated_rgb = self._observations_cache["object_map_rgbd"][0][0]
         policy_info["annotated_rgb"] = annotated_rgb
         policy_info["annotated_depth"] = annotated_depth
 
@@ -232,7 +231,7 @@ class BaseObjectNavPolicy(BasePolicy):
         )
         obs_pointnav = {
             "depth": image_resize(
-                self._observations_cache["depth_tensor"],
+                self._observations_cache["nav_depth"],
                 self._depth_image_shape,
                 channels_last=True,
                 interpolation_mode="area",

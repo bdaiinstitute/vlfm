@@ -139,13 +139,12 @@ class HabitatMixin:
                 frontiers = np.array([])
 
         self._observations_cache = {
-            "rgb": rgb,
-            "depth_numpy": depth,
-            "tf_camera_to_episodic": tf_camera_to_episodic,
             "frontier_sensor": frontiers,
             "nav_depth": observations["depth"],  # for pointnav
-            "robot_xy": camera_position[:2],  # for pointnav
-            "robot_heading": camera_yaw,  # for pointnav
+            "robot_xy": camera_position[:2],
+            "robot_heading": camera_yaw,
+            "object_map_rgbd": [(rgb, depth, tf_camera_to_episodic)],
+            "value_map_rgbd": [(rgb, depth, tf_camera_to_episodic)],
         }
 
 
