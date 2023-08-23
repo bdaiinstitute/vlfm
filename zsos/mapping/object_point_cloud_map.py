@@ -47,13 +47,11 @@ class ObjectPointCloudMap:
         """Updates the object map with the latest information from the agent."""
         self._image_height, self._image_width = depth_img.shape[:2]
         local_cloud = self._extract_object_cloud(depth_img, object_mask)
-        global_cloud = transform_points(tf_camera_to_episodic, local_cloud)
 
         # Mark all points of local_cloud whose distance from the camera is too far
         # as being out of range
-        camera_position = tf_camera_to_episodic[:3, 3] / tf_camera_to_episodic[3, 3]
-        distances = np.linalg.norm(local_cloud - camera_position, axis=1)
-        within_range = distances <= self._max_depth * 0.9  # 10% margin
+        within_range = local_cloud[:, 0] <= self._max_depth * 0.95  # 5% margin
+        global_cloud = transform_points(tf_camera_to_episodic, local_cloud)
         global_cloud = np.concatenate((global_cloud, within_range[:, None]), axis=1)
 
         if object_name in self.clouds:
