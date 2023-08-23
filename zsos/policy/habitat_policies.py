@@ -114,31 +114,26 @@ class HabitatMixin:
         info["start_yaw"] = self._start_yaw
         return info
 
-    def _extract_from_obs(
+    def _cache_observations(
         self: Union["HabitatMixin", BaseObjectNavPolicy], observations: TensorDict
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """Extracts the rgb, depth, and camera transform from the observations.
+    ):
+        """Caches the rgb, depth, and camera transform from the observations.
 
         Args:
-            observations (TensorDict): The observations from the current timestep.
-
-        Returns:
-            Tuple[np.ndarray, np.ndarray, np.ndarray]: The rgb image, depth image, and
-                camera transform. The depth image is normalized to be between 0 and 1.
-                The camera transform is the transform from the camera to the episodic
-                frame, a 4x4 transformation matrix.
+           observations (TensorDict): The observations from the current timestep.
         """
+        if len(self._observations_cache) > 0:
+            return
         rgb = observations["rgb"][0].cpu().numpy()
         depth = observations["depth"][0].cpu().numpy()
         x, y = observations["gps"][0].cpu().numpy()
         camera_yaw = observations["compass"][0].cpu().item()
-        depth_2d = filter_depth(depth.reshape(depth.shape[:2]), blur_type=None)
-        depth = np.expand_dims(depth_2d, axis=-1)
+        depth = filter_depth(depth.reshape(depth.shape[:2]), blur_type=None)
         # Habitat GPS makes west negative, so flip y
         camera_position = np.array([x, -y, self._camera_height])
         tf_camera_to_episodic = xyz_yaw_to_tf_matrix(camera_position, camera_yaw)
         if self._compute_frontiers:
-            self._obstacle_map.update_map(depth_2d, tf_camera_to_episodic)
+            self._obstacle_map.update_map(depth, tf_camera_to_episodic)
             frontiers = self._obstacle_map.frontiers
         else:
             if "frontier_sensor" in observations:
@@ -146,7 +141,15 @@ class HabitatMixin:
             else:
                 frontiers = np.array([])
 
-        return rgb, depth, tf_camera_to_episodic, frontiers
+        self._observations_cache = {
+            "rgb": rgb,
+            "depth_numpy": depth,
+            "tf_camera_to_episodic": tf_camera_to_episodic,
+            "frontier_sensor": frontiers,
+            "depth_tensor": observations["depth"],  # for pointnav
+            "robot_xy": camera_position[:2],  # for pointnav
+            "robot_heading": camera_yaw,  # for pointnav
+        }
 
 
 @baseline_registry.register_policy

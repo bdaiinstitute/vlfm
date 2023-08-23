@@ -36,9 +36,7 @@ class LLMPolicy(BaseObjectNavPolicy):
         else:
             goal = self._last_goal
 
-        pointnav_action = self._pointnav(
-            observations, goal[:2], deterministic=True, stop=False
-        )
+        pointnav_action = self._pointnav(goal[:2], deterministic=True, stop=False)
 
         return pointnav_action
 

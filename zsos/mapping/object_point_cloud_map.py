@@ -45,7 +45,7 @@ class ObjectPointCloudMap:
         tf_camera_to_episodic: np.ndarray,
     ) -> None:
         """Updates the object map with the latest information from the agent."""
-        self._image_height, self._image_width = depth_img.shape[:2]
+        self._image_height, self._image_width = depth_img.shape
         local_cloud = self._extract_object_cloud(depth_img, object_mask)
 
         # Mark all points of local_cloud whose distance from the camera is too far
@@ -92,7 +92,7 @@ class ObjectPointCloudMap:
         final_mask = object_mask * 255
         final_mask = cv2.erode(final_mask, None, iterations=self._erosion_size)
 
-        valid_depth = depth.reshape(depth.shape[:2])
+        valid_depth = depth.copy()
         valid_depth[valid_depth == 0] = 1  # set all holes (0) to just be far (1)
         valid_depth = (
             valid_depth * (self._max_depth - self._min_depth) + self._min_depth

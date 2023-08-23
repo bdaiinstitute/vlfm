@@ -9,10 +9,8 @@ from torch import Tensor
 from zsos.mapping.object_point_cloud_map import ObjectPointCloudMap
 from zsos.mapping.obstacle_map import ObstacleMap
 from zsos.obs_transformers.utils import image_resize
-from zsos.policy.utils.pointnav_policy import (
-    WrappedPointNavResNetPolicy,
-    rho_theta_from_gps_compass_goal,
-)
+from zsos.policy.utils.pointnav_policy import WrappedPointNavResNetPolicy
+from zsos.utils.geometry_utils import rho_theta
 from zsos.vlm.grounding_dino import GroundingDINOClient, ObjectDetections
 from zsos.vlm.sam import MobileSAMClient
 
@@ -32,9 +30,7 @@ class BaseObjectNavPolicy(BasePolicy):
     _detect_target_only: bool = True
     _object_masks: np.ndarray = None  # set by ._update_object_map()
     _stop_action: Tensor = None  # MUST BE SET BY SUBCLASS
-    _observations_cache: Union[
-        Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray], None
-    ] = None
+    _observations_cache: Dict[str, Any] = {}
 
     def __init__(
         self,
@@ -106,6 +102,7 @@ class BaseObjectNavPolicy(BasePolicy):
         Then, explores the scene until it finds the target object.
         Once the target object is found, it navigates to the object.
         """
+        self._cache_observations(observations)
 
         assert masks.shape[1] == 1, "Currently only supporting one env at a time"
         if masks[0] == 0:
@@ -114,9 +111,10 @@ class BaseObjectNavPolicy(BasePolicy):
 
         self._policy_info = {}
 
-        rgb, depth, tf_camera_to_episodic, _ = self._get_object_camera_info(
-            observations
-        )
+        rgb, depth, tf_camera_to_episodic = [
+            self._observations_cache[k]
+            for k in ["rgb", "depth_numpy", "tf_camera_to_episodic"]
+        ]
         detections = self._update_object_map(rgb, depth, tf_camera_to_episodic)
         position = tf_camera_to_episodic[:2, 3] / tf_camera_to_episodic[3, 3]
         goal = self._get_target_object_location(position)
@@ -127,13 +125,13 @@ class BaseObjectNavPolicy(BasePolicy):
             pointnav_action = self._explore(observations)
         else:
             pointnav_action = self._pointnav(
-                observations, goal[:2], deterministic=deterministic, stop=True
+                goal[:2], deterministic=deterministic, stop=True
             )
 
         self._policy_info = self._get_policy_info(observations, detections)
         self._num_steps += 1
 
-        self._observations_cache = None
+        self._observations_cache = {}
 
         return pointnav_action, rnn_hidden_states
 
@@ -212,13 +210,7 @@ class BaseObjectNavPolicy(BasePolicy):
 
         return detections
 
-    def _pointnav(
-        self,
-        observations: "TensorDict",
-        goal: np.ndarray,
-        deterministic=False,
-        stop=False,
-    ) -> Tensor:
+    def _pointnav(self, goal: np.ndarray, deterministic=False, stop=False) -> Tensor:
         """
         Calculates rho and theta from the robot's current position to the goal using the
         gps and heading sensors within the observations and the given goal, then uses
@@ -233,17 +225,22 @@ class BaseObjectNavPolicy(BasePolicy):
                 self._pointnav_policy.reset()
                 masks = torch.zeros_like(masks)
             self._last_goal = goal
-        rho_theta = rho_theta_from_gps_compass_goal(observations, goal)
+        robot_xy = self._observations_cache["robot_xy"]
+        heading = self._observations_cache["robot_heading"]
+        rho, theta = rho_theta(robot_xy, heading, goal)
+        rho_theta_tensor = torch.tensor(
+            [[rho, theta]], device="cuda", dtype=torch.float32
+        )
         obs_pointnav = {
             "depth": image_resize(
-                observations["depth"],
+                self._observations_cache["depth_tensor"],
                 self._depth_image_shape,
                 channels_last=True,
                 interpolation_mode="area",
             ),
-            "pointgoal_with_gps_compass": rho_theta.unsqueeze(0),
+            "pointgoal_with_gps_compass": rho_theta_tensor,
         }
-        if rho_theta[0] < self._pointnav_stop_radius and stop:
+        if rho < self._pointnav_stop_radius and stop:
             return self._stop_action
         action = self._pointnav_policy.act(
             obs_pointnav, masks, deterministic=deterministic
@@ -273,26 +270,10 @@ class BaseObjectNavPolicy(BasePolicy):
 
         return detections
 
-    def _get_object_camera_info(
-        self, observations: "TensorDict"
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def _cache_observations(self, observations: "TensorDict"):
         """Extracts the rgb, depth, and camera transform from the observations.
 
         Args:
             observations ("TensorDict"): The observations from the current timestep.
-
-        Returns:
-            Tuple[np.ndarray, np.ndarray, np.ndarray]: The rgb image, depth image, and
-                camera transform. The depth image is normalized to be between 0 and 1.
-                The camera transform is the transform from the camera to the episodic
-                frame, a 4x4 transformation matrix.
         """
-        if self._observations_cache is None:
-            self._observations_cache = self._extract_from_obs(observations)
-
-        return self._observations_cache
-
-    def _extract_from_obs(
-        self, observations: "TensorDict"
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         raise NotImplementedError
