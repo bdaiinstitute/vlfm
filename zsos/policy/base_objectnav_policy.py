@@ -129,7 +129,7 @@ class BaseObjectNavPolicy(BasePolicy):
                 goal[:2], deterministic=deterministic, stop=True
             )
 
-        self._policy_info = self._get_policy_info(observations, detections)
+        self._policy_info = self._get_policy_info(detections)
         self._num_steps += 1
 
         self._observations_cache = {}
@@ -149,17 +149,15 @@ class BaseObjectNavPolicy(BasePolicy):
         else:
             return None
 
-    def _get_policy_info(
-        self, observations: "TensorDict", detections: ObjectDetections
-    ) -> Dict[str, Any]:
+    def _get_policy_info(self, detections: ObjectDetections) -> Dict[str, Any]:
         if self._target_object in self._object_map.clouds:
             target_point_cloud = self._object_map.get_target_cloud(self._target_object)
         else:
             target_point_cloud = np.array([])
         policy_info = {
             "target_object": "target: " + self._target_object,
-            "gps": str(observations["gps"][0].cpu().numpy()),
-            "yaw": np.rad2deg(observations["compass"][0].item()),
+            "gps": str(self._observations_cache["robot_xy"] * np.array([1, -1])),
+            "yaw": np.rad2deg(self._observations_cache["robot_heading"]),
             "target_detected": self._target_detected,
             "target_point_cloud": target_point_cloud,
             # don't render these on egocentric images when making videos:
@@ -171,7 +169,7 @@ class BaseObjectNavPolicy(BasePolicy):
         if not self._visualize:
             return policy_info
 
-        annotated_depth = observations["depth"][0].cpu().numpy() * 255
+        annotated_depth = self._observations_cache["depth_numpy"] * 255
         annotated_depth = cv2.cvtColor(
             annotated_depth.astype(np.uint8), cv2.COLOR_GRAY2RGB
         )
@@ -188,7 +186,7 @@ class BaseObjectNavPolicy(BasePolicy):
                 annotated_depth, contours, -1, (255, 0, 0), 2
             )
         else:
-            annotated_rgb = observations["rgb"][0].cpu().numpy()
+            annotated_rgb = self._observations_cache["rgb"]
         policy_info["annotated_rgb"] = annotated_rgb
         policy_info["annotated_depth"] = annotated_depth
 

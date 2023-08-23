@@ -104,7 +104,7 @@ class HabitatMixin:
     ) -> Dict[str, Any]:
         """Get policy info for logging"""
         parent_cls: BaseObjectNavPolicy = super()  # type: ignore
-        info = parent_cls._get_policy_info(observations, detections)
+        info = parent_cls._get_policy_info(detections)
 
         if not self._visualize:  # type: ignore
             return info
