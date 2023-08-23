@@ -138,12 +138,8 @@ class BaseITMPolicy(BaseObjectNavPolicy):
 
         return best_frontier, best_value
 
-    def _get_policy_info(
-        self,
-        observations: "TensorDict",
-        detections: ObjectDetections,
-    ) -> Dict[str, Any]:
-        policy_info = super()._get_policy_info(observations, detections)
+    def _get_policy_info(self, detections: ObjectDetections) -> Dict[str, Any]:
+        policy_info = super()._get_policy_info(detections)
 
         if not self._visualize:
             return policy_info
