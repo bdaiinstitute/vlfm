@@ -93,8 +93,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         )
         best_frontier, best_value = None, None
 
-        tf_camera_to_episodic = self._observations_cache["tf_camera_to_episodic"]
-        position = tf_camera_to_episodic[:2, 3] / tf_camera_to_episodic[3, 3]
+        robot_xy = self._observations_cache["robot_xy"]
 
         if self._last_value > 0.0:
             closest_index = closest_point_within_threshold(
@@ -114,7 +113,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
             )
         else:
             for frontier, value in zip(sorted_pts, sorted_values):
-                cyclic = self._acyclic_enforcer.check_cyclic(position, frontier)
+                cyclic = self._acyclic_enforcer.check_cyclic(robot_xy, frontier)
                 if not cyclic:
                     best_frontier, best_value = frontier, value
                     break
@@ -124,7 +123,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
                 print("All frontiers are cyclic. Choosing the closest one.")
                 best_idx = max(
                     range(len(frontiers)),
-                    key=lambda i: np.linalg.norm(frontiers[i] - position),
+                    key=lambda i: np.linalg.norm(frontiers[i] - robot_xy),
                 )
 
                 best_frontier, best_value = (
@@ -132,7 +131,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
                     sorted_values[best_idx],
                 )
 
-        self._acyclic_enforcer.add_state_action(position, best_frontier)
+        self._acyclic_enforcer.add_state_action(robot_xy, best_frontier)
         self._last_value = best_value
         self._last_frontier = best_frontier
 

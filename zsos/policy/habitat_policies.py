@@ -4,7 +4,6 @@ from typing import Any, Dict, Union
 import numpy as np
 import torch
 from depth_camera_filtering import filter_depth
-from habitat.tasks.nav.nav import HeadingSensor
 from habitat.tasks.nav.object_nav_task import ObjectGoalSensor
 from habitat_baselines.common.baseline_registry import baseline_registry
 from habitat_baselines.common.tensor_dict import TensorDict
@@ -99,9 +98,7 @@ class HabitatMixin:
         parent_cls._reset()
         self._start_yaw = None
 
-    def _get_policy_info(
-        self, observations: TensorDict, detections: ObjectDetections
-    ) -> Dict[str, Any]:
+    def _get_policy_info(self, detections: ObjectDetections) -> Dict[str, Any]:
         """Get policy info for logging"""
         parent_cls: BaseObjectNavPolicy = super()  # type: ignore
         info = parent_cls._get_policy_info(detections)
@@ -110,7 +107,7 @@ class HabitatMixin:
             return info
 
         if self._start_yaw is None:
-            self._start_yaw = observations[HeadingSensor.cls_uuid][0].item()
+            self._start_yaw = self._observations_cache["robot_heading"]
         info["start_yaw"] = self._start_yaw
         return info
 
@@ -146,7 +143,7 @@ class HabitatMixin:
             "depth_numpy": depth,
             "tf_camera_to_episodic": tf_camera_to_episodic,
             "frontier_sensor": frontiers,
-            "depth_tensor": observations["depth"],  # for pointnav
+            "nav_depth": observations["depth"],  # for pointnav
             "robot_xy": camera_position[:2],  # for pointnav
             "robot_heading": camera_yaw,  # for pointnav
         }
