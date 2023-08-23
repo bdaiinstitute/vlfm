@@ -24,6 +24,8 @@ except ModuleNotFoundError:
     )
 
     class PointNavResNetTensorOutputPolicy(PointNavResNetPolicy):
+        """Already outputs a tensor, so no need to convert."""
+
         pass
 
     HABITAT_BASELINES_AVAILABLE = False
