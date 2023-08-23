@@ -1,5 +1,6 @@
 import os
-from typing import Any, Dict, Tuple, Union
+from dataclasses import dataclass, fields
+from typing import Any, Dict, List, Tuple, Union
 
 import cv2
 import numpy as np
@@ -277,3 +278,28 @@ class BaseObjectNavPolicy(BasePolicy):
             observations ("TensorDict"): The observations from the current timestep.
         """
         raise NotImplementedError
+
+
+@dataclass
+class ZSOSConfig:
+    name: str = "HabitatITMPolicy"
+    pointnav_policy_path: str = "data/pointnav_weights.pth"
+    depth_image_shape: Tuple[int, int] = (244, 224)
+    det_conf_threshold: float = 0.6
+    pointnav_stop_radius: float = 0.9
+    object_map_min_depth: float = 0.5
+    object_map_max_depth: float = 5.0
+    object_map_hfov: float = 79.0
+    value_map_hfov: float = 79.0
+    object_map_proximity_threshold: float = 1.5
+    use_max_confidence: bool = False
+    object_map_erosion_size: int = 5
+    exploration_thresh: float = 0.0
+    obstacle_map_area_threshold: float = 1.5  # in square meters
+    text_prompt: str = "Seems like there is a target_object ahead."
+
+    @classmethod
+    @property
+    def kwaarg_names(cls) -> List[str]:
+        # This returns all the fields listed above, except the name field
+        return [f.name for f in fields(ZSOSConfig) if f.name != "name"]

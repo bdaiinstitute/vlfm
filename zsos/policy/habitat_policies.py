@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, Union
 
 import numpy as np
 import torch
@@ -20,7 +20,7 @@ from frontier_exploration.base_explorer import BaseExplorer
 from zsos.utils.geometry_utils import xyz_yaw_to_tf_matrix
 from zsos.vlm.grounding_dino import ObjectDetections
 
-from .base_objectnav_policy import BaseObjectNavPolicy
+from .base_objectnav_policy import BaseObjectNavPolicy, ZSOSConfig
 from .itm_policy import ITMPolicy, ITMPolicyV2, ITMPolicyV3
 
 ID_TO_NAME = ["chair", "bed", "potted plant", "toilet", "tv", "couch"]
@@ -51,7 +51,7 @@ class HabitatMixin:
     def from_config(cls, config: DictConfig, *args_unused, **kwargs_unused):
         policy_config: ZSOSPolicyConfig = config.habitat_baselines.rl.policy
         kwargs = {
-            k: policy_config[k] for k in ZSOSPolicyConfig.arg_names()  # type: ignore
+            k: policy_config[k] for k in ZSOSPolicyConfig.kwaarg_names  # type: ignore
         }
 
         # In habitat, we need the height of the camera to generate the camera transform
@@ -188,42 +188,8 @@ class HabitatITMPolicyV3(HabitatMixin, ITMPolicyV3):
 
 
 @dataclass
-class ZSOSPolicyConfig(PolicyConfig):
-    name: str = "HabitatITMPolicy"
-    pointnav_policy_path: str = "data/pointnav_weights.pth"
-    depth_image_shape: Tuple[int, int] = (244, 224)
-    det_conf_threshold: float = 0.6
-    pointnav_stop_radius: float = 0.9
-    object_map_min_depth: float = 0.5
-    object_map_max_depth: float = 5.0
-    object_map_hfov: float = 79.0
-    value_map_hfov: float = 79.0
-    object_map_proximity_threshold: float = 1.5
-    use_max_confidence: bool = False
-    object_map_erosion_size: int = 5
-    exploration_thresh: float = 0.0
-    obstacle_map_area_threshold: float = 1.5  # in square meters
-    text_prompt: str = "Seems like there is a target_object ahead."
-
-    @classmethod
-    def arg_names(cls) -> List[str]:
-        # All the above except "name". Also excludes all attributes from parent classes.
-        return [
-            "pointnav_policy_path",
-            "depth_image_shape",
-            "det_conf_threshold",
-            "pointnav_stop_radius",
-            "object_map_min_depth",
-            "object_map_max_depth",
-            "object_map_hfov",
-            "object_map_proximity_threshold",
-            "value_map_hfov",
-            "use_max_confidence",
-            "object_map_erosion_size",
-            "exploration_thresh",
-            "obstacle_map_area_threshold",
-            "text_prompt",
-        ]
+class ZSOSPolicyConfig(ZSOSConfig, PolicyConfig):
+    pass
 
 
 cs = ConfigStore.instance()
