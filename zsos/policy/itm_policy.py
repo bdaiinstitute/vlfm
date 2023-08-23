@@ -171,16 +171,18 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         return policy_info
 
     def _update_value_map(self):
-        rgb, depth, tf_camera_to_episodic = [
-            self._observations_cache[k]
-            for k in ["rgb", "depth_numpy", "tf_camera_to_episodic"]
+        all_rgb = [rgb for rgb, _, _ in self._observations_cache["value_map_rgbd"]]
+        cosines = [
+            [
+                self._itm.cosine(rgb, p.replace("target_object", self._target_object))
+                for p in self._text_prompt.split("\n")
+            ]
+            for rgb in all_rgb
         ]
-        curr_cosine = [
-            self._itm.cosine(rgb, p.replace("target_object", self._target_object))
-            for p in self._text_prompt.split("\n")
-        ]
-        curr_cosine = np.array(curr_cosine)
-        self._value_map.update_map(depth, tf_camera_to_episodic, curr_cosine)
+        for cosine, (rgb, depth, tf) in zip(
+            cosines, self._observations_cache["value_map_rgbd"]
+        ):
+            self._value_map.update_map(depth, tf, np.array(cosine))
 
     def _sort_frontiers_by_value(
         self, observations: "TensorDict", frontiers: np.ndarray
@@ -206,7 +208,7 @@ class ITMPolicy(BaseITMPolicy):
     def _sort_frontiers_by_value(
         self, observations: "TensorDict", frontiers: np.ndarray
     ) -> Tuple[np.ndarray, List[float]]:
-        rgb = self._observations_cache["rgb"]
+        rgb = self._observations_cache["object_map_rgbd"][0][0]
         text = self._text_prompt.replace("target_object", self._target_object)
         self._frontier_map.update(frontiers, rgb, text)  # type: ignore
         return self._frontier_map.sort_waypoints()
