@@ -21,7 +21,7 @@ from zsos.utils.geometry_utils import xyz_yaw_to_tf_matrix
 from zsos.vlm.grounding_dino import ObjectDetections
 
 from .base_objectnav_policy import BaseObjectNavPolicy
-from .itm_policy import ITMPolicy, ITMPolicyV2
+from .itm_policy import ITMPolicy, ITMPolicyV2, ITMPolicyV3
 
 ID_TO_NAME = ["chair", "bed", "potted plant", "toilet", "tv", "couch"]
 
@@ -179,6 +179,11 @@ class HabitatITMPolicyV2(HabitatMixin, ITMPolicyV2):
     pass
 
 
+@baseline_registry.register_policy
+class HabitatITMPolicyV3(HabitatMixin, ITMPolicyV3):
+    pass
+
+
 @dataclass
 class ZSOSPolicyConfig(PolicyConfig):
     name: str = "HabitatITMPolicy"
@@ -193,6 +198,7 @@ class ZSOSPolicyConfig(PolicyConfig):
     object_map_proximity_threshold: float = 1.5
     use_max_confidence: bool = False
     object_map_erosion_size: int = 5
+    exploration_thresh: float = 0.0
     obstacle_map_area_threshold: float = 1.5  # in square meters
     text_prompt: str = "Seems like there is a target_object ahead."
 
@@ -211,6 +217,7 @@ class ZSOSPolicyConfig(PolicyConfig):
             "value_map_hfov",
             "use_max_confidence",
             "object_map_erosion_size",
+            "exploration_thresh",
             "obstacle_map_area_threshold",
             "text_prompt",
         ]

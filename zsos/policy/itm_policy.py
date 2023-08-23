@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Tuple, Union
 
 import cv2
 import numpy as np
@@ -29,6 +29,10 @@ class BaseITMPolicy(BaseObjectNavPolicy):
     _last_value: float = float("-inf")
     _last_frontier: np.ndarray = np.zeros(2)
     _second_best_thresh: float = 0.9
+
+    @staticmethod
+    def _vis_reduce_fn(i):
+        return np.max(i, axis=-1)
 
     def __init__(
         self,
@@ -166,8 +170,9 @@ class BaseITMPolicy(BaseObjectNavPolicy):
                 color = self._target_object_color
             marker_kwargs = {"color": color, **base_kwargs}
             markers.append((self._last_goal, marker_kwargs))
-        policy_info["cost_map"] = cv2.cvtColor(
-            self._value_map.visualize(markers), cv2.COLOR_BGR2RGB
+        policy_info["value_map"] = cv2.cvtColor(
+            self._value_map.visualize(markers, reduce_fn=self._vis_reduce_fn),
+            cv2.COLOR_BGR2RGB,
         )
 
         return policy_info
@@ -213,6 +218,8 @@ class ITMPolicy(BaseITMPolicy):
 
 
 class ITMPolicyV2(BaseITMPolicy):
+    _reduce_fn: Callable = np.max
+
     def act(self, observations: "TensorDict", *args, **kwargs) -> Tuple[Tensor, Tensor]:
         self._update_value_map(observations)
         return super().act(observations, *args, **kwargs)
@@ -220,4 +227,30 @@ class ITMPolicyV2(BaseITMPolicy):
     def _sort_frontiers_by_value(
         self, observations: "TensorDict", frontiers: np.ndarray
     ) -> Tuple[np.ndarray, List[float]]:
-        return self._value_map.sort_waypoints(frontiers, 0.5)
+        sorted_frontiers, sorted_values = self._value_map.sort_waypoints(
+            frontiers, 0.5, reduce_fn=self._reduce_fn
+        )
+        return sorted_frontiers, sorted_values
+
+
+class ITMPolicyV3(ITMPolicyV2):
+    def __init__(self, exploration_thresh: float, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        def select_value(values: Tuple[float, float]) -> float:
+            return max(values) if values[0] < exploration_thresh else values[0]
+
+        def visualize_value_map(arr: np.ndarray):
+            # Get the values in the first channel
+            first_channel = arr[:, :, 0]
+            # Get the max values across the two channels
+            max_values = np.max(arr, axis=2)
+            # Create a boolean mask where the first channel is above the threshold
+            mask = first_channel > exploration_thresh
+            # Use the mask to select from the first channel or max values
+            result = np.where(mask, first_channel, max_values)
+
+            return result
+
+        self._reduce_fn = select_value
+        self._vis_reduce_fn = visualize_value_map
