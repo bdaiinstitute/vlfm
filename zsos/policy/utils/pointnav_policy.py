@@ -7,8 +7,6 @@ from gym.spaces import Dict as SpaceDict
 from gym.spaces import Discrete
 from torch import Tensor
 
-from zsos.utils.geometry_utils import rho_theta
-
 try:
     from habitat_baselines.common.tensor_dict import TensorDict
     from habitat_baselines.rl.ddppo.policy import PointNavResNetPolicy
@@ -111,42 +109,6 @@ class WrappedPointNavResNetPolicy:
             self.pointnav_test_recurrent_hidden_states
         )
         self.pointnav_prev_actions = torch.zeros_like(self.pointnav_prev_actions)
-
-
-def rho_theta_from_gps_compass_goal(
-    observations: "TensorDict",
-    goal: np.ndarray,
-    device: Union[str, torch.device] = "cuda",
-) -> Tensor:
-    """Calculates polar coordinates (rho, theta) relative to the agent's current
-    position and heading towards a given goal position using GPS and compass
-    observations given in Habitat format from the observations batch.
-
-    Args:
-       observations ("TensorDict"): A dictionary containing observations from the agent.
-           It should include "gps" and "compass" information.
-           - "gps" (Tensor): Tensor of shape (batch_size, 2) representing the
-             GPS coordinates of the agent.
-           - "compass" (Tensor): Tensor of shape (batch_size, 1) representing
-             the compass heading of the agent in radians. It represents how many radians
-             the agent must turn to the left (CCW from above) from its initial heading
-             to reach its current heading.
-       goal (np.ndarray): Array of shape (2,) representing the goal position.
-       device (Union[str, torch.device]): The device to use for the tensor.
-
-    Returns:
-       Tensor: A tensor of shape (2,) representing the polar coordinates (rho, theta).
-           - rho (float): The distance from the agent to the goal.
-           - theta (float): The angle, in radians, that the agent must turn (to the
-             left, CCW from above) to face the goal.
-    """
-    gps_numpy = observations["gps"].squeeze(1).cpu().numpy()[0]
-    heading = observations["compass"].squeeze(1).cpu().numpy()[0]
-    gps_numpy[1] *= -1  # Flip y-axis to match habitat's coordinate system.
-    rho, theta = rho_theta(gps_numpy, heading, goal)
-    rho_theta_tensor = torch.tensor([rho, theta], device=device, dtype=torch.float32)
-
-    return rho_theta_tensor
 
 
 def load_pointnav_policy(file_path: str) -> PointNavResNetTensorOutputPolicy:

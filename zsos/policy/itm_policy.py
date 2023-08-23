@@ -63,15 +63,13 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         self._last_frontier = np.zeros(2)
 
     def _explore(self, observations: Union[Dict[str, Tensor], "TensorDict"]) -> Tensor:
-        _, _, _, frontiers = self._get_object_camera_info(observations)
+        frontiers = self._observations_cache["frontier_sensor"]
         if np.array_equal(frontiers, np.zeros((1, 2))):
             return self._stop_action
         best_frontier, best_value = self._get_best_frontier(observations, frontiers)
         os.environ["DEBUG_INFO"] = f"Best value: {best_value*100:.2f}%"
         print(f"Step: {self._num_steps} Best value: {best_value*100:.2f}%")
-        pointnav_action = self._pointnav(
-            observations, best_frontier, deterministic=True, stop=False
-        )
+        pointnav_action = self._pointnav(best_frontier, deterministic=True, stop=False)
 
         return pointnav_action
 
@@ -95,7 +93,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         )
         best_frontier, best_value = None, None
 
-        _, _, tf_camera_to_episodic, _ = self._get_object_camera_info(observations)
+        tf_camera_to_episodic = self._observations_cache["tf_camera_to_episodic"]
         position = tf_camera_to_episodic[:2, 3] / tf_camera_to_episodic[3, 3]
 
         if self._last_value > 0.0:
@@ -157,7 +155,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
             "radius": self._circle_marker_radius,
             "thickness": self._circle_marker_thickness,
         }
-        _, _, _, frontiers = self._get_object_camera_info(observations)
+        frontiers = self._observations_cache["frontier_sensor"]
         for frontier in frontiers:
             marker_kwargs = {"color": self._frontier_color, **base_kwargs}
             markers.append((frontier[:2], marker_kwargs))
@@ -177,10 +175,11 @@ class BaseITMPolicy(BaseObjectNavPolicy):
 
         return policy_info
 
-    def _update_value_map(self, observations: "TensorDict"):
-        rgb, depth, tf_camera_to_episodic, _ = self._get_object_camera_info(
-            observations
-        )
+    def _update_value_map(self):
+        rgb, depth, tf_camera_to_episodic = [
+            self._observations_cache[k]
+            for k in ["rgb", "depth_numpy", "tf_camera_to_episodic"]
+        ]
         curr_cosine = [
             self._itm.cosine(rgb, p.replace("target_object", self._target_object))
             for p in self._text_prompt.split("\n")
@@ -200,8 +199,9 @@ class ITMPolicy(BaseITMPolicy):
         self._frontier_map: FrontierMap = FrontierMap()
 
     def act(self, observations: "TensorDict", *args, **kwargs) -> Tuple[Tensor, Tensor]:
+        self._cache_observations(observations)
         if self._visualize:
-            self._update_value_map(observations)
+            self._update_value_map()
         return super().act(observations, *args, **kwargs)
 
     def _reset(self):
@@ -211,7 +211,7 @@ class ITMPolicy(BaseITMPolicy):
     def _sort_frontiers_by_value(
         self, observations: "TensorDict", frontiers: np.ndarray
     ) -> Tuple[np.ndarray, List[float]]:
-        rgb = observations["rgb"][0].cpu().numpy()
+        rgb = self._observations_cache["rgb"]
         text = self._text_prompt.replace("target_object", self._target_object)
         self._frontier_map.update(frontiers, rgb, text)  # type: ignore
         return self._frontier_map.sort_waypoints()
@@ -221,7 +221,8 @@ class ITMPolicyV2(BaseITMPolicy):
     _reduce_fn: Callable = np.max
 
     def act(self, observations: "TensorDict", *args, **kwargs) -> Tuple[Tensor, Tensor]:
-        self._update_value_map(observations)
+        self._cache_observations(observations)
+        self._update_value_map()
         return super().act(observations, *args, **kwargs)
 
     def _sort_frontiers_by_value(
