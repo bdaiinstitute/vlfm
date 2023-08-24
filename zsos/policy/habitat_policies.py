@@ -124,7 +124,7 @@ class HabitatMixin:
             return info
 
         if self._start_yaw is None:
-            self._start_yaw = self._observations_cache["robot_heading"]
+            self._start_yaw = self._observations_cache["habitat_start_yaw"]
         info["start_yaw"] = self._start_yaw
         return info
 
@@ -191,6 +191,7 @@ class HabitatMixin:
                     self._camera_fov,
                 )
             ],
+            "habitat_start_yaw": observations["heading"][0].item(),
         }
 
 
