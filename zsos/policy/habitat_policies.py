@@ -19,6 +19,7 @@ from frontier_exploration.base_explorer import BaseExplorer
 from zsos.utils.geometry_utils import xyz_yaw_to_tf_matrix
 from zsos.vlm.grounding_dino import ObjectDetections
 
+from ..mapping.obstacle_map import ObstacleMap
 from .base_objectnav_policy import BaseObjectNavPolicy, ZSOSConfig
 from .itm_policy import ITMPolicy, ITMPolicyV2, ITMPolicyV3
 
@@ -42,9 +43,23 @@ class HabitatMixin:
     _stop_action: Tensor = TorchActionIDs.STOP
     _start_yaw: Union[float, None] = None  # must be set by _reset() method
 
-    def __init__(self, camera_height: float, *args: Any, **kwargs: Any) -> None:
-        self._camera_height = camera_height
+    def __init__(
+        self,
+        camera_height: float,
+        min_depth: float,
+        max_depth: float,
+        camera_fov: float,
+        image_width: int,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(*args, **kwargs)
+        self._camera_height = camera_height
+        self._min_depth = min_depth
+        self._max_depth = max_depth
+        camera_fov_rad = np.deg2rad(camera_fov)
+        self._camera_fov = camera_fov_rad
+        self._fx = self._fy = image_width / (2 * np.tan(camera_fov_rad / 2))
 
     @classmethod
     def from_config(cls, config: DictConfig, *args_unused, **kwargs_unused):
@@ -58,8 +73,10 @@ class HabitatMixin:
         kwargs["camera_height"] = sim_sensors_cfg.rgb_sensor.position[1]
 
         # Synchronize the mapping min/max depth values with the habitat config
-        kwargs["value_map_min_depth"] = sim_sensors_cfg.depth_sensor.min_depth
-        kwargs["value_map_max_depth"] = sim_sensors_cfg.depth_sensor.max_depth
+        kwargs["min_depth"] = sim_sensors_cfg.depth_sensor.min_depth
+        kwargs["max_depth"] = sim_sensors_cfg.depth_sensor.max_depth
+        kwargs["camera_fov"] = sim_sensors_cfg.depth_sensor.hfov
+        kwargs["image_width"] = sim_sensors_cfg.depth_sensor.width
 
         # Only bother visualizing if we're actually going to save the video
         kwargs["visualize"] = len(config.habitat_baselines.eval.video_option) > 0
@@ -129,8 +146,18 @@ class HabitatMixin:
         # Habitat GPS makes west negative, so flip y
         camera_position = np.array([x, -y, self._camera_height])
         tf_camera_to_episodic = xyz_yaw_to_tf_matrix(camera_position, camera_yaw)
+
+        self._obstacle_map: ObstacleMap
         if self._compute_frontiers:
-            self._obstacle_map.update_map(depth, tf_camera_to_episodic)
+            self._obstacle_map.update_map(
+                depth,
+                tf_camera_to_episodic,
+                self._min_depth,
+                self._max_depth,
+                self._fx,
+                self._fy,
+                self._camera_fov,
+            )
             frontiers = self._obstacle_map.frontiers
         else:
             if "frontier_sensor" in observations:
@@ -143,8 +170,27 @@ class HabitatMixin:
             "nav_depth": observations["depth"],  # for pointnav
             "robot_xy": camera_position[:2],
             "robot_heading": camera_yaw,
-            "object_map_rgbd": [(rgb, depth, tf_camera_to_episodic)],
-            "value_map_rgbd": [(rgb, depth, tf_camera_to_episodic)],
+            "object_map_rgbd": [
+                (
+                    rgb,
+                    depth,
+                    tf_camera_to_episodic,
+                    self._min_depth,
+                    self._max_depth,
+                    self._fx,
+                    self._fy,
+                )
+            ],
+            "value_map_rgbd": [
+                (
+                    rgb,
+                    depth,
+                    tf_camera_to_episodic,
+                    self._min_depth,
+                    self._max_depth,
+                    self._camera_fov,
+                )
+            ],
         }
 
 

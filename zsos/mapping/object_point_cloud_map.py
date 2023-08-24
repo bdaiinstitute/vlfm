@@ -9,27 +9,9 @@ from zsos.utils.geometry_utils import get_point_cloud, transform_points
 
 class ObjectPointCloudMap:
     clouds: Dict[str, np.ndarray] = {}
-    _image_width: int = None  # set upon execution of update_map method
-    _image_height: int = None  # set upon execution of update_map method
-    __fx: float = None  # set upon execution of update_map method
 
-    def __init__(
-        self, min_depth: float, max_depth: float, hfov: float, erosion_size: float
-    ) -> None:
-        self._min_depth = min_depth
-        self._max_depth = max_depth
-        self._hfov = np.deg2rad(hfov)
+    def __init__(self, erosion_size: float) -> None:
         self._erosion_size = erosion_size
-
-    @property
-    def _fx(self) -> float:
-        if self.__fx is None:
-            self.__fx = self._image_width / (2 * np.tan(self._hfov / 2))
-        return self.__fx
-
-    @property
-    def _fy(self) -> float:
-        return self._fx
 
     def reset(self):
         self.clouds = {}
@@ -43,14 +25,19 @@ class ObjectPointCloudMap:
         depth_img: np.ndarray,
         object_mask: np.ndarray,
         tf_camera_to_episodic: np.ndarray,
+        min_depth: float,
+        max_depth: float,
+        fx: float,
+        fy: float,
     ) -> None:
         """Updates the object map with the latest information from the agent."""
-        self._image_height, self._image_width = depth_img.shape
-        local_cloud = self._extract_object_cloud(depth_img, object_mask)
+        local_cloud = self._extract_object_cloud(
+            depth_img, object_mask, min_depth, max_depth, fx, fy
+        )
 
         # Mark all points of local_cloud whose distance from the camera is too far
         # as being out of range
-        within_range = local_cloud[:, 0] <= self._max_depth * 0.95  # 5% margin
+        within_range = local_cloud[:, 0] <= max_depth * 0.95  # 5% margin
         global_cloud = transform_points(tf_camera_to_episodic, local_cloud)
         global_cloud = np.concatenate((global_cloud, within_range[:, None]), axis=1)
 
@@ -87,17 +74,21 @@ class ObjectPointCloudMap:
         return target_cloud
 
     def _extract_object_cloud(
-        self, depth: np.ndarray, object_mask: np.ndarray
+        self,
+        depth: np.ndarray,
+        object_mask: np.ndarray,
+        min_depth: float,
+        max_depth: float,
+        fx: float,
+        fy: float,
     ) -> np.ndarray:
         final_mask = object_mask * 255
         final_mask = cv2.erode(final_mask, None, iterations=self._erosion_size)
 
         valid_depth = depth.copy()
         valid_depth[valid_depth == 0] = 1  # set all holes (0) to just be far (1)
-        valid_depth = (
-            valid_depth * (self._max_depth - self._min_depth) + self._min_depth
-        )
-        cloud = get_point_cloud(valid_depth, final_mask, self._fx, self._fy)
+        valid_depth = valid_depth * (max_depth - min_depth) + min_depth
+        cloud = get_point_cloud(valid_depth, final_mask, fx, fy)
         cloud = open3d_dbscan_filtering(cloud)
 
         return cloud
