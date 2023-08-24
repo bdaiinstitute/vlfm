@@ -11,10 +11,12 @@ import cv2
 import numpy as np
 
 from zsos.mapping.base_map import BaseMap
-from zsos.utils.geometry_utils import get_rotation_matrix
+from zsos.utils.geometry_utils import extract_yaw, get_rotation_matrix
 from zsos.utils.img_utils import (
     monochannel_to_inferno_rgb,
     pixel_value_within_radius,
+    place_img_in_img,
+    rotate_image,
 )
 
 DEBUG = False
@@ -29,7 +31,7 @@ class ValueMap(BaseMap):
     """Generates a map representing how valuable explored regions of the environment
     are with respect to finding and navigating to the target object."""
 
-    _confidence_mask: np.ndarray = None
+    _confidence_masks: Dict[Tuple[float, float], np.ndarray] = {}
     _camera_positions: List[np.ndarray] = []
     _last_camera_yaw: float = None
     _min_confidence: float = 0.25
@@ -37,9 +39,6 @@ class ValueMap(BaseMap):
 
     def __init__(
         self,
-        fov: float,
-        min_depth: float,
-        max_depth: float,
         value_channels: int,
         size: int = 1000,
         use_max_confidence: bool = True,
@@ -47,12 +46,11 @@ class ValueMap(BaseMap):
         """
         Args:
             value_channels: The number of channels in the value map.
-            fov: The field of view of the camera in degrees.
-            max_depth: The desired maximum depth of the camera in meters.
+            size: The size of the value map in pixels.
             use_max_confidence: Whether to use the maximum confidence value in the value
                 map or a weighted average confidence value.
         """
-        super().__init__(fov, min_depth, max_depth, size)
+        super().__init__(size)
         self._value_map = np.zeros((size, size, value_channels), np.float32)
         self._value_channels = value_channels
         self._use_max_confidence = use_max_confidence
@@ -68,9 +66,6 @@ class ValueMap(BaseMap):
             with open(KWARGS_JSON, "w") as f:
                 json.dump(
                     {
-                        "fov": fov,
-                        "min_depth": min_depth,
-                        "max_depth": max_depth,
                         "value_channels": value_channels,
                         "size": size,
                         "use_max_confidence": use_max_confidence,
@@ -86,23 +81,34 @@ class ValueMap(BaseMap):
         self._value_map.fill(0)
 
     def update_map(
-        self, depth: np.ndarray, tf_camera_to_episodic: np.ndarray, values: np.ndarray
+        self,
+        values: np.ndarray,
+        depth: np.ndarray,
+        tf_camera_to_episodic: np.ndarray,
+        min_depth: float,
+        max_depth: float,
+        fov: float,
     ):
         """Updates the value map with the given depth image, pose, and value to use.
 
         Args:
+            values: The value to use for updating the map.
             depth: The depth image to use for updating the map; expected to be already
                 normalized to the range [0, 1].
             tf_camera_to_episodic: The transformation matrix from the episodic frame to
                 the camera frame.
-            values: The value to use for updating the map.
+            min_depth: The minimum depth value in meters.
+            max_depth: The maximum depth value in meters.
+            fov: The field of view of the camera in RADIANS.
         """
         assert len(values) == self._value_channels, (
             "Incorrect number of values given "
             f"({len(values)}). Expected {self._value_channels}."
         )
 
-        curr_map = self._localize_new_data(depth, tf_camera_to_episodic)
+        curr_map = self._localize_new_data(
+            depth, tf_camera_to_episodic, min_depth, max_depth, fov
+        )
 
         # Fuse the new data with the existing data
         self._fuse_new_data(curr_map, values)
@@ -189,14 +195,13 @@ class ValueMap(BaseMap):
         return map_img
 
     def _process_local_data(
-        self, depth: np.ndarray, tf_camera_to_episodic: np.ndarray = None
+        self, depth: np.ndarray, fov: float, min_depth: float, max_depth: float
     ) -> np.ndarray:
         """Using the FOV and depth, return the visible portion of the FOV.
 
         Args:
             depth: The depth image to use for determining the visible portion of the
                 FOV.
-            tf_camera_to_episodic: Currently unused for this subclass.
         Returns:
             A mask of the visible portion of the FOV.
         """
@@ -204,13 +209,10 @@ class ValueMap(BaseMap):
         if len(depth.shape) == 3:
             depth = depth.squeeze(2)
         # Squash depth image into one row with the max depth value for each column
-        depth_row = (
-            np.max(depth, axis=0) * (self._max_depth - self._min_depth)
-            + self._min_depth
-        )
+        depth_row = np.max(depth, axis=0) * (max_depth - min_depth) + min_depth
 
         # Create a linspace of the same length as the depth row from -fov/2 to fov/2
-        angles = np.linspace(-self._fov / 2, self._fov / 2, len(depth_row))
+        angles = np.linspace(-fov / 2, fov / 2, len(depth_row))
 
         # Assign each value in the row with an x, y coordinate depending on 'angles'
         # and the max depth value for that column
@@ -218,7 +220,7 @@ class ValueMap(BaseMap):
         y = depth_row * np.tan(angles)
 
         # Get blank cone mask
-        cone_mask = self._get_confidence_mask()
+        cone_mask = self._get_confidence_mask(fov, max_depth)
 
         # Convert the x, y coordinates to pixel coordinates
         x = (x * self.pixels_per_meter + cone_mask.shape[0] / 2).astype(int)
@@ -267,39 +269,68 @@ class ValueMap(BaseMap):
 
         return visible_mask
 
-    def _get_blank_cone_mask(self) -> np.ndarray:
+    def _localize_new_data(
+        self,
+        depth: np.ndarray,
+        tf_camera_to_episodic: np.ndarray,
+        min_depth: float,
+        max_depth: float,
+        fov: float,
+    ) -> np.ndarray:
+        # Get new portion of the map
+        curr_data = self._process_local_data(depth, fov, min_depth, max_depth)
+
+        # Rotate this new data to match the camera's orientation
+        self._last_camera_yaw = yaw = extract_yaw(tf_camera_to_episodic)
+        curr_data = rotate_image(curr_data, -yaw)
+
+        # Determine where this mask should be overlaid
+        cam_x, cam_y = tf_camera_to_episodic[:2, 3] / tf_camera_to_episodic[3, 3]
+        self._camera_positions.append(np.array([cam_x, cam_y]))
+
+        # Convert to pixel units
+        px = int(cam_x * self.pixels_per_meter) + self._episode_pixel_origin[0]
+        py = int(-cam_y * self.pixels_per_meter) + self._episode_pixel_origin[1]
+
+        # Overlay the new data onto the map
+        curr_map = np.zeros_like(self._map)
+        curr_map = place_img_in_img(curr_map, curr_data, px, py)
+
+        return curr_map
+
+    def _get_blank_cone_mask(self, fov: float, max_depth: float) -> np.ndarray:
         """Generate a FOV cone without any obstacles considered"""
-        size = int(self._max_depth * self.pixels_per_meter)
+        size = int(max_depth * self.pixels_per_meter)
         cone_mask = np.zeros((size * 2 + 1, size * 2 + 1))
         cone_mask = cv2.ellipse(
             cone_mask,
             (size, size),  # center_pixel
             (size, size),  # axes lengths
             0,  # angle circle is rotated
-            -np.rad2deg(self._fov) / 2 + 90,  # start_angle
-            np.rad2deg(self._fov) / 2 + 90,  # end_angle
+            -np.rad2deg(fov) / 2 + 90,  # start_angle
+            np.rad2deg(fov) / 2 + 90,  # end_angle
             1,  # color
             -1,  # thickness
         )
         return cone_mask
 
-    def _get_confidence_mask(self) -> np.ndarray:
+    def _get_confidence_mask(self, fov: float, max_depth: float) -> np.ndarray:
         """Generate a FOV cone with central values weighted more heavily"""
-        if self._confidence_mask is not None:
-            return self._confidence_mask.copy()
-        cone_mask = self._get_blank_cone_mask()
+        if (fov, max_depth) in self._confidence_masks:
+            return self._confidence_masks[(fov, max_depth)].copy()
+        cone_mask = self._get_blank_cone_mask(fov, max_depth)
         adjusted_mask = np.zeros_like(cone_mask).astype(np.float32)
         for row in range(adjusted_mask.shape[0]):
             for col in range(adjusted_mask.shape[1]):
                 horizontal = abs(row - adjusted_mask.shape[0] // 2)
                 vertical = abs(col - adjusted_mask.shape[1] // 2)
                 angle = np.arctan2(vertical, horizontal)
-                angle = remap(angle, 0, self._fov / 2, 0, np.pi / 2)
+                angle = remap(angle, 0, fov / 2, 0, np.pi / 2)
                 confidence = np.cos(angle) ** 2
                 confidence = remap(confidence, 0, 1, self._min_confidence, 1)
                 adjusted_mask[row, col] = confidence
         adjusted_mask = adjusted_mask * cone_mask
-        self._confidence_mask = adjusted_mask.copy()
+        self._confidence_masks[(fov, max_depth)] = adjusted_mask.copy()
 
         return adjusted_mask
 
@@ -386,9 +417,6 @@ def replay_from_dir():
         data = json.load(f)
 
     v = ValueMap(
-        fov=kwargs["fov"],
-        min_depth=float(kwargs.get("min_depth", 0.0)),
-        max_depth=float(kwargs["max_depth"]),
         value_channels=kwargs["value_channels"],
         size=kwargs["size"],
         use_max_confidence=kwargs["use_max_confidence"],
@@ -413,9 +441,14 @@ if __name__ == "__main__":
     # replay_from_dir()
     # quit()
 
-    v = ValueMap(fov=79, max_depth=5.0, value_channels=1)
+    v = ValueMap(value_channels=1)
     depth = cv2.imread("depth.png", cv2.IMREAD_GRAYSCALE).astype(np.float32) / 255.0
-    img = v._process_local_data(depth)
+    img = v._process_local_data(
+        depth=depth,
+        fov=np.deg2rad(79),
+        min_depth=0.5,
+        max_depth=5.0,
+    )
     cv2.imshow("img", (img * 255).astype(np.uint8))
     cv2.waitKey(0)
 
@@ -431,7 +464,14 @@ if __name__ == "__main__":
         tf = np.eye(4)
         tf[:2, 3] = pt
         tf[:2, :2] = get_rotation_matrix(angle)
-        v.update_map(depth, tf, np.array([1]))
+        v.update_map(
+            np.array([1]),
+            depth,
+            tf,
+            min_depth=0.5,
+            max_depth=5.0,
+            fov=np.deg2rad(79),
+        )
         img = v.visualize()
         cv2.imshow("img", img)
         key = cv2.waitKey(0)

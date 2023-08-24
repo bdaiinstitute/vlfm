@@ -37,9 +37,6 @@ class BaseITMPolicy(BaseObjectNavPolicy):
     def __init__(
         self,
         text_prompt: str,
-        value_map_min_depth: float,
-        value_map_max_depth: float,
-        value_map_hfov: float,
         use_max_confidence: bool = True,
         *args,
         **kwargs,
@@ -48,9 +45,6 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         self._itm = BLIP2ITMClient()
         self._text_prompt = text_prompt
         self._value_map: ValueMap = ValueMap(
-            fov=value_map_hfov,
-            min_depth=value_map_min_depth,
-            max_depth=value_map_max_depth,
             value_channels=len(text_prompt.split("\n")),
             use_max_confidence=use_max_confidence,
         )
@@ -171,7 +165,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         return policy_info
 
     def _update_value_map(self):
-        all_rgb = [rgb for rgb, _, _ in self._observations_cache["value_map_rgbd"]]
+        all_rgb = [i[0] for i in self._observations_cache["value_map_rgbd"]]
         cosines = [
             [
                 self._itm.cosine(rgb, p.replace("target_object", self._target_object))
@@ -179,10 +173,12 @@ class BaseITMPolicy(BaseObjectNavPolicy):
             ]
             for rgb in all_rgb
         ]
-        for cosine, (rgb, depth, tf) in zip(
+        for cosine, (rgb, depth, tf, min_depth, max_depth, fov) in zip(
             cosines, self._observations_cache["value_map_rgbd"]
         ):
-            self._value_map.update_map(depth, tf, np.array(cosine))
+            self._value_map.update_map(
+                np.array(cosine), depth, tf, min_depth, max_depth, fov
+            )
 
     def _sort_frontiers_by_value(
         self, observations: "TensorDict", frontiers: np.ndarray

@@ -39,9 +39,6 @@ class BaseObjectNavPolicy(BasePolicy):
         depth_image_shape: Tuple[int, int],
         det_conf_threshold: float,
         pointnav_stop_radius: float,
-        object_map_min_depth: float,
-        object_map_max_depth: float,
-        object_map_hfov: float,
         object_map_erosion_size: float,
         visualize: bool = True,
         compute_frontiers: bool = True,
@@ -57,10 +54,7 @@ class BaseObjectNavPolicy(BasePolicy):
         self._mobile_sam = MobileSAMClient()
         self._pointnav_policy = WrappedPointNavResNetPolicy(pointnav_policy_path)
         self._object_map: ObjectPointCloudMap = ObjectPointCloudMap(
-            min_depth=object_map_min_depth,
-            max_depth=object_map_max_depth,
-            hfov=object_map_hfov,
-            erosion_size=object_map_erosion_size,
+            erosion_size=object_map_erosion_size
         )
         self._depth_image_shape = tuple(depth_image_shape)
         self._det_conf_threshold = det_conf_threshold
@@ -74,11 +68,8 @@ class BaseObjectNavPolicy(BasePolicy):
         self._compute_frontiers = compute_frontiers
         if compute_frontiers:
             self._obstacle_map = ObstacleMap(
-                fov=object_map_hfov,
                 min_height=min_obstacle_height,
                 max_height=max_obstacle_height,
-                min_depth=object_map_min_depth,
-                max_depth=object_map_max_depth,
                 area_thresh=obstacle_map_area_threshold,
                 agent_radius=agent_radius,
             )
@@ -112,9 +103,10 @@ class BaseObjectNavPolicy(BasePolicy):
 
         self._policy_info = {}
 
+        object_map_rgbd = self._observations_cache["object_map_rgbd"]
         detections = [
-            self._update_object_map(rgb, depth, tf)
-            for rgb, depth, tf in self._observations_cache["object_map_rgbd"]
+            self._update_object_map(rgb, depth, tf, min_depth, max_depth, fx, fy)
+            for (rgb, depth, tf, min_depth, max_depth, fx, fy) in object_map_rgbd
         ]
         robot_xy = self._observations_cache["robot_xy"]
         goal = self._get_target_object_location(robot_xy)
@@ -215,7 +207,12 @@ class BaseObjectNavPolicy(BasePolicy):
         it to determine the next action to take using the pre-trained pointnav policy.
 
         Args:
-            observations ("TensorDict"): The observations from the current timestep.
+            goal (np.ndarray): The goal to navigate to as (x, y), where x and y are in
+                meters.
+            deterministic (bool): Whether to use the deterministic or stochastic
+                policy.
+            stop (bool): Whether to stop if we are close enough to the goal.
+
         """
         masks = torch.tensor([self._num_steps != 0], dtype=torch.bool, device="cuda")
         if not np.array_equal(goal, self._last_goal):
@@ -246,8 +243,35 @@ class BaseObjectNavPolicy(BasePolicy):
         return action
 
     def _update_object_map(
-        self, rgb: np.ndarray, depth: np.ndarray, tf_camera_to_episodic: np.ndarray
+        self,
+        rgb: np.ndarray,
+        depth: np.ndarray,
+        tf_camera_to_episodic: np.ndarray,
+        min_depth: float,
+        max_depth: float,
+        fx: float,
+        fy: float,
     ) -> ObjectDetections:
+        """
+        Updates the object map with the given rgb and depth images, and the given
+        transformation matrix from the camera to the episodic coordinate frame.
+
+        Args:
+            rgb (np.ndarray): The rgb image to use for updating the object map. Used for
+                object detection and Mobile SAM segmentation to extract better object
+                point clouds.
+            depth (np.ndarray): The depth image to use for updating the object map. It
+                is normalized to the range [0, 1] and has a shape of (height, width).
+            tf_camera_to_episodic (np.ndarray): The transformation matrix from the
+                camera to the episodic coordinate frame.
+            min_depth (float): The minimum depth value (in meters) of the depth image.
+            max_depth (float): The maximum depth value (in meters) of the depth image.
+            fx (float): The focal length of the camera in the x direction.
+            fy (float): The focal length of the camera in the y direction.
+
+        Returns:
+            ObjectDetections: The object detections from the object detector.
+        """
         detections = self._get_object_detections(rgb)
         height, width = rgb.shape[:2]
         self._object_masks = np.zeros((height, width), dtype=np.uint8)
@@ -262,6 +286,10 @@ class BaseObjectNavPolicy(BasePolicy):
                 depth,
                 object_mask,
                 tf_camera_to_episodic,
+                min_depth,
+                max_depth,
+                fx,
+                fy,
             )
 
         self._object_map.update_explored(tf_camera_to_episodic)
@@ -284,10 +312,6 @@ class ZSOSConfig:
     depth_image_shape: Tuple[int, int] = (244, 224)
     det_conf_threshold: float = 0.6
     pointnav_stop_radius: float = 0.9
-    object_map_min_depth: float = 0.5
-    object_map_max_depth: float = 5.0
-    object_map_hfov: float = 79.0
-    value_map_hfov: float = 79.0
     object_map_proximity_threshold: float = 1.5
     use_max_confidence: bool = False
     object_map_erosion_size: int = 5

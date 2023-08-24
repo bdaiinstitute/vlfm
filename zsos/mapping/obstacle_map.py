@@ -22,24 +22,19 @@ class ObstacleMap(BaseMap):
 
     def __init__(
         self,
-        fov: float,
-        min_depth: float,
-        max_depth: float,
         min_height: float,
         max_height: float,
         agent_radius: float,
         area_thresh: float = 3.0,  # square meters
         size: int = 1000,
     ):
-        super().__init__(fov, min_depth, max_depth, size)
+        super().__init__(size)
         self._map = np.zeros((size, size), dtype=bool)
         self._navigable_map = np.zeros((size, size), dtype=bool)
         self._explored_area = np.zeros((size, size), dtype=bool)
-        self._hfov = np.deg2rad(fov)
         self._min_height = min_height
         self._max_height = max_height
         self._area_thresh_in_pixels = area_thresh * (self.pixels_per_meter**2)
-        self.__fx = None
         kernel_size = self.pixels_per_meter * agent_radius * 2
         # round kernel_size to nearest odd number
         kernel_size = int(kernel_size) + (int(kernel_size) % 2 == 0)
@@ -52,23 +47,39 @@ class ObstacleMap(BaseMap):
         self._frontiers_px = np.array([])
         self.frontiers = np.array([])
 
-    @property
-    def _fx(self) -> float:
-        if self.__fx is None:
-            self.__fx = self._image_width / (2 * np.tan(self._hfov / 2))
-        return self.__fx
-
-    @property
-    def _fy(self) -> float:
-        return self._fx
-
-    def update_map(self, depth: np.ndarray, tf_camera_to_episodic: np.ndarray):
-        """Adds all obstacles from the current view to the map. Also updates the area
+    def update_map(
+        self,
+        depth: np.ndarray,
+        tf_camera_to_episodic: np.ndarray,
+        min_depth: float,
+        max_depth: float,
+        fx: float,
+        fy: float,
+        topdown_fov: float,
+    ):
+        """
+        Adds all obstacles from the current view to the map. Also updates the area
         that the robot has explored so far.
+
+        Args:
+            depth (np.ndarray): The depth image to use for updating the object map. It
+                is normalized to the range [0, 1] and has a shape of (height, width).
+
+            tf_camera_to_episodic (np.ndarray): The transformation matrix from the
+                camera to the episodic coordinate frame.
+            min_depth (float): The minimum depth value (in meters) of the depth image.
+            max_depth (float): The maximum depth value (in meters) of the depth image.
+            fx (float): The focal length of the camera in the x direction.
+            fy (float): The focal length of the camera in the y direction.
+            topdown_fov (float): The field of view of the depth camera projected onto
+                the topdown map.
         """
         if self._image_width is None:
             self._image_width = depth.shape[1]
-        point_cloud_camera_frame = self._get_local_point_cloud(depth)
+
+        scaled_depth = depth * (max_depth - min_depth) + min_depth
+        mask = scaled_depth < max_depth
+        point_cloud_camera_frame = get_point_cloud(scaled_depth, mask, fx, fy)
         point_cloud_episodic_frame = transform_points(
             tf_camera_to_episodic, point_cloud_camera_frame
         )
@@ -99,8 +110,8 @@ class ObstacleMap(BaseMap):
             current_fog_of_war_mask=self._explored_area.astype(np.uint8),
             current_point=agent_pixel_location[::-1],
             current_angle=-self._last_camera_yaw,
-            fov=np.rad2deg(self._hfov),
-            max_line_len=self._max_depth * self.pixels_per_meter,
+            fov=np.rad2deg(topdown_fov),
+            max_line_len=max_depth * self.pixels_per_meter,
         )
 
         # Compute frontier locations
@@ -147,12 +158,6 @@ class ObstacleMap(BaseMap):
 
         return vis_img
 
-    def _get_local_point_cloud(self, depth: np.ndarray) -> np.ndarray:
-        scaled_depth = depth * (self._max_depth - self._min_depth) + self._min_depth
-        mask = scaled_depth < self._max_depth
-        point_cloud = get_point_cloud(scaled_depth, mask, self._fx, self._fy)
-        return point_cloud
-
 
 def filter_points_by_height(
     points: np.ndarray, min_height: float, max_height: float
@@ -167,11 +172,8 @@ def replay_from_dir():
         data = json.load(f)
 
     v = ObstacleMap(
-        fov=kwargs["fov"],
         min_height=float(kwargs.get("min_height", 0.15)),
         max_height=float(kwargs.get("max_height", 0.88)),
-        min_depth=kwargs["min_depth"],
-        max_depth=kwargs["max_depth"],
         agent_radius=float(kwargs.get("agent_radius", 0.18)),
         size=kwargs["size"],
     )
