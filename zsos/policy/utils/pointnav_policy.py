@@ -42,12 +42,12 @@ class WrappedPointNavResNetPolicy:
         self,
         ckpt_path: str,
         device: Union[str, torch.device] = "cuda",
-        discrete_actions: bool = True,
     ):
         if isinstance(device, str):
             device = torch.device(device)
         self.policy = load_pointnav_policy(ckpt_path)
         self.policy.to(device)
+        discrete_actions = not hasattr(self.policy.action_distribution, "mu_maybe_std")
         self.pointnav_test_recurrent_hidden_states = torch.zeros(
             1,  # The number of environments.
             self.policy.net.num_recurrent_layers,

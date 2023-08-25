@@ -37,6 +37,16 @@ class ObjectDetections:
             )
         return self._annotated_frame
 
+    def __repr__(self):
+        """Print each detection's class, score, and box"""
+        dets = [
+            f"{phrase} ({logit:.2f}): {box.tolist()}"
+            for box, logit, phrase in zip(self.boxes, self.logits, self.phrases)
+        ]
+        if len(dets) == 0:
+            return "No detections"
+        return "\n".join(dets)
+
     def filter_by_conf(self, conf_thresh: float):
         """Filters detections by confidence threshold in-place.
 

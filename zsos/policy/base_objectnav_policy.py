@@ -62,6 +62,7 @@ class BaseObjectNavPolicy(BasePolicy):
         self._visualize = visualize
 
         self._num_steps = 0
+        self._did_reset = False
         self._last_goal = np.zeros(2)
         self._done_initializing = False
         self._target_detected = False
@@ -84,6 +85,7 @@ class BaseObjectNavPolicy(BasePolicy):
         self._target_detected = False
         if self._compute_frontiers:
             self._obstacle_map.reset()
+        self._did_reset = True
 
     def act(
         self, observations, rnn_hidden_states, prev_actions, masks, deterministic=False
@@ -94,14 +96,7 @@ class BaseObjectNavPolicy(BasePolicy):
         Then, explores the scene until it finds the target object.
         Once the target object is found, it navigates to the object.
         """
-        self._cache_observations(observations)
-
-        assert masks.shape[1] == 1, "Currently only supporting one env at a time"
-        if masks[0] == 0:
-            self._reset()
-            self._target_object = observations["objectgoal"]
-
-        self._policy_info = {}
+        self._pre_step(observations, masks)
 
         object_map_rgbd = self._observations_cache["object_map_rgbd"]
         detections = [
@@ -124,8 +119,17 @@ class BaseObjectNavPolicy(BasePolicy):
         self._num_steps += 1
 
         self._observations_cache = {}
+        self._did_reset = True
 
         return pointnav_action, rnn_hidden_states
+
+    def _pre_step(self, observations: "TensorDict", masks: Tensor) -> None:
+        assert masks.shape[1] == 1, "Currently only supporting one env at a time"
+        if not self._did_reset and masks[0] == 0:
+            self._reset()
+            self._target_object = observations["objectgoal"]
+        self._cache_observations(observations)
+        self._policy_info = {}
 
     def _initialize(self) -> Tensor:
         raise NotImplementedError
