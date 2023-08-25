@@ -24,8 +24,8 @@ VALUE_MAP_CAMS = [
 
 POINT_CLOUD_CAMS = [
     SpotCamIds.RIGHT_DEPTH_IN_VISUAL_FRAME,
-    SpotCamIds.FRONTLEFT_DEPTH_IN_VISUAL_FRAME,
-    SpotCamIds.FRONTRIGHT_DEPTH_IN_VISUAL_FRAME,
+    SpotCamIds.FRONTLEFT_DEPTH,
+    SpotCamIds.FRONTRIGHT_DEPTH,
     SpotCamIds.BACK_DEPTH_IN_VISUAL_FRAME,
     SpotCamIds.LEFT_DEPTH_IN_VISUAL_FRAME,
     # SpotCamIds.RIGHT_DEPTH_IN_VISUAL_FRAME,
@@ -138,14 +138,12 @@ class ObjectNavEnv(PointNavEnv):
 
         # Nav depth requires the front two camera images, and they must be rotated
         # to be upright
-        f_left = SpotCamIds.FRONTLEFT_DEPTH_IN_VISUAL_FRAME
-        f_right = SpotCamIds.FRONTRIGHT_DEPTH_IN_VISUAL_FRAME
+        f_left = SpotCamIds.FRONTLEFT_DEPTH
+        f_right = SpotCamIds.FRONTRIGHT_DEPTH
         nav_cam_data = self.robot.reorient_images(
-            {k: cam_data[k] for k in [f_left, f_right]}
+            {k: cam_data[k]["image"] for k in [f_left, f_right]}
         )
-        nav_depth = np.hstack(
-            [nav_cam_data[f_right]["image"], nav_cam_data[f_left]["image"]]
-        )
+        nav_depth = np.hstack([nav_cam_data[f_right], nav_cam_data[f_left]])
         nav_depth = filter_depth(nav_depth, blur_type=None, set_black_value=1.0)
 
         # Obstacle map output is a list of (depth, tf, min_depth, max_depth, fx, fy,
@@ -155,10 +153,7 @@ class ObjectNavEnv(PointNavEnv):
             depth = cam_data[src]["image"]
             fx, fy = cam_data[src]["fx"], cam_data[src]["fy"]
             tf = cam_data[src]["tf_camera_to_global"]
-            if src in [
-                SpotCamIds.FRONTLEFT_DEPTH_IN_VISUAL_FRAME,
-                SpotCamIds.FRONTRIGHT_DEPTH_IN_VISUAL_FRAME,
-            ]:
+            if src in [SpotCamIds.FRONTLEFT_DEPTH, SpotCamIds.FRONTRIGHT_DEPTH]:
                 fov = get_fov(fy, depth.shape[0])
             else:
                 fov = get_fov(fx, depth.shape[1])
