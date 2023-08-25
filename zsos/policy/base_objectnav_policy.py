@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Tuple, Union
 import cv2
 import numpy as np
 import torch
+from hydra.core.config_store import ConfigStore
 from torch import Tensor
 
 from zsos.mapping.object_point_cloud_map import ObjectPointCloudMap
@@ -279,6 +280,8 @@ class BaseObjectNavPolicy(BasePolicy):
         detections = self._get_object_detections(rgb)
         height, width = rgb.shape[:2]
         self._object_masks = np.zeros((height, width), dtype=np.uint8)
+        if np.array_equal(depth, np.ones_like(depth)) and detections.num_detections > 0:
+            depth = self._infer_depth(rgb, min_depth, max_depth)
         for idx in range(len(detections.logits)):
             bbox_denorm = detections.boxes[idx] * np.array(
                 [width, height, width, height]
@@ -308,6 +311,19 @@ class BaseObjectNavPolicy(BasePolicy):
         """
         raise NotImplementedError
 
+    def _infer_depth(
+        self, rgb: np.ndarray, min_depth: float, max_depth: float
+    ) -> np.ndarray:
+        """Infers the depth image from the rgb image.
+
+        Args:
+            rgb (np.ndarray): The rgb image to infer the depth from.
+
+        Returns:
+            np.ndarray: The inferred depth image.
+        """
+        raise NotImplementedError
+
 
 @dataclass
 class ZSOSConfig:
@@ -328,3 +344,7 @@ class ZSOSConfig:
     def kwaarg_names(cls) -> List[str]:
         # This returns all the fields listed above, except the name field
         return [f.name for f in fields(ZSOSConfig) if f.name != "name"]
+
+
+cs = ConfigStore.instance()
+cs.store(group="policy", name="zsos_config_base", node=ZSOSConfig())
