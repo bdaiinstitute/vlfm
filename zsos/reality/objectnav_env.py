@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Tuple
 
 import cv2
 import numpy as np
+from depth_camera_filtering import filter_depth
 
 from zsos.reality.pointnav_env import PointNavEnv
 from zsos.reality.robots.camera_ids import SpotCamIds
@@ -104,6 +105,19 @@ class ObjectNavEnv(PointNavEnv):
             cam_data[src]["tf_camera_to_global"] = np.dot(tf, rotation_matrix)
 
             img = cam_data[src]["image"]
+
+            # Normalize and filter depth images; don't filter nav depth yet
+            if img.dtype == np.uint16:
+                if "hand" in src:
+                    max_depth = self._max_gripper_cam_depth
+                else:
+                    max_depth = self._max_body_cam_depth
+                img = self._norm_depth(img, max_depth=max_depth)
+                # Don't filter nav depth yet
+                if "front" not in src:
+                    img = filter_depth(img, blur_type=None, recover_nonzero=False)
+                cam_data[src]["image"] = img
+
             if img.dtype == np.uint8:
                 if img.ndim == 2 or img.shape[2] == 1:
                     cam_data[src]["image"] = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
@@ -117,7 +131,7 @@ class ObjectNavEnv(PointNavEnv):
         src = SpotCamIds.HAND_COLOR
         rgb = cam_data[src]["image"]
         hand_depth = np.ones(rgb.shape[:2], dtype=np.float32)
-        tf = self.tf_global_to_episodic @ cam_data[src]["tf_camera_to_global"]
+        tf = cam_data[src]["tf_camera_to_global"]
         max_depth = self._max_gripper_cam_depth
         fx, fy = cam_data[src]["fx"], cam_data[src]["fy"]
         object_map_rgbd = [(rgb, hand_depth, tf, min_depth, max_depth, fx, fy)]
@@ -132,13 +146,13 @@ class ObjectNavEnv(PointNavEnv):
         nav_depth = np.hstack(
             [nav_cam_data[f_right]["image"], nav_cam_data[f_left]["image"]]
         )
-        nav_depth = self._norm_depth(nav_depth)
+        nav_depth = filter_depth(nav_depth, blur_type=None, set_black_value=1.0)
 
         # Obstacle map output is a list of (depth, tf, min_depth, max_depth, fx, fy,
         # topdown_fov) for each of the cameras in POINT_CLOUD_CAMS
         obstacle_map_depths = []
         for src in POINT_CLOUD_CAMS:
-            depth = self._norm_depth(cam_data[src]["image"])
+            depth = cam_data[src]["image"]
             fx, fy = cam_data[src]["fx"], cam_data[src]["fy"]
             tf = cam_data[src]["tf_camera_to_global"]
             if src in [
@@ -163,7 +177,7 @@ class ObjectNavEnv(PointNavEnv):
             if depth_src == "hand_depth_estimated":
                 depth = hand_depth
             else:
-                depth = self._norm_depth(cam_data[depth_src]["image"])
+                depth = cam_data[src]["image"]
             fx = cam_data[rgb_src]["fx"]
             tf = cam_data[rgb_src]["tf_camera_to_global"]
             fov = get_fov(fx, rgb.shape[1])
