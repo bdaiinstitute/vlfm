@@ -58,7 +58,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
 
     def _explore(self, observations: Union[Dict[str, Tensor], "TensorDict"]) -> Tensor:
         frontiers = self._observations_cache["frontier_sensor"]
-        if np.array_equal(frontiers, np.zeros((1, 2))):
+        if np.array_equal(frontiers, np.zeros((1, 2))) or len(frontiers) == 0:
             return self._stop_action
         best_frontier, best_value = self._get_best_frontier(observations, frontiers)
         os.environ["DEBUG_INFO"] = f"Best value: {best_value*100:.2f}%"
@@ -180,6 +180,11 @@ class BaseITMPolicy(BaseObjectNavPolicy):
                 np.array(cosine), depth, tf, min_depth, max_depth, fov
             )
 
+        self._value_map.update_agent_traj(
+            self._observations_cache["robot_xy"],
+            self._observations_cache["robot_heading"],
+        )
+
     def _sort_frontiers_by_value(
         self, observations: "TensorDict", frontiers: np.ndarray
     ) -> Tuple[np.ndarray, List[float]]:
@@ -191,11 +196,15 @@ class ITMPolicy(BaseITMPolicy):
         super().__init__(*args, **kwargs)
         self._frontier_map: FrontierMap = FrontierMap()
 
-    def act(self, observations: "TensorDict", *args, **kwargs) -> Tuple[Tensor, Tensor]:
-        self._cache_observations(observations)
+    def act(
+        self, observations, rnn_hidden_states, prev_actions, masks, deterministic=False
+    ) -> Tuple[Tensor, Tensor]:
+        self._pre_step(observations, masks)
         if self._visualize:
             self._update_value_map()
-        return super().act(observations, *args, **kwargs)
+        return super().act(
+            observations, rnn_hidden_states, prev_actions, masks, deterministic
+        )
 
     def _reset(self):
         super()._reset()
@@ -213,10 +222,14 @@ class ITMPolicy(BaseITMPolicy):
 class ITMPolicyV2(BaseITMPolicy):
     _reduce_fn: Callable = np.max
 
-    def act(self, observations: "TensorDict", *args, **kwargs) -> Tuple[Tensor, Tensor]:
-        self._cache_observations(observations)
+    def act(
+        self, observations, rnn_hidden_states, prev_actions, masks, deterministic=False
+    ) -> Tuple[Tensor, Tensor]:
+        self._pre_step(observations, masks)
         self._update_value_map()
-        return super().act(observations, *args, **kwargs)
+        return super().act(
+            observations, rnn_hidden_states, prev_actions, masks, deterministic
+        )
 
     def _sort_frontiers_by_value(
         self, observations: "TensorDict", frontiers: np.ndarray

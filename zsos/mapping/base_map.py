@@ -30,6 +30,10 @@ class BaseMap:
             self._episode_pixel_origin, self.pixels_per_meter
         )
 
+    def update_agent_traj(self, robot_xy, robot_heading):
+        self._camera_positions.append(robot_xy)
+        self._last_camera_yaw = robot_heading
+
     def _xy_to_px(self, points: np.ndarray) -> np.ndarray:
         """Converts an array of (x, y) coordinates to pixel coordinates.
 

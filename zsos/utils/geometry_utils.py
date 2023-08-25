@@ -247,3 +247,21 @@ def get_point_cloud(
     cloud = np.stack((z, -x, -y), axis=-1)
 
     return cloud
+
+
+def get_fov(focal_length: float, image_height_or_width: int) -> float:
+    """
+    Given an fx and the image width, or an fy and the image height, returns the
+    horizontal or vertical field of view, respectively.
+
+    Args:
+        focal_length: Focal length of the camera.
+        image_height_or_width: Height or width of the image.
+
+    Returns:
+        Field of view in radians.
+    """
+
+    # Calculate the field of view using the formula
+    fov = 2 * math.atan((image_height_or_width / 2) / focal_length)
+    return fov

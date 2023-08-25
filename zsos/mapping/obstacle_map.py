@@ -16,7 +16,6 @@ class ObstacleMap(BaseMap):
     """
 
     _map_dtype: np.dtype = bool
-    _image_width: int = None  # set upon execution of update_map method
     _frontiers_px: np.ndarray = np.array([])
     frontiers: np.ndarray = np.array([])
 
@@ -74,9 +73,6 @@ class ObstacleMap(BaseMap):
             topdown_fov (float): The field of view of the depth camera projected onto
                 the topdown map.
         """
-        if self._image_width is None:
-            self._image_width = depth.shape[1]
-
         scaled_depth = depth * (max_depth - min_depth) + min_depth
         mask = scaled_depth < max_depth
         point_cloud_camera_frame = get_point_cloud(scaled_depth, mask, fx, fy)
@@ -93,7 +89,7 @@ class ObstacleMap(BaseMap):
         self._map[pixel_points[:, 1], pixel_points[:, 0]] = 1
 
         # Update the navigable area, which is an inverse of the obstacle map after a
-        # dilation operation to accomodate the robot's radius.
+        # dilation operation to accommodate the robot's radius.
         self._navigable_map = 1 - cv2.dilate(
             self._map.astype(np.uint8),
             self._navigable_kernel,
@@ -102,21 +98,22 @@ class ObstacleMap(BaseMap):
 
         # Update the explored area
         agent_xy_location = tf_camera_to_episodic[:2, 3]
-        self._camera_positions.append(agent_xy_location)
         agent_pixel_location = self._xy_to_px(agent_xy_location.reshape(1, 2))[0]
-        self._last_camera_yaw = extract_yaw(tf_camera_to_episodic)
         self._explored_area = reveal_fog_of_war(
             top_down_map=self._navigable_map.astype(np.uint8),
             current_fog_of_war_mask=self._explored_area.astype(np.uint8),
             current_point=agent_pixel_location[::-1],
-            current_angle=-self._last_camera_yaw,
+            current_angle=-extract_yaw(tf_camera_to_episodic),
             fov=np.rad2deg(topdown_fov),
             max_line_len=max_depth * self.pixels_per_meter,
         )
 
         # Compute frontier locations
         self._frontiers_px = self._get_frontiers()
-        self.frontiers = self._px_to_xy(self._frontiers_px)
+        if len(self._frontiers_px) == 0:
+            self.frontiers = np.array([])
+        else:
+            self.frontiers = self._px_to_xy(self._frontiers_px)
 
     def _get_frontiers(self):
         """Returns the frontiers of the map."""

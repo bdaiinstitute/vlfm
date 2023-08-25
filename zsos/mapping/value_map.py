@@ -281,12 +281,11 @@ class ValueMap(BaseMap):
         curr_data = self._process_local_data(depth, fov, min_depth, max_depth)
 
         # Rotate this new data to match the camera's orientation
-        self._last_camera_yaw = yaw = extract_yaw(tf_camera_to_episodic)
+        yaw = extract_yaw(tf_camera_to_episodic)
         curr_data = rotate_image(curr_data, -yaw)
 
         # Determine where this mask should be overlaid
         cam_x, cam_y = tf_camera_to_episodic[:2, 3] / tf_camera_to_episodic[3, 3]
-        self._camera_positions.append(np.array([cam_x, cam_y]))
 
         # Convert to pixel units
         px = int(cam_x * self.pixels_per_meter) + self._episode_pixel_origin[0]
