@@ -96,6 +96,13 @@ class ObjectNavEnv(PointNavEnv):
         srcs: List[str] = ALL_CAMS
         cam_data = self.robot.get_camera_data(srcs)
         for src in ALL_CAMS:
+            tf = self.tf_global_to_episodic @ cam_data[src]["tf_camera_to_global"]
+            # a tf that remaps from camera conventions to xyz conventions
+            rotation_matrix = np.array(
+                [[0, -1, 0, 0], [0, 0, -1, 0], [1, 0, 0, 0], [0, 0, 0, 1]]
+            )
+            cam_data[src]["tf_camera_to_global"] = np.dot(tf, rotation_matrix)
+
             img = cam_data[src]["image"]
             if img.dtype == np.uint8:
                 if img.ndim == 2 or img.shape[2] == 1:
@@ -133,12 +140,7 @@ class ObjectNavEnv(PointNavEnv):
         for src in POINT_CLOUD_CAMS:
             depth = self._norm_depth(cam_data[src]["image"])
             fx, fy = cam_data[src]["fx"], cam_data[src]["fy"]
-            tf = self.tf_global_to_episodic @ cam_data[src]["tf_camera_to_global"]
-            # a tf that remaps from camera conventions to xyz conventions
-            rotation_matrix = np.array(
-                [[0, -1, 0, 0], [0, 0, -1, 0], [1, 0, 0, 0], [0, 0, 0, 1]]
-            )
-            tf = np.dot(tf, rotation_matrix)
+            tf = cam_data[src]["tf_camera_to_global"]
             if src in [
                 SpotCamIds.FRONTLEFT_DEPTH_IN_VISUAL_FRAME,
                 SpotCamIds.FRONTRIGHT_DEPTH_IN_VISUAL_FRAME,
@@ -162,15 +164,8 @@ class ObjectNavEnv(PointNavEnv):
                 depth = hand_depth
             else:
                 depth = self._norm_depth(cam_data[depth_src]["image"])
-            if depth_src == "hand_depth_estimated":
-                hand_depth = depth
             fx = cam_data[rgb_src]["fx"]
-            tf = self.tf_global_to_episodic @ cam_data[rgb_src]["tf_camera_to_global"]
-            # a tf that remaps from camera conventions to xyz conventions
-            rotation_matrix = np.array(
-                [[0, -1, 0, 0], [0, 0, -1, 0], [1, 0, 0, 0], [0, 0, 0, 1]]
-            )
-            tf = np.dot(tf, rotation_matrix)
+            tf = cam_data[rgb_src]["tf_camera_to_global"]
             fov = get_fov(fx, rgb.shape[1])
             src_data = (rgb, depth, tf, min_depth, max_depth, fov)
             value_map_rgbd.append(src_data)
