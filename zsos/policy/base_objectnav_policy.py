@@ -108,13 +108,19 @@ class BaseObjectNavPolicy(BasePolicy):
         goal = self._get_target_object_location(robot_xy)
 
         if not self._done_initializing:  # Initialize
+            mode = "initialize"
             pointnav_action = self._initialize()
         elif goal is None:  # Haven't found target object yet
+            mode = "explore"
             pointnav_action = self._explore(observations)
         else:
+            mode = "navigate"
             pointnav_action = self._pointnav(
                 goal[:2], deterministic=deterministic, stop=True
             )
+
+        action_numpy = pointnav_action.detach().cpu().numpy()
+        print(f"Step: {self._num_steps} | Mode: {mode} | Action: {action_numpy}")
 
         self._policy_info = self._get_policy_info(detections[0])  # a little hacky
         self._num_steps += 1
@@ -282,6 +288,9 @@ class BaseObjectNavPolicy(BasePolicy):
         self._object_masks = np.zeros((height, width), dtype=np.uint8)
         if np.array_equal(depth, np.ones_like(depth)) and detections.num_detections > 0:
             depth = self._infer_depth(rgb, min_depth, max_depth)
+            obs = list(self._observations_cache["object_map_rgbd"][0])
+            obs[1] = depth
+            self._observations_cache["object_map_rgbd"][0] = tuple(obs)
         for idx in range(len(detections.logits)):
             bbox_denorm = detections.boxes[idx] * np.array(
                 [width, height, width, height]

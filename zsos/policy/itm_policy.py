@@ -63,7 +63,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
             return self._stop_action
         best_frontier, best_value = self._get_best_frontier(observations, frontiers)
         os.environ["DEBUG_INFO"] = f"Best value: {best_value*100:.2f}%"
-        print(f"Step: {self._num_steps} Best value: {best_value*100:.2f}%")
+        print(f"Best value: {best_value*100:.2f}%")
         pointnav_action = self._pointnav(best_frontier, deterministic=True, stop=False)
 
         return pointnav_action
