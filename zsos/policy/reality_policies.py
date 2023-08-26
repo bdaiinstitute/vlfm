@@ -22,11 +22,12 @@ class RealityMixin:
 
     _stop_action: Tensor = torch.tensor([[0.0, 0.0]], dtype=torch.float32)
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(self: BaseObjectNavPolicy, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._depth_model = torch.hub.load(
             "isl-org/ZoeDepth", "ZoeD_NK", config_mode="eval", pretrained=True
         ).to("cuda" if torch.cuda.is_available() else "cpu")
+        self._object_map.use_dbscan = False
 
     @classmethod
     def from_config(cls, config: DictConfig, *args_unused, **kwargs_unused):
