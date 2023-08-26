@@ -9,13 +9,7 @@ from habitat_baselines.common.tensor_dict import TensorDict
 
 from frontier_exploration.utils.general_utils import xyz_to_habitat
 from zsos.utils.geometry_utils import transform_points
-from zsos.utils.img_utils import (
-    crop_white_border,
-    pad_larger_dim,
-    pad_to_square,
-    resize_images,
-    rotate_image,
-)
+from zsos.utils.img_utils import reorient_rescale_map, resize_images, rotate_image
 from zsos.utils.visualization import add_text_to_image, pad_images
 
 
@@ -71,7 +65,7 @@ class HabitatVis:
         )
         self.maps.append(map)
         vis_map_imgs = [
-            reorient_rescale_map(infos, policy_info[0][vkey])
+            self._reorient_rescale_habitat_map(infos, policy_info[0][vkey])
             for vkey in ["obstacle_map", "value_map"]
             if vkey in policy_info[0]
         ]
@@ -112,6 +106,25 @@ class HabitatVis:
         self.reset()
 
         return frames
+
+    @staticmethod
+    def _reorient_rescale_habitat_map(
+        infos: List[Dict[str, Any]], vis_map: np.ndarray
+    ) -> np.ndarray:
+        # Rotate the cost map to match the agent's orientation at the start
+        # of the episode
+        start_yaw = infos[0]["start_yaw"]
+        if start_yaw != 0.0:
+            vis_map = rotate_image(vis_map, start_yaw, border_value=(255, 255, 255))
+
+        # Rotate the image 90 degrees if the corresponding map is taller than it is wide
+        habitat_map = infos[0]["top_down_map"]["map"]
+        if habitat_map.shape[0] > habitat_map.shape[1]:
+            vis_map = np.rot90(vis_map, 1)
+
+        vis_map = reorient_rescale_map(vis_map)
+
+        return vis_map
 
     @staticmethod
     def _create_frame(
@@ -167,28 +180,6 @@ class HabitatVis:
             frame = add_text_to_image(frame, t, top=True)
 
         return frame
-
-
-def reorient_rescale_map(infos, vis_map_img):
-    # Rotate the cost map to match the agent's orientation at the start
-    # of the episode
-    start_yaw = infos[0]["start_yaw"]
-    vis_map_img = rotate_image(vis_map_img, start_yaw, border_value=(255, 255, 255))
-    # Remove unnecessary white space around the edges
-    vis_map_img = crop_white_border(vis_map_img)
-    # Make the image at least 150 pixels tall or wide
-    vis_map_img = pad_larger_dim(vis_map_img, 150)
-    # Rotate the image if the corresponding map is taller than it is wide
-    map = infos[0]["top_down_map"]["map"]
-    if map.shape[0] > map.shape[1]:
-        vis_map_img = np.rot90(vis_map_img, 1)
-    # Pad the shorter dimension to be the same size as the longer
-    vis_map_img = pad_to_square(vis_map_img, extra_pad=50)
-    # Pad the image border with some white space
-    vis_map_img = cv2.copyMakeBorder(
-        vis_map_img, 50, 50, 50, 50, cv2.BORDER_CONSTANT, value=(255, 255, 255)
-    )
-    return vis_map_img
 
 
 def sim_xy_to_grid_xy(

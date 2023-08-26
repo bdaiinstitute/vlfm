@@ -1,4 +1,4 @@
-from typing import Tuple, Union
+from typing import List, Tuple, Union
 
 import cv2
 import numpy as np
@@ -88,7 +88,9 @@ def monochannel_to_inferno_rgb(image: np.ndarray) -> np.ndarray:
     return inferno_colormap
 
 
-def resize_images(images, match_dimension="height"):
+def resize_images(
+    images: List[np.ndarray], match_dimension="height"
+) -> List[np.ndarray]:
     """
     Resize images to match either their heights or their widths.
 
@@ -296,3 +298,31 @@ def median_blur_normalized_depth_image(
     blurred_depth_image = blurred_depth_image_uint8.astype(np.float32) / 255
 
     return blurred_depth_image
+
+
+def reorient_rescale_map(vis_map_img) -> np.ndarray:
+    """Reorient and rescale a visual map image for display.
+
+    This function preprocesses a visual map image by:
+    1. Cropping whitespace borders
+    2. Padding the smaller dimension to at least 150px
+    3. Padding the image to a square
+    4. Adding a 50px whitespace border
+
+    Args:
+        vis_map_img (np.ndarray): The input visual map image
+
+    Returns:
+        np.ndarray: The reoriented and rescaled visual map image
+    """
+    # Remove unnecessary white space around the edges
+    vis_map_img = crop_white_border(vis_map_img)
+    # Make the image at least 150 pixels tall or wide
+    vis_map_img = pad_larger_dim(vis_map_img, 150)
+    # Pad the shorter dimension to be the same size as the longer
+    vis_map_img = pad_to_square(vis_map_img, extra_pad=50)
+    # Pad the image border with some white space
+    vis_map_img = cv2.copyMakeBorder(
+        vis_map_img, 50, 50, 50, 50, cv2.BORDER_CONSTANT, value=(255, 255, 255)
+    )
+    return vis_map_img
