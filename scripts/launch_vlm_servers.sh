@@ -22,7 +22,8 @@ tmux send-keys -t vlm_servers:0.1 "${OS_PYTHON} -m zsos.vlm.blip2itm ; sleep 30"
 
 # Select the third pane and run ${OS_PYTHON} -m zsos.vlm.fiber
 tmux select-pane -t vlm_servers:0.2
-tmux send-keys -t vlm_servers:0.2 "${OS_PYTHON} -m zsos.vlm.fiber ; sleep 30" C-m
+#tmux send-keys -t vlm_servers:0.2 "${OS_PYTHON} -m zsos.vlm.fiber ; sleep 30" C-m
+tmux send-keys -t vlm_servers:0.2 "${OS_PYTHON} -m zsos.vlm.sam ; sleep 30" C-m
 
 # Attach to the tmux session to view the windows
 echo "Created tmux session 'vlm_servers'. You must wait up to 90 seconds for the model weights to finish being loaded."
