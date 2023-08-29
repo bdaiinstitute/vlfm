@@ -326,3 +326,18 @@ def reorient_rescale_map(vis_map_img) -> np.ndarray:
         vis_map_img, 50, 50, 50, 50, cv2.BORDER_CONSTANT, value=(255, 255, 255)
     )
     return vis_map_img
+
+
+def remove_small_blobs(image, min_area):
+    # Find all contours in the image
+    contours, _ = cv2.findContours(image, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+
+    for contour in contours:
+        # Calculate area of the contour
+        area = cv2.contourArea(contour)
+
+        # If area is smaller than the threshold, remove the contour
+        if area < min_area:
+            cv2.drawContours(image, [contour], -1, 0, -1)
+
+    return image

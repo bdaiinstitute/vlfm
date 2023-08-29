@@ -56,8 +56,8 @@ class PointNavEnv:
     def _compute_velocities(self, action: Dict[str, np.ndarray]) -> Tuple[float, float]:
         velocities = []
         for action_key, max_dist in (
-            ["angular_action", self._max_ang_dist],
-            ["linear_action", self._max_lin_dist],
+            ["angular", self._max_ang_dist],
+            ["linear", self._max_lin_dist],
         ):
             act_val = action.get(action_key, 0.0)  # default to 0.0 if key not present
             dist = np.clip(act_val, -1.0, 1.0)  # clip to [-1, 1]

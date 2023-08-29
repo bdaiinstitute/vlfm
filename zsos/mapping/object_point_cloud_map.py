@@ -70,7 +70,10 @@ class ObjectPointCloudMap:
             # Get the top 20% of points
             percent = 0.25
             top_percent = sorted_indices[: int(percent * len(target_cloud))]
-            median_index = top_percent[int(len(top_percent) / 2)]
+            try:
+                median_index = top_percent[int(len(top_percent) / 2)]
+            except IndexError:
+                median_index = 0
             closest_point = target_cloud[median_index]
 
         closest_point_2d = closest_point[:2]

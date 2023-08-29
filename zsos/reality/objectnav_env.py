@@ -1,3 +1,6 @@
+import os
+import time
+from datetime import datetime
 from typing import Any, Dict, List, Tuple
 
 import cv2
@@ -7,6 +10,7 @@ from depth_camera_filtering import filter_depth
 from zsos.reality.pointnav_env import PointNavEnv
 from zsos.reality.robots.camera_ids import SpotCamIds
 from zsos.utils.geometry_utils import get_fov, wrap_heading
+from zsos.utils.img_utils import reorient_rescale_map, resize_images
 
 LEFT_CROP = 124
 RIGHT_CROP = 60
@@ -31,12 +35,6 @@ POINT_CLOUD_CAMS = [
     # SpotCamIds.RIGHT_DEPTH_IN_VISUAL_FRAME,
 ]
 
-MAYBE_GRAY_BODY_CAMS = [
-    SpotCamIds.BACK_FISHEYE,
-    SpotCamIds.LEFT_FISHEYE,
-    SpotCamIds.RIGHT_FISHEYE,
-]
-
 ALL_CAMS = list(set(VALUE_MAP_CAMS + POINT_CLOUD_CAMS))
 
 
@@ -53,6 +51,12 @@ class ObjectNavEnv(PointNavEnv):
     def __init__(self, max_gripper_cam_depth: float, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._max_gripper_cam_depth = max_gripper_cam_depth
+        # Get the current date and time
+        now = datetime.now()
+        # Format it into a string in the format MM-DD-HH-MM-SS
+        date_string = now.strftime("%m-%d-%H-%M-%S")
+        self._vis_dir = f"{date_string}"
+        os.makedirs(f"vis/{self._vis_dir}", exist_ok=True)
 
     def reset(self, goal: Any, *args, **kwargs) -> Dict[str, np.ndarray]:
         assert isinstance(goal, str)
@@ -67,9 +71,31 @@ class ObjectNavEnv(PointNavEnv):
     def step(self, action: Dict[str, np.ndarray]) -> Tuple[Dict, float, bool, Dict]:
         # Parent class only moves the base; if we want to move the gripper camera,
         # we need to do it here
-        for k in ["obstacle_map", "value_map", "annotated_rgb", "annotated_depth"]:
-            cv2.imshow(k, cv2.cvtColor(action["info"][k], cv2.COLOR_RGB2BGR))
-        cv2.waitKey(0)
+        vis_imgs = []
+        for k in ["annotated_rgb", "annotated_depth", "obstacle_map", "value_map"]:
+            img = cv2.cvtColor(action["info"][k], cv2.COLOR_RGB2BGR)
+            if "map" in k:
+                img = reorient_rescale_map(img)
+            if k == "annotated_depth" and np.array_equal(img, np.ones_like(img) * 255):
+                # Put text in the middle saying "Target not curently detected"
+                text = "Target not currently detected"
+                text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1, 1)[0]
+                cv2.putText(
+                    img,
+                    text,
+                    (img.shape[1] // 2 - text_size[0] // 2, img.shape[0] // 2),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1,
+                    (0, 0, 0),
+                    1,
+                )
+            vis_imgs.append(img)
+        vis_img = np.hstack(resize_images(vis_imgs, match_dimension="height"))
+        time_id = time.time()
+        cv2.imwrite(f"vis/{self._vis_dir}/{time_id}.jpg", vis_img)
+        cv2.imshow("Visualization", cv2.resize(vis_img, (0, 0), fx=0.5, fy=0.5))
+        cv2.waitKey(1)
+
         if "gripper_camera_pan" in action:
             self._pan_gripper_camera(action["gripper_camera_pan"])
         return super().step(action)
