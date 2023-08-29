@@ -8,6 +8,7 @@ from frontier_exploration.utils.fog_of_war import reveal_fog_of_war
 from zsos.mapping.base_map import BaseMap
 from zsos.mapping.value_map import JSON_PATH, KWARGS_JSON
 from zsos.utils.geometry_utils import extract_yaw, get_point_cloud, transform_points
+from zsos.utils.img_utils import remove_small_blobs
 
 
 class ObstacleMap(BaseMap):
@@ -55,6 +56,7 @@ class ObstacleMap(BaseMap):
         fx: float,
         fy: float,
         topdown_fov: float,
+        robot_xy_location: np.ndarray,
     ):
         """
         Adds all obstacles from the current view to the map. Also updates the area
@@ -87,6 +89,18 @@ class ObstacleMap(BaseMap):
         xy_points = obstacle_cloud[:, :2]
         pixel_points = self._xy_to_px(xy_points)
         self._map[pixel_points[:, 1], pixel_points[:, 0]] = 1
+
+        # Clear out the space around the camera at its current location
+        robot_xy_location_px = self._xy_to_px(robot_xy_location.reshape(1, 2))[0]
+        self._map = cv2.circle(
+            self._map.astype(np.uint8),
+            tuple(robot_xy_location_px[::-1]),
+            int(self.pixels_per_meter * 0.5),
+            0,
+            -1,
+        ).astype(bool)
+
+        self._map = remove_small_blobs(self._map.astype(np.uint8), 20).astype(bool)
 
         # Update the navigable area, which is an inverse of the obstacle map after a
         # dilation operation to accommodate the robot's radius.

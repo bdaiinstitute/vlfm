@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Tuple, Union
 import cv2
 import numpy as np
 import torch
+from hydra.core.config_store import ConfigStore
 from torch import Tensor
 
 from zsos.mapping.object_point_cloud_map import ObjectPointCloudMap
@@ -107,14 +108,19 @@ class BaseObjectNavPolicy(BasePolicy):
         goal = self._get_target_object_location(robot_xy)
 
         if not self._done_initializing:  # Initialize
+            mode = "initialize"
             pointnav_action = self._initialize()
         elif goal is None:  # Haven't found target object yet
+            mode = "explore"
             pointnav_action = self._explore(observations)
         else:
+            mode = "navigate"
             pointnav_action = self._pointnav(
                 goal[:2], deterministic=deterministic, stop=True
             )
 
+        action_numpy = pointnav_action.detach().cpu().numpy()
+        print(f"Step: {self._num_steps} | Mode: {mode} | Action: {action_numpy}")
         self._policy_info = self._get_policy_info(detections[0])  # a little hacky
         self._num_steps += 1
 
@@ -279,6 +285,11 @@ class BaseObjectNavPolicy(BasePolicy):
         detections = self._get_object_detections(rgb)
         height, width = rgb.shape[:2]
         self._object_masks = np.zeros((height, width), dtype=np.uint8)
+        if np.array_equal(depth, np.ones_like(depth)) and detections.num_detections > 0:
+            depth = self._infer_depth(rgb, min_depth, max_depth)
+            obs = list(self._observations_cache["object_map_rgbd"][0])
+            obs[1] = depth
+            self._observations_cache["object_map_rgbd"][0] = tuple(obs)
         for idx in range(len(detections.logits)):
             bbox_denorm = detections.boxes[idx] * np.array(
                 [width, height, width, height]
@@ -308,6 +319,19 @@ class BaseObjectNavPolicy(BasePolicy):
         """
         raise NotImplementedError
 
+    def _infer_depth(
+        self, rgb: np.ndarray, min_depth: float, max_depth: float
+    ) -> np.ndarray:
+        """Infers the depth image from the rgb image.
+
+        Args:
+            rgb (np.ndarray): The rgb image to infer the depth from.
+
+        Returns:
+            np.ndarray: The inferred depth image.
+        """
+        raise NotImplementedError
+
 
 @dataclass
 class ZSOSConfig:
@@ -328,3 +352,7 @@ class ZSOSConfig:
     def kwaarg_names(cls) -> List[str]:
         # This returns all the fields listed above, except the name field
         return [f.name for f in fields(ZSOSConfig) if f.name != "name"]
+
+
+cs = ConfigStore.instance()
+cs.store(group="policy", name="zsos_config_base", node=ZSOSConfig())

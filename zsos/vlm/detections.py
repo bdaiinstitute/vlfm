@@ -37,6 +37,11 @@ class ObjectDetections:
             )
         return self._annotated_frame
 
+    @property
+    def num_detections(self) -> int:
+        """Returns the number of detections."""
+        return len(self.phrases)
+
     def __repr__(self):
         """Print each detection's class, score, and box"""
         dets = [

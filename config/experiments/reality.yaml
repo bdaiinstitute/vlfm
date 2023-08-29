@@ -1,0 +1,25 @@
+# @package _global_
+defaults:
+  - /policy: zsos_config_base
+  - _self_
+
+policy:
+    name: "RealityITMPolicyV2"
+    pointnav_policy_path: "data/pointnav_weights.pth"
+    depth_image_shape: [212, 240]  # height, width
+    det_conf_threshold: 0.6
+    pointnav_stop_radius: 1.2
+    object_map_proximity_threshold: 1.5
+    use_max_confidence: False
+    object_map_erosion_size: 5
+    exploration_thresh: 0.0
+    obstacle_map_area_threshold: 1.5  # in square meters
+    text_prompt: "Seems like there is a target_object ahead."
+
+env:
+  max_body_cam_depth: 3.5
+  max_gripper_cam_depth: 5.0
+  max_lin_dist: 0.2
+  max_ang_dist: 0.523599
+  time_step: 0.7
+  goal: "office chair"
