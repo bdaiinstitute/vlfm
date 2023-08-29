@@ -9,6 +9,7 @@ from zsos.utils.geometry_utils import get_point_cloud, transform_points
 
 class ObjectPointCloudMap:
     clouds: Dict[str, np.ndarray] = {}
+    use_dbscan: bool = True
 
     def __init__(self, erosion_size: float) -> None:
         self._erosion_size = erosion_size
@@ -53,10 +54,28 @@ class ObjectPointCloudMap:
     ) -> np.ndarray:
         target_cloud = self.get_target_cloud(target_class)
 
-        # Return the point that is closest to curr_position, which is 2D
-        closest_point = target_cloud[
-            np.argmin(np.linalg.norm(target_cloud[:, :2] - curr_position, axis=1))
-        ]
+        if self.use_dbscan:
+            # Return the point that is closest to curr_position, which is 2D
+            closest_point = target_cloud[
+                np.argmin(np.linalg.norm(target_cloud[:, :2] - curr_position, axis=1))
+            ]
+        else:
+            # Calculate the Euclidean distance from each point to the reference point
+            ref_point = np.concatenate((curr_position, np.array([0.5])))
+            distances = np.linalg.norm(target_cloud[:, :3] - ref_point, axis=1)
+
+            # Use argsort to get the indices that would sort the distances
+            sorted_indices = np.argsort(distances)
+
+            # Get the top 20% of points
+            percent = 0.25
+            top_percent = sorted_indices[: int(percent * len(target_cloud))]
+            try:
+                median_index = top_percent[int(len(top_percent) / 2)]
+            except IndexError:
+                median_index = 0
+            closest_point = target_cloud[median_index]
+
         closest_point_2d = closest_point[:2]
 
         return closest_point_2d
@@ -89,7 +108,8 @@ class ObjectPointCloudMap:
         valid_depth[valid_depth == 0] = 1  # set all holes (0) to just be far (1)
         valid_depth = valid_depth * (max_depth - min_depth) + min_depth
         cloud = get_point_cloud(valid_depth, final_mask, fx, fy)
-        cloud = open3d_dbscan_filtering(cloud)
+        if self.use_dbscan:
+            cloud = open3d_dbscan_filtering(cloud)
 
         return cloud
 
