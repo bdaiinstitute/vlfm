@@ -9,7 +9,7 @@ from zsos.utils.geometry_utils import get_point_cloud, transform_points
 
 class ObjectPointCloudMap:
     clouds: Dict[str, np.ndarray] = {}
-    use_dbscan: bool = True
+    use_dbscan: bool = False
 
     def __init__(self, erosion_size: float) -> None:
         self._erosion_size = erosion_size

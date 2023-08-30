@@ -119,13 +119,15 @@ class BaseObjectNavPolicy(BasePolicy):
                 goal[:2], deterministic=deterministic, stop=True
             )
 
-        action_numpy = pointnav_action.detach().cpu().numpy()
+        action_numpy = pointnav_action.detach().cpu().numpy()[0]
+        if len(action_numpy) == 1:
+            action_numpy = action_numpy[0]
         print(f"Step: {self._num_steps} | Mode: {mode} | Action: {action_numpy}")
         self._policy_info = self._get_policy_info(detections[0])  # a little hacky
         self._num_steps += 1
 
         self._observations_cache = {}
-        self._did_reset = True
+        self._did_reset = False
 
         return pointnav_action, rnn_hidden_states
 

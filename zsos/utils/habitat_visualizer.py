@@ -240,7 +240,6 @@ def color_point_cloud_on_map(infos, policy_info):
     )
 
     new_map = infos[0]["top_down_map"]["map"].copy()
-    for x, y in grid_xy:
-        new_map[x, y] = MAP_TARGET_POINT_INDICATOR
+    new_map[grid_xy[:, 0], grid_xy[:, 1]] = MAP_TARGET_POINT_INDICATOR
 
     infos[0]["top_down_map"]["map"] = new_map
