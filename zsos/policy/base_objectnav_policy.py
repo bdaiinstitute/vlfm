@@ -342,7 +342,6 @@ class ZSOSConfig:
     depth_image_shape: Tuple[int, int] = (244, 224)
     det_conf_threshold: float = 0.6
     pointnav_stop_radius: float = 0.9
-    object_map_proximity_threshold: float = 1.5
     use_max_confidence: bool = False
     object_map_erosion_size: int = 5
     exploration_thresh: float = 0.0
