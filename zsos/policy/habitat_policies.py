@@ -145,6 +145,7 @@ class HabitatMixin:
         depth = filter_depth(depth.reshape(depth.shape[:2]), blur_type=None)
         # Habitat GPS makes west negative, so flip y
         camera_position = np.array([x, -y, self._camera_height])
+        robot_xy = camera_position[:2]
         tf_camera_to_episodic = xyz_yaw_to_tf_matrix(camera_position, camera_yaw)
 
         self._obstacle_map: ObstacleMap
@@ -157,6 +158,7 @@ class HabitatMixin:
                 self._fx,
                 self._fy,
                 self._camera_fov,
+                robot_xy,
             )
             frontiers = self._obstacle_map.frontiers
         else:
@@ -168,7 +170,7 @@ class HabitatMixin:
         self._observations_cache = {
             "frontier_sensor": frontiers,
             "nav_depth": observations["depth"],  # for pointnav
-            "robot_xy": camera_position[:2],
+            "robot_xy": robot_xy,
             "robot_heading": camera_yaw,
             "object_map_rgbd": [
                 (

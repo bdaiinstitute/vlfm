@@ -12,7 +12,7 @@ export OS_PYTHON=${OS_PYTHON:-`which python`}
 export MOBILE_SAM_CHECKPOINT=${MOBILE_SAM_CHECKPOINT:-data/mobile_sam.pt}
 export GROUNDING_DINO_CONFIG=${GROUNDING_DINO_CONFIG:-GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py}
 export GROUNDING_DINO_WEIGHTS=${GROUNDING_DINO_WEIGHTS:-data/groundingdino_swint_ogc.pth}
-
+export CLASSES_PATH=${CLASSES_PATH:-zsos/vlm/classes.txt}
 
 # Create a detached tmux session
 tmux new-session -d -s vlm_servers
