@@ -49,7 +49,7 @@ class BLIP2ITM:
 
 
 class BLIP2ITMClient:
-    def __init__(self, url: str = "http://localhost:8032/blip2itm"):
+    def __init__(self, url: str = "http://localhost:12182/blip2itm"):
         self.url = url
 
     def cosine(self, image: np.ndarray, txt: str) -> float:
@@ -61,7 +61,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=8032)
+    parser.add_argument("--port", type=int, default=12182)
     args = parser.parse_args()
 
     print("Loading model...")

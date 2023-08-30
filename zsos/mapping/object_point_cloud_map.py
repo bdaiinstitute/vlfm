@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Union
 
 import cv2
 import numpy as np
@@ -9,13 +9,15 @@ from zsos.utils.geometry_utils import get_point_cloud, transform_points
 
 class ObjectPointCloudMap:
     clouds: Dict[str, np.ndarray] = {}
-    use_dbscan: bool = False
+    use_dbscan: bool = True
 
     def __init__(self, erosion_size: float) -> None:
         self._erosion_size = erosion_size
+        self.last_target_coord: Union[np.ndarray, None] = None
 
     def reset(self):
         self.clouds = {}
+        self.last_target_coord = None
 
     def has_object(self, target_class: str) -> bool:
         return target_class in self.clouds
@@ -35,6 +37,8 @@ class ObjectPointCloudMap:
         local_cloud = self._extract_object_cloud(
             depth_img, object_mask, min_depth, max_depth, fx, fy
         )
+        if len(local_cloud) == 0:
+            return
 
         # Mark all points of local_cloud whose distance from the camera is too far
         # as being out of range
@@ -78,7 +82,28 @@ class ObjectPointCloudMap:
 
         closest_point_2d = closest_point[:2]
 
-        return closest_point_2d
+        if self.last_target_coord is None:
+            self.last_target_coord = closest_point_2d
+        else:
+            # Do NOT update self.last_target_coord if:
+            # 1. the closest point is only slightly different
+            # 2. the closest point is a little different, but the agent is too far for
+            #    the difference to matter much
+            delta_dist = np.linalg.norm(closest_point_2d - self.last_target_coord)
+            if delta_dist < 0.1:
+                # closest point is only slightly different
+                return self.last_target_coord
+            elif (
+                delta_dist < 0.5
+                and np.linalg.norm(curr_position - closest_point_2d) > 2.0
+            ):
+                # closest point is a little different, but the agent is too far for
+                # the difference to matter much
+                return self.last_target_coord
+            else:
+                self.last_target_coord = closest_point_2d
+
+        return self.last_target_coord
 
     def update_explored(self, *args, **kwargs):
         pass
@@ -102,12 +127,15 @@ class ObjectPointCloudMap:
         fy: float,
     ) -> np.ndarray:
         final_mask = object_mask * 255
-        final_mask = cv2.erode(final_mask, None, iterations=self._erosion_size)
+        final_mask = cv2.erode(  # type: ignore
+            final_mask, None, iterations=self._erosion_size
+        )
 
         valid_depth = depth.copy()
         valid_depth[valid_depth == 0] = 1  # set all holes (0) to just be far (1)
         valid_depth = valid_depth * (max_depth - min_depth) + min_depth
         cloud = get_point_cloud(valid_depth, final_mask, fx, fy)
+        cloud = get_random_subarray(cloud, 5000)
         if self.use_dbscan:
             cloud = open3d_dbscan_filtering(cloud)
 
@@ -170,3 +198,24 @@ def visualize_and_save_point_cloud(point_cloud: np.ndarray, save_path: str):
 
     plt.savefig(save_path)
     plt.close()
+
+
+def get_random_subarray(points: np.ndarray, size: int) -> np.ndarray:
+    """
+    This function returns a subarray of a given 3D points array. The size of the
+    subarray is specified by the user. The elements of the subarray are randomly
+    selected from the original array. If the size of the original array is smaller than
+    the specified size, the function will simply return the original array.
+
+    Args:
+        points (numpy array): A numpy array of 3D points. Each element of the array is a
+            3D point represented as a numpy array of size 3.
+        size (int): The desired size of the subarray.
+
+    Returns:
+        numpy array: A subarray of the original points array.
+    """
+    if len(points) <= size:
+        return points
+    indices = np.random.choice(len(points), size, replace=False)
+    return points[indices]

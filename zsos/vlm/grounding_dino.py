@@ -79,7 +79,7 @@ class GroundingDINO:
 
 class GroundingDINOClient:
     def __init__(
-        self, url: str = "http://localhost:9040/gdino", classes: str = CLASSES
+        self, url: str = "http://localhost:12181/gdino", classes: str = CLASSES
     ):
         self.url = url
         self.classes = classes
@@ -97,7 +97,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=9040)
+    parser.add_argument("--port", type=int, default=12181)
     args = parser.parse_args()
 
     print("Loading model...")

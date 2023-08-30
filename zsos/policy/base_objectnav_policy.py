@@ -115,9 +115,7 @@ class BaseObjectNavPolicy(BasePolicy):
             pointnav_action = self._explore(observations)
         else:
             mode = "navigate"
-            pointnav_action = self._pointnav(
-                goal[:2], deterministic=deterministic, stop=True
-            )
+            pointnav_action = self._pointnav(goal[:2], stop=True)
 
         action_numpy = pointnav_action.detach().cpu().numpy()[0]
         if len(action_numpy) == 1:
@@ -212,7 +210,7 @@ class BaseObjectNavPolicy(BasePolicy):
 
         return detections
 
-    def _pointnav(self, goal: np.ndarray, deterministic=False, stop=False) -> Tensor:
+    def _pointnav(self, goal: np.ndarray, stop=False) -> Tensor:
         """
         Calculates rho and theta from the robot's current position to the goal using the
         gps and heading sensors within the observations and the given goal, then uses
@@ -221,8 +219,6 @@ class BaseObjectNavPolicy(BasePolicy):
         Args:
             goal (np.ndarray): The goal to navigate to as (x, y), where x and y are in
                 meters.
-            deterministic (bool): Whether to use the deterministic or stochastic
-                policy.
             stop (bool): Whether to stop if we are close enough to the goal.
 
         """
@@ -249,9 +245,7 @@ class BaseObjectNavPolicy(BasePolicy):
         }
         if rho < self._pointnav_stop_radius and stop:
             return self._stop_action
-        action = self._pointnav_policy.act(
-            obs_pointnav, masks, deterministic=deterministic
-        )
+        action = self._pointnav_policy.act(obs_pointnav, masks, deterministic=True)
         return action
 
     def _update_object_map(

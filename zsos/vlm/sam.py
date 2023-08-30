@@ -51,7 +51,7 @@ class MobileSAM:
 
 
 class MobileSAMClient:
-    def __init__(self, url: str = "http://localhost:8767/mobile_sam"):
+    def __init__(self, url: str = "http://localhost:12183/mobile_sam"):
         self.url = url
 
     def segment_bbox(self, image: np.ndarray, bbox: List[int]) -> np.ndarray:
@@ -66,7 +66,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=8767)
+    parser.add_argument("--port", type=int, default=12183)
     args = parser.parse_args()
 
     print("Loading model...")
