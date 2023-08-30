@@ -4,38 +4,3 @@ toilet
 chair
 couch
 potted plant
-dining table
-bed frame
-wardrobe
-tv stand
-desk
-bookshelf
-dresser
-armchair
-coffee table
-kitchen island
-refrigerator
-washing machine
-dryer
-dishwasher
-oven
-microwave
-dining chairs
-nightstand
-floor lamp
-mirror
-shoe rack
-ironing board
-trash can
-ottoman
-wall clock
-wall art
-computer
-printer
-toaster
-coffee maker
-shower curtain
-bathroom towel rack
-bathroom
-hallway
-door frame
