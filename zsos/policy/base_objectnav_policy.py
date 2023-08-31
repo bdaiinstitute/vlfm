@@ -67,6 +67,7 @@ class BaseObjectNavPolicy(BasePolicy):
         self._last_goal = np.zeros(2)
         self._done_initializing = False
         self._target_detected = False
+        self._called_stop = False
         self._compute_frontiers = compute_frontiers
         if compute_frontiers:
             self._obstacle_map = ObstacleMap(
@@ -84,6 +85,7 @@ class BaseObjectNavPolicy(BasePolicy):
         self._num_steps = 0
         self._done_initializing = False
         self._target_detected = False
+        self._called_stop = False
         if self._compute_frontiers:
             self._obstacle_map.reset()
         self._did_reset = True
@@ -156,11 +158,13 @@ class BaseObjectNavPolicy(BasePolicy):
         else:
             target_point_cloud = np.array([])
         policy_info = {
-            "target_object": "target: " + self._target_object,
+            "target_object": self._target_object,
             "gps": str(self._observations_cache["robot_xy"] * np.array([1, -1])),
             "yaw": np.rad2deg(self._observations_cache["robot_heading"]),
             "target_detected": self._target_detected,
             "target_point_cloud": target_point_cloud,
+            "nav_goal": self._last_goal,
+            "stop_called": self._called_stop,
             # don't render these on egocentric images when making videos:
             "render_below_images": [
                 "target_object",
@@ -244,6 +248,7 @@ class BaseObjectNavPolicy(BasePolicy):
             "pointgoal_with_gps_compass": rho_theta_tensor,
         }
         if rho < self._pointnav_stop_radius and stop:
+            self._called_stop = True
             return self._stop_action
         action = self._pointnav_policy.act(obs_pointnav, masks, deterministic=True)
         return action
@@ -341,6 +346,8 @@ class ZSOSConfig:
     exploration_thresh: float = 0.0
     obstacle_map_area_threshold: float = 1.5  # in square meters
     text_prompt: str = "Seems like there is a target_object ahead."
+    min_obstacle_height: float = 0.61
+    max_obstacle_height: float = 0.88
 
     @classmethod
     @property

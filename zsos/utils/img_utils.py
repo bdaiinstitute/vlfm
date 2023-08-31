@@ -89,7 +89,7 @@ def monochannel_to_inferno_rgb(image: np.ndarray) -> np.ndarray:
 
 
 def resize_images(
-    images: List[np.ndarray], match_dimension="height"
+    images: List[np.ndarray], match_dimension="height", use_max: bool = True
 ) -> List[np.ndarray]:
     """
     Resize images to match either their heights or their widths.
@@ -106,15 +106,21 @@ def resize_images(
         return images
 
     if match_dimension == "height":
-        max_height = max(img.shape[0] for img in images)
+        if use_max:
+            new_height = max(img.shape[0] for img in images)
+        else:
+            new_height = min(img.shape[0] for img in images)
         resized_images = [
-            cv2.resize(img, (int(img.shape[1] * max_height / img.shape[0]), max_height))
+            cv2.resize(img, (int(img.shape[1] * new_height / img.shape[0]), new_height))
             for img in images
         ]
     elif match_dimension == "width":
-        max_width = max(img.shape[1] for img in images)
+        if use_max:
+            new_width = max(img.shape[1] for img in images)
+        else:
+            new_width = min(img.shape[1] for img in images)
         resized_images = [
-            cv2.resize(img, (max_width, int(img.shape[0] * max_width / img.shape[1])))
+            cv2.resize(img, (new_width, int(img.shape[0] * new_width / img.shape[1])))
             for img in images
         ]
     else:
@@ -341,3 +347,58 @@ def remove_small_blobs(image, min_area):
             cv2.drawContours(image, [contour], -1, 0, -1)
 
     return image
+
+
+def resize_image(img: np.ndarray, new_height: int) -> np.ndarray:
+    """
+    Resizes an image to a given height while maintaining the aspect ratio.
+
+    Args:
+        img (np.ndarray): The input image.
+        new_height (int): The desired height for the resized image.
+
+    Returns:
+        np.ndarray: The resized image.
+    """
+    # Calculate the aspect ratio
+    aspect_ratio = img.shape[1] / img.shape[0]
+
+    # Calculate the new width
+    new_width = int(new_height * aspect_ratio)
+
+    # Resize the image
+    resized_img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
+
+    return resized_img
+
+
+def fill_small_holes(depth_img: np.ndarray, area_thresh: int) -> np.ndarray:
+    """
+    Identifies regions in the depth image that have a value of 0 and fills them in
+    with 1 if the region is smaller than a given area threshold.
+
+    Args:
+        depth_img (np.ndarray): The input depth image
+        area_thresh (int): The area threshold for filling in holes
+
+    Returns:
+        np.ndarray: The depth image with small holes filled in
+    """
+    # Create a binary image where holes are 1 and the rest is 0
+    binary_img = np.where(depth_img == 0, 1, 0).astype("uint8")
+
+    # Find contours in the binary image
+    contours, _ = cv2.findContours(binary_img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    filled_holes = np.zeros_like(binary_img)
+
+    for cnt in contours:
+        # If the area of the contour is smaller than the threshold
+        if cv2.contourArea(cnt) < area_thresh:
+            # Fill the contour
+            cv2.drawContours(filled_holes, [cnt], 0, 1, -1)
+
+    # Create the filled depth image
+    filled_depth_img = np.where(filled_holes == 1, 1, depth_img)
+
+    return filled_depth_img

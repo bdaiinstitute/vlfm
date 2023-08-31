@@ -158,7 +158,6 @@ class HabitatMixin:
                 self._fx,
                 self._fy,
                 self._camera_fov,
-                robot_xy,
             )
             frontiers = self._obstacle_map.frontiers
             self._obstacle_map.update_agent_traj(robot_xy, camera_yaw)

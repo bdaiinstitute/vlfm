@@ -9,7 +9,12 @@ from habitat_baselines.common.tensor_dict import TensorDict
 
 from frontier_exploration.utils.general_utils import xyz_to_habitat
 from zsos.utils.geometry_utils import transform_points
-from zsos.utils.img_utils import reorient_rescale_map, resize_images, rotate_image
+from zsos.utils.img_utils import (
+    reorient_rescale_map,
+    resize_image,
+    resize_images,
+    rotate_image,
+)
 from zsos.utils.visualization import add_text_to_image, pad_images
 
 
@@ -100,9 +105,15 @@ class HabitatVis:
                 self.vis_maps[i],
                 self.texts[i],
             )
+            failure_cause_text = "Failure cause: " + failure_cause  # noqa: F821
+            frame = add_text_to_image(frame, failure_cause_text, top=True)
             frames.append(frame)
 
-        frames = pad_images(frames, pad_from_top=True)
+        if len(frames) > 0:
+            frames = pad_images(frames, pad_from_top=True)
+
+        frames = [resize_image(f, 480 * 2) for f in frames]
+
         self.reset()
 
         return frames

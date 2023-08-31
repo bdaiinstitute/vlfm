@@ -11,8 +11,9 @@ from omegaconf import DictConfig
 # import and unsorted import warnings by ruff.
 import frontier_exploration  # noqa
 from habitat import get_config  # noqa
+import zsos.measurements.traveled_stairs  # noqa: F401
 import zsos.obs_transformers.resize  # noqa: F401
-from zsos.policy import habitat_policies  # noqa: F401
+import zsos.policy.habitat_policies  # noqa: F401
 
 
 @hydra.main(

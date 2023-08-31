@@ -8,6 +8,7 @@ from frontier_exploration.utils.fog_of_war import reveal_fog_of_war
 from zsos.mapping.base_map import BaseMap
 from zsos.mapping.value_map import JSON_PATH, KWARGS_JSON
 from zsos.utils.geometry_utils import extract_yaw, get_point_cloud, transform_points
+from zsos.utils.img_utils import fill_small_holes
 
 
 class ObstacleMap(BaseMap):
@@ -55,7 +56,6 @@ class ObstacleMap(BaseMap):
         fx: float,
         fy: float,
         topdown_fov: float,
-        robot_xy_location: np.ndarray,
     ):
         """
         Adds all obstacles from the current view to the map. Also updates the area
@@ -74,7 +74,8 @@ class ObstacleMap(BaseMap):
             topdown_fov (float): The field of view of the depth camera projected onto
                 the topdown map.
         """
-        scaled_depth = depth * (max_depth - min_depth) + min_depth
+        filled_depth = fill_small_holes(depth, 10000)
+        scaled_depth = filled_depth * (max_depth - min_depth) + min_depth
         mask = scaled_depth < max_depth
         point_cloud_camera_frame = get_point_cloud(scaled_depth, mask, fx, fy)
         point_cloud_episodic_frame = transform_points(
@@ -100,14 +101,40 @@ class ObstacleMap(BaseMap):
         # Update the explored area
         agent_xy_location = tf_camera_to_episodic[:2, 3]
         agent_pixel_location = self._xy_to_px(agent_xy_location.reshape(1, 2))[0]
-        self._explored_area = reveal_fog_of_war(
+        new_explored_area = reveal_fog_of_war(
             top_down_map=self._navigable_map.astype(np.uint8),
-            current_fog_of_war_mask=self._explored_area.astype(np.uint8),
+            current_fog_of_war_mask=np.zeros_like(self._map, dtype=np.uint8),
             current_point=agent_pixel_location[::-1],
             current_angle=-extract_yaw(tf_camera_to_episodic),
             fov=np.rad2deg(topdown_fov),
             max_line_len=max_depth * self.pixels_per_meter,
         )
+        new_explored_area = cv2.dilate(
+            new_explored_area, np.ones((3, 3), np.uint8), iterations=1
+        )
+        self._explored_area[new_explored_area > 0] = 1
+        self._explored_area[self._navigable_map == 0] = 0
+        contours, _ = cv2.findContours(
+            self._explored_area.astype(np.uint8),
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE,
+        )
+        if len(contours) > 1:
+            min_dist = np.inf
+            best_idx = 0
+            for idx, cnt in enumerate(contours):
+                dist = cv2.pointPolygonTest(
+                    cnt, tuple([int(i) for i in agent_pixel_location]), True
+                )
+                if dist >= 0:
+                    best_idx = idx
+                    break
+                elif abs(dist) < min_dist:
+                    min_dist = abs(dist)
+                    best_idx = idx
+            new_area = np.zeros_like(self._explored_area, dtype=np.uint8)
+            cv2.drawContours(new_area, contours, best_idx, 1, -1)  # type: ignore
+            self._explored_area = new_area.astype(bool)
 
         # Compute frontier locations
         self._frontiers_px = self._get_frontiers()
