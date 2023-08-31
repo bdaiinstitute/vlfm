@@ -84,7 +84,7 @@ class HabitatVis:
         ]
         self.texts.append(text)
 
-    def flush_frames(self) -> List[np.ndarray]:
+    def flush_frames(self, failure_cause: str) -> List[np.ndarray]:
         """Flush all frames and return them"""
         # Because the annotated frames are actually one step delayed, pop the first one
         # and add a placeholder frame to the end (gets removed anyway)
@@ -105,7 +105,7 @@ class HabitatVis:
                 self.vis_maps[i],
                 self.texts[i],
             )
-            failure_cause_text = "Failure cause: " + failure_cause  # noqa: F821
+            failure_cause_text = "Failure cause: " + failure_cause
             frame = add_text_to_image(frame, failure_cause_text, top=True)
             frames.append(frame)
 
