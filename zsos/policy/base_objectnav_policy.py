@@ -13,8 +13,10 @@ from zsos.mapping.obstacle_map import ObstacleMap
 from zsos.obs_transformers.utils import image_resize
 from zsos.policy.utils.pointnav_policy import WrappedPointNavResNetPolicy
 from zsos.utils.geometry_utils import rho_theta
+from zsos.vlm.coco_classes import COCO_CLASSES
 from zsos.vlm.grounding_dino import GroundingDINOClient, ObjectDetections
 from zsos.vlm.sam import MobileSAMClient
+from zsos.vlm.yolov7 import YOLOv7Client
 
 try:
     from habitat_baselines.common.tensor_dict import TensorDict
@@ -52,6 +54,7 @@ class BaseObjectNavPolicy(BasePolicy):
     ):
         super().__init__()
         self._object_detector = GroundingDINOClient()
+        self._coco_object_detector = YOLOv7Client()
         self._mobile_sam = MobileSAMClient()
         self._pointnav_policy = WrappedPointNavResNetPolicy(pointnav_policy_path)
         self._object_map: ObjectPointCloudMap = ObjectPointCloudMap(
@@ -207,7 +210,10 @@ class BaseObjectNavPolicy(BasePolicy):
         return policy_info
 
     def _get_object_detections(self, img: np.ndarray) -> ObjectDetections:
-        detections = self._object_detector.predict(img, visualize=self._visualize)
+        if self._target_object in COCO_CLASSES:
+            detections = self._coco_object_detector.predict(img)
+        else:
+            detections = self._object_detector.predict(img)
         if self._detect_target_only:
             detections.filter_by_class([self._target_object])
         detections.filter_by_conf(self._det_conf_threshold)

@@ -147,8 +147,8 @@ def annotate(
     # Draw bounding boxes, class names, and scores on image
     for box, prob, phrase in zip(boxes, logits, phrases):
         # Convert tensor to numpy array
-        box = box.numpy()
-        prob = prob.numpy()
+        box = box.detach().cpu().numpy()
+        prob = prob.detach().cpu().numpy()
 
         # If the box appears to be in normalized coordinates, de-normalize using the
         # image dimensions

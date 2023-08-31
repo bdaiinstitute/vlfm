@@ -46,6 +46,13 @@ class ObjectPointCloudMap:
         global_cloud = transform_points(tf_camera_to_episodic, local_cloud)
         global_cloud = np.concatenate((global_cloud, within_range[:, None]), axis=1)
 
+        curr_position = tf_camera_to_episodic[:3, 3]
+        closest_point = self._get_closest_point(global_cloud, curr_position)
+        dist = np.linalg.norm(closest_point[:3] - curr_position)
+        if dist < 1.0:
+            # Object is too close to trust as a valid object
+            return
+
         if object_name in self.clouds:
             self.clouds[object_name] = np.concatenate(
                 (self.clouds[object_name], global_cloud), axis=0
@@ -58,29 +65,7 @@ class ObjectPointCloudMap:
     ) -> np.ndarray:
         target_cloud = self.get_target_cloud(target_class)
 
-        if self.use_dbscan:
-            # Return the point that is closest to curr_position, which is 2D
-            closest_point = target_cloud[
-                np.argmin(np.linalg.norm(target_cloud[:, :2] - curr_position, axis=1))
-            ]
-        else:
-            # Calculate the Euclidean distance from each point to the reference point
-            ref_point = np.concatenate((curr_position, np.array([0.5])))
-            distances = np.linalg.norm(target_cloud[:, :3] - ref_point, axis=1)
-
-            # Use argsort to get the indices that would sort the distances
-            sorted_indices = np.argsort(distances)
-
-            # Get the top 20% of points
-            percent = 0.25
-            top_percent = sorted_indices[: int(percent * len(target_cloud))]
-            try:
-                median_index = top_percent[int(len(top_percent) / 2)]
-            except IndexError:
-                median_index = 0
-            closest_point = target_cloud[median_index]
-
-        closest_point_2d = closest_point[:2]
+        closest_point_2d = self._get_closest_point(target_cloud, curr_position)[:2]
 
         if self.last_target_coord is None:
             self.last_target_coord = closest_point_2d
@@ -140,6 +125,36 @@ class ObjectPointCloudMap:
             cloud = open3d_dbscan_filtering(cloud)
 
         return cloud
+
+    def _get_closest_point(
+        self, cloud: np.ndarray, curr_position: np.ndarray
+    ) -> np.ndarray:
+        ndim = curr_position.shape[0]
+        if self.use_dbscan:
+            # Return the point that is closest to curr_position, which is 2D
+            closest_point = cloud[
+                np.argmin(np.linalg.norm(cloud[:, :ndim] - curr_position, axis=1))
+            ]
+        else:
+            # Calculate the Euclidean distance from each point to the reference point
+            if ndim == 2:
+                ref_point = np.concatenate((curr_position, np.array([0.5])))
+            else:
+                ref_point = curr_position
+            distances = np.linalg.norm(cloud[:, :3] - ref_point, axis=1)
+
+            # Use argsort to get the indices that would sort the distances
+            sorted_indices = np.argsort(distances)
+
+            # Get the top 20% of points
+            percent = 0.25
+            top_percent = sorted_indices[: int(percent * len(cloud))]
+            try:
+                median_index = top_percent[int(len(top_percent) / 2)]
+            except IndexError:
+                median_index = 0
+            closest_point = cloud[median_index]
+        return closest_point
 
 
 def open3d_dbscan_filtering(

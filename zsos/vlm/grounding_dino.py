@@ -84,9 +84,7 @@ class GroundingDINOClient:
         self.url = url
         self.classes = classes
 
-    def predict(
-        self, image_numpy: np.ndarray, visualize: bool = False
-    ) -> ObjectDetections:
+    def predict(self, image_numpy: np.ndarray) -> ObjectDetections:
         response = send_request(self.url, image=image_numpy)
         detections = ObjectDetections.from_json(response, image_source=image_numpy)
 
