@@ -53,9 +53,13 @@ class BaseObjectNavPolicy(BasePolicy):
         **kwargs,
     ):
         super().__init__()
-        self._object_detector = GroundingDINOClient()
-        self._coco_object_detector = YOLOv7Client()
-        self._mobile_sam = MobileSAMClient()
+        self._object_detector = GroundingDINOClient(
+            port=os.environ.get("GROUNDING_DINO_PORT", 12181)
+        )
+        self._coco_object_detector = YOLOv7Client(
+            port=os.environ.get("YOLOV7_PORT", 12184)
+        )
+        self._mobile_sam = MobileSAMClient(port=os.environ.get("SAM_PORT", 12183))
         self._pointnav_policy = WrappedPointNavResNetPolicy(pointnav_policy_path)
         self._object_map: ObjectPointCloudMap = ObjectPointCloudMap(
             erosion_size=object_map_erosion_size

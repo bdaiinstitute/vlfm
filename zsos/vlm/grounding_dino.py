@@ -78,10 +78,8 @@ class GroundingDINO:
 
 
 class GroundingDINOClient:
-    def __init__(
-        self, url: str = "http://localhost:12181/gdino", classes: str = CLASSES
-    ):
-        self.url = url
+    def __init__(self, port: int = 12181, classes: str = CLASSES):
+        self.url = f"http://localhost:{port}/gdino"
         self.classes = classes
 
     def predict(self, image_numpy: np.ndarray) -> ObjectDetections:

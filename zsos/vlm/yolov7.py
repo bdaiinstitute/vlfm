@@ -113,8 +113,8 @@ class YOLOv7:
 
 
 class YOLOv7Client:
-    def __init__(self, url: str = "http://localhost:12184/yolov7"):
-        self.url = url
+    def __init__(self, port: int = 12184):
+        self.url = f"http://localhost:{port}/yolov7"
 
     def predict(self, image_numpy: np.ndarray) -> ObjectDetections:
         response = send_request(self.url, image=image_numpy)
