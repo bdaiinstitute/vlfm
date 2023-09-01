@@ -28,7 +28,6 @@ class BaseITMPolicy(BaseObjectNavPolicy):
     _acyclic_enforcer: AcyclicEnforcer = None  # must be set by ._reset()
     _last_value: float = float("-inf")
     _last_frontier: np.ndarray = np.zeros(2)
-    _second_best_thresh: float = 0.9
 
     @staticmethod
     def _vis_reduce_fn(i):
@@ -83,49 +82,61 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         Returns:
             Tuple[np.ndarray, float]: The best frontier and its value.
         """
+        # The points and values will be sorted in descending order
         sorted_pts, sorted_values = self._sort_frontiers_by_value(
             observations, frontiers
         )
-        best_frontier, best_value = None, None
-
         robot_xy = self._observations_cache["robot_xy"]
+        best_frontier_idx = None
 
-        if self._last_value > 0.0:
-            closest_index = closest_point_within_threshold(
-                sorted_pts, self._last_frontier, threshold=0.5
-            )
-        else:
-            closest_index = -1
+        # If there is a last point pursued, then we consider sticking to pursuing it
+        # if it is still in the list of frontiers and its current value is not much
+        # worse than self._last_value.
+        if not np.array_equal(self._last_frontier, np.zeros(2)):
+            curr_index = None
 
-        if (
-            closest_index != -1
-            and self._last_value
-            > sorted_values[closest_index] * self._second_best_thresh
-        ):
-            best_frontier, best_value = (
-                sorted_pts[closest_index],
-                sorted_values[closest_index],
-            )
-        else:
-            for frontier, value in zip(sorted_pts, sorted_values):
-                cyclic = self._acyclic_enforcer.check_cyclic(robot_xy, frontier)
-                if not cyclic:
-                    best_frontier, best_value = frontier, value
+            for idx, p in enumerate(sorted_pts):
+                if np.array_equal(p, self._last_frontier):
+                    # Last point is still in the list of frontiers
+                    curr_index = idx
                     break
-                print("Suppressed cyclic frontier.")
 
-            if best_frontier is None:
-                print("All frontiers are cyclic. Choosing the closest one.")
-                best_idx = max(
-                    range(len(frontiers)),
-                    key=lambda i: np.linalg.norm(frontiers[i] - robot_xy),
+            if curr_index is None:
+                closest_index = closest_point_within_threshold(
+                    sorted_pts, self._last_frontier, threshold=0.5
                 )
 
-                best_frontier, best_value = (
-                    frontiers[best_idx],
-                    sorted_values[best_idx],
-                )
+                if closest_index != -1:
+                    # There is a point close to the last point pursued
+                    curr_index = closest_index
 
+            if curr_index is not None:
+                curr_value = sorted_values[curr_index]
+                if curr_value + 0.01 > self._last_value:
+                    # The last point pursued is still in the list of frontiers and its
+                    # value is not much worse than self._last_value
+                    best_frontier_idx = curr_index
+
+        # If there is no last point pursued, then just take the best point, given that
+        # it is not cyclic.
+        if best_frontier_idx is None:
+            for idx, frontier in enumerate(sorted_pts):
+                cyclic = self._acyclic_enforcer.check_cyclic(robot_xy, frontier)
+                if cyclic:
+                    print("Suppressed cyclic frontier.")
+                    continue
+                best_frontier_idx = idx
+                break
+
+        if best_frontier_idx is None:
+            print("All frontiers are cyclic. Just choosing the closest one.")
+            best_frontier_idx = max(
+                range(len(frontiers)),
+                key=lambda i: np.linalg.norm(frontiers[i] - robot_xy),
+            )
+
+        best_frontier = sorted_pts[best_frontier_idx]
+        best_value = sorted_values[best_frontier_idx]
         self._acyclic_enforcer.add_state_action(robot_xy, best_frontier)
         self._last_value = best_value
         self._last_frontier = best_frontier

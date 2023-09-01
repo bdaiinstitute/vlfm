@@ -8,7 +8,6 @@ from frontier_exploration.utils.fog_of_war import reveal_fog_of_war
 from zsos.mapping.base_map import BaseMap
 from zsos.mapping.value_map import JSON_PATH, KWARGS_JSON
 from zsos.utils.geometry_utils import extract_yaw, get_point_cloud, transform_points
-from zsos.utils.img_utils import fill_small_holes
 
 
 class ObstacleMap(BaseMap):
@@ -74,7 +73,8 @@ class ObstacleMap(BaseMap):
             topdown_fov (float): The field of view of the depth camera projected onto
                 the topdown map.
         """
-        filled_depth = fill_small_holes(depth, 10000)
+        filled_depth = depth.copy()
+        filled_depth[depth == 0] = 1.0
         scaled_depth = filled_depth * (max_depth - min_depth) + min_depth
         mask = scaled_depth < max_depth
         point_cloud_camera_frame = get_point_cloud(scaled_depth, mask, fx, fy)

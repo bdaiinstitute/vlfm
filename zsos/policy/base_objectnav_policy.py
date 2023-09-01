@@ -344,8 +344,8 @@ class BaseObjectNavPolicy(BasePolicy):
 class ZSOSConfig:
     name: str = "HabitatITMPolicy"
     pointnav_policy_path: str = "data/pointnav_weights.pth"
-    depth_image_shape: Tuple[int, int] = (244, 224)
-    det_conf_threshold: float = 0.6
+    depth_image_shape: Tuple[int, int] = (224, 224)
+    det_conf_threshold: float = 0.8
     pointnav_stop_radius: float = 0.9
     use_max_confidence: bool = False
     object_map_erosion_size: int = 5
