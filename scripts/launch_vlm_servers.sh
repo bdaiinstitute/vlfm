@@ -18,23 +18,25 @@ export BLIP2ITM_PORT=${BLIP2ITM_PORT:-12182}
 export SAM_PORT=${SAM_PORT:-12183}
 export YOLOV7_PORT=${YOLOV7_PORT:-12184}
 
+session_name=vlm_servers_${RANDOM}
+
 # Create a detached tmux session
-tmux new-session -d -s vlm_servers
+tmux new-session -d -s ${session_name}
 
 # Split the window vertically
-tmux split-window -v -t vlm_servers:0
+tmux split-window -v -t ${session_name}:0
 
 # Split both panes horizontally
-tmux split-window -h -t vlm_servers:0.0
-tmux split-window -h -t vlm_servers:0.2
+tmux split-window -h -t ${session_name}:0.0
+tmux split-window -h -t ${session_name}:0.2
 
 # Run commands in each pane
-tmux send-keys -t vlm_servers:0.0 "${OS_PYTHON} -m zsos.vlm.grounding_dino --port ${GROUNDING_DINO_PORT}" C-m
-tmux send-keys -t vlm_servers:0.1 "${OS_PYTHON} -m zsos.vlm.blip2itm --port ${BLIP2ITM_PORT}" C-m
-tmux send-keys -t vlm_servers:0.2 "${OS_PYTHON} -m zsos.vlm.sam --port ${SAM_PORT}" C-m
-tmux send-keys -t vlm_servers:0.3 "${OS_PYTHON} -m zsos.vlm.yolov7 --port ${YOLOV7_PORT}" C-m
+tmux send-keys -t ${session_name}:0.0 "${OS_PYTHON} -m zsos.vlm.grounding_dino --port ${GROUNDING_DINO_PORT}" C-m
+tmux send-keys -t ${session_name}:0.1 "${OS_PYTHON} -m zsos.vlm.blip2itm --port ${BLIP2ITM_PORT}" C-m
+tmux send-keys -t ${session_name}:0.2 "${OS_PYTHON} -m zsos.vlm.sam --port ${SAM_PORT}" C-m
+tmux send-keys -t ${session_name}:0.3 "${OS_PYTHON} -m zsos.vlm.yolov7 --port ${YOLOV7_PORT}" C-m
 
 # Attach to the tmux session to view the windows
-echo "Created tmux session 'vlm_servers'. You must wait up to 90 seconds for the model weights to finish being loaded."
+echo "Created tmux session '${session_name}'. You must wait up to 90 seconds for the model weights to finish being loaded."
 echo "Run the following to monitor all the server commands:"
-echo "tmux attach-session -t vlm_servers"
+echo "tmux attach-session -t ${session_name}"
