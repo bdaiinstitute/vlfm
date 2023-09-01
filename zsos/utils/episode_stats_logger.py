@@ -46,7 +46,7 @@ def log_episode_stats(episode_id: int, scene_id: str, infos: Dict) -> str:
 
         # Skip if the filename already exists AND it isn't empty
         if not (os.path.exists(filename) and os.path.getsize(filename) > 0):
-            print(f"Logging episode {episode_id:04d} to {filename}")
+            print(f"Logging episode {int(episode_id):04d} to {filename}")
             with open(filename, "w") as f:
                 json.dump(data, f, indent=4)
 

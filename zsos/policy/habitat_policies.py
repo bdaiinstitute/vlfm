@@ -23,7 +23,30 @@ from ..mapping.obstacle_map import ObstacleMap
 from .base_objectnav_policy import BaseObjectNavPolicy, ZSOSConfig
 from .itm_policy import ITMPolicy, ITMPolicyV2, ITMPolicyV3
 
-ID_TO_NAME = ["chair", "bed", "potted plant", "toilet", "tv", "couch"]
+HM3D_ID_TO_NAME = ["chair", "bed", "potted plant", "toilet", "tv", "couch"]
+MP3D_ID_TO_NAME = [
+    "chair",
+    "table",
+    "picture",
+    "cabinet",
+    "cushion",
+    "couch",  # "sofa",
+    "bed",
+    "chest of drawers",
+    "potted plant",  # "plant",
+    "sink",
+    "toilet",
+    "stool",
+    "towel",
+    "tv",  # "tv monitor",
+    "shower",
+    "bathtub",
+    "counter",
+    "fireplace",
+    "gym equipment",
+    "seating",
+    "clothes",
+]
 
 
 class TorchActionIDs:
@@ -50,6 +73,7 @@ class HabitatMixin:
         max_depth: float,
         camera_fov: float,
         image_width: int,
+        dataset_type: str = "hm3d",
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -60,6 +84,7 @@ class HabitatMixin:
         camera_fov_rad = np.deg2rad(camera_fov)
         self._camera_fov = camera_fov_rad
         self._fx = self._fy = image_width / (2 * np.tan(camera_fov_rad / 2))
+        self._dataset_type = dataset_type
 
     @classmethod
     def from_config(cls, config: DictConfig, *args_unused, **kwargs_unused):
@@ -81,10 +106,17 @@ class HabitatMixin:
         # Only bother visualizing if we're actually going to save the video
         kwargs["visualize"] = len(config.habitat_baselines.eval.video_option) > 0
 
+        if "hm3d" in config.habitat.dataset.data_path:
+            kwargs["dataset_type"] = "hm3d"
+        elif "mp3d" in config.habitat.dataset.data_path:
+            kwargs["dataset_type"] = "mp3d"
+        else:
+            raise ValueError("Dataset type could not be inferred from habitat config")
+
         return cls(**kwargs)
 
     def act(
-        self: BaseObjectNavPolicy,
+        self: Union["HabitatMixin", BaseObjectNavPolicy],
         observations: TensorDict,
         rnn_hidden_states: Any,
         prev_actions: Any,
@@ -94,7 +126,12 @@ class HabitatMixin:
         """Converts object ID to string name, returns action as PolicyActionData"""
         object_id: int = observations[ObjectGoalSensor.cls_uuid][0].item()
         obs_dict = observations.to_tree()
-        obs_dict[ObjectGoalSensor.cls_uuid]: str = ID_TO_NAME[object_id]
+        if self._dataset_type == "hm3d":
+            obs_dict[ObjectGoalSensor.cls_uuid]: str = HM3D_ID_TO_NAME[object_id]
+        elif self._dataset_type == "mp3d":
+            obs_dict[ObjectGoalSensor.cls_uuid]: str = MP3D_ID_TO_NAME[object_id]
+        else:
+            raise ValueError(f"Dataset type {self._dataset_type} not recognized")
         parent_cls: BaseObjectNavPolicy = super()  # type: ignore
         action, rnn_hidden_states = parent_cls.act(
             obs_dict, rnn_hidden_states, prev_actions, masks, deterministic
