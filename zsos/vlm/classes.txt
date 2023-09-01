@@ -1,6 +1,21 @@
-tv
-bed
-toilet
 chair
+table
+picture
+cabinet
+cushion
 couch
+bed
+chest of drawers
 potted plant
+sink
+toilet
+stool
+towel
+tv
+shower
+bathtub
+counter
+fireplace
+gym equipment
+seating
+clothes
