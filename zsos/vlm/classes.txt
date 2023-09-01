@@ -1,17 +1,10 @@
-chair
-table
 picture
 cabinet
-cushion
-couch
-bed
-chest of drawers
-potted plant
+pillow
+dresser
 sink
-toilet
 stool
 towel
-tv
 shower
 bathtub
 counter

@@ -26,13 +26,13 @@ from .itm_policy import ITMPolicy, ITMPolicyV2, ITMPolicyV3
 HM3D_ID_TO_NAME = ["chair", "bed", "potted plant", "toilet", "tv", "couch"]
 MP3D_ID_TO_NAME = [
     "chair",
-    "table",
+    "dining table",  # "table",
     "picture",
     "cabinet",
-    "cushion",
+    "pillow",  # "cushion",
     "couch",  # "sofa",
     "bed",
-    "chest of drawers",
+    "dresser",  # "chest of drawers",
     "potted plant",  # "plant",
     "sink",
     "toilet",
