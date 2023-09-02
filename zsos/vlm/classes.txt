@@ -13,3 +13,4 @@ gym equipment
 seating
 clothes
 cupboard
+table
