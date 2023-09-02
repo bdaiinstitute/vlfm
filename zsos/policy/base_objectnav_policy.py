@@ -221,8 +221,18 @@ class BaseObjectNavPolicy(BasePolicy):
     def _get_object_detections(self, img: np.ndarray) -> ObjectDetections:
         if self._target_object in COCO_CLASSES:
             detections = self._coco_object_detector.predict(img)
+            self._det_conf_threshold = 0.8
+            detections.phrases = [
+                p.replace("cupboard", "cabinet") for p in detections.phrases
+            ]
         else:
             detections = self._object_detector.predict(img)
+            if self._target_object == "table" and detections.num_detections == 0:
+                detections = self._coco_object_detector.predict(img)
+                detections.phrases = [
+                    p.replace("dining table", "table") for p in detections.phrases
+                ]
+            self._det_conf_threshold = 0.6
         if self._detect_target_only:
             detections.filter_by_class([self._target_object])
         detections.filter_by_conf(self._det_conf_threshold)

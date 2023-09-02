@@ -12,3 +12,4 @@ fireplace
 gym equipment
 seating
 clothes
+cupboard

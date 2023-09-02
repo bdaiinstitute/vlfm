@@ -26,7 +26,7 @@ from .itm_policy import ITMPolicy, ITMPolicyV2, ITMPolicyV3
 HM3D_ID_TO_NAME = ["chair", "bed", "potted plant", "toilet", "tv", "couch"]
 MP3D_ID_TO_NAME = [
     "chair",
-    "dining table",  # "table",
+    "table",
     "picture",
     "cabinet",
     "pillow",  # "cushion",

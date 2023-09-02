@@ -70,6 +70,89 @@ def calculate_avg_performance(stats: List[Dict[str, Any]]) -> None:
     print(table)
 
 
+def calculate_avg_fail_per_category(stats: List[Dict[str, Any]]) -> None:
+    """
+    For each possible "target_object", calculate the average failure rate.
+
+    Args:
+        stats (List[Dict[str, Any]]): A list of stats for each episode.
+    """
+    # Create a dictionary to store the fail count and total count for each category
+    category_stats = {}
+
+    for episode in stats:
+        category = episode["target_object"]
+        success = int(episode["success"]) == 1
+
+        if category not in category_stats:
+            category_stats[category] = {"fail_count": 0, "total_count": 0}
+
+        category_stats[category]["total_count"] += 1
+        if not success:
+            category_stats[category]["fail_count"] += 1
+
+    # Create a table with headers
+    table = PrettyTable(["Category", "Average Failure Rate"])
+
+    # Add each row to the table
+    for category, stats in sorted(
+        category_stats.items(),
+        key=lambda x: (x[1]["fail_count"] / x[1]["total_count"]),
+        reverse=True,
+    ):
+        avg_failure_rate = (stats["fail_count"] / stats["total_count"]) * 100
+        table.add_row(
+            [
+                category,
+                (
+                    f"{avg_failure_rate:.2f}% ({stats['fail_count']}/"
+                    f"{stats['total_count']})"
+                ),
+            ]
+        )
+
+    print(table)
+
+
+def calculate_avg_fail_rate_per_category(
+    stats: List[Dict[str, Any]], failure_cause: str
+) -> None:
+    """
+    For each possible "target_object", count the number of times the agent failed due to
+    the given failure cause. Then, sum the counts across all categories and use it to
+    divide the per category failure count to get the average failure rate for each
+    category.
+
+    Args:
+        stats (List[Dict[str, Any]]): A list of stats for each episode.
+    """
+    category_to_fail_count = {}
+    total_fail_count = 0
+    for episode in stats:
+        if episode["failure_cause"] != failure_cause:
+            continue
+        total_fail_count += 1
+        category = episode["target_object"]
+        if category not in category_to_fail_count:
+            category_to_fail_count[category] = 0
+        category_to_fail_count[category] += 1
+
+    # Create a table with headers
+    table = PrettyTable(["Category", f"% Occurrence for {failure_cause}"])
+
+    # Sort the categories by their failure count in descending order
+    sorted_categories = sorted(
+        category_to_fail_count.items(), key=lambda x: x[1], reverse=True
+    )
+
+    # Add each row to the table
+    for category, count in sorted_categories:
+        percentage = (count / total_fail_count) * 100
+        table.add_row([category, f"{percentage:.2f}% ({count})"])
+
+    print(table)
+
+
 def main() -> None:
     """
     Main function to parse command line arguments and process the directory.
@@ -86,6 +169,17 @@ def main() -> None:
 
     print()
     calculate_avg_performance(episode_stats)
+
+    print()
+    calculate_avg_fail_per_category(episode_stats)
+
+    print()
+    print("Conditioned on failure cause: false_positive")
+    calculate_avg_fail_rate_per_category(episode_stats, "false_positive")
+
+    print()
+    print("Conditioned on failure cause: false_negative")
+    calculate_avg_fail_rate_per_category(episode_stats, "false_negative")
 
 
 if __name__ == "__main__":
