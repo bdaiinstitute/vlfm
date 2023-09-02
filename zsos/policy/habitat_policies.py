@@ -133,9 +133,12 @@ class HabitatMixin:
         else:
             raise ValueError(f"Dataset type {self._dataset_type} not recognized")
         parent_cls: BaseObjectNavPolicy = super()  # type: ignore
-        action, rnn_hidden_states = parent_cls.act(
-            obs_dict, rnn_hidden_states, prev_actions, masks, deterministic
-        )
+        try:
+            action, rnn_hidden_states = parent_cls.act(
+                obs_dict, rnn_hidden_states, prev_actions, masks, deterministic
+            )
+        except StopIteration:
+            action = self._stop_action
         return PolicyActionData(
             actions=action,
             rnn_hidden_states=rnn_hidden_states,

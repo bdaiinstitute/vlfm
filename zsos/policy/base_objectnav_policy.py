@@ -143,7 +143,12 @@ class BaseObjectNavPolicy(BasePolicy):
         if not self._did_reset and masks[0] == 0:
             self._reset()
             self._target_object = observations["objectgoal"]
-        self._cache_observations(observations)
+        try:
+            self._cache_observations(observations)
+        except IndexError as e:
+            print(e)
+            print("Reached edge of map, stopping.")
+            raise StopIteration
         self._policy_info = {}
 
     def _initialize(self) -> Tensor:
