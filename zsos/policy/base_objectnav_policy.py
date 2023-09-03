@@ -221,7 +221,7 @@ class BaseObjectNavPolicy(BasePolicy):
     def _get_object_detections(self, img: np.ndarray) -> ObjectDetections:
         if self._target_object in COCO_CLASSES:
             detections = self._coco_object_detector.predict(img)
-            self._det_conf_threshold = 0.8
+            self._det_conf_threshold = 0.6
         else:
             detections = self._object_detector.predict(img)
             detections.phrases = [
@@ -232,7 +232,7 @@ class BaseObjectNavPolicy(BasePolicy):
                 detections.phrases = [
                     p.replace("dining table", "table") for p in detections.phrases
                 ]
-            self._det_conf_threshold = 0.6
+            self._det_conf_threshold = 0.4
         if self._detect_target_only:
             detections.filter_by_class([self._target_object])
         detections.filter_by_conf(self._det_conf_threshold)
