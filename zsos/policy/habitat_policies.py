@@ -27,7 +27,7 @@ HM3D_ID_TO_NAME = ["chair", "bed", "potted plant", "toilet", "tv", "couch"]
 MP3D_ID_TO_NAME = [
     "chair",
     "table",
-    "framed photo",  # "picture",
+    "framed photograph",  # "picture",
     "cabinet",
     "pillow",  # "cushion",
     "couch",  # "sofa",
