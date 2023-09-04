@@ -43,10 +43,13 @@ class BLIP2:
             self.vis_processors["eval"](pil_img).unsqueeze(0).to(self.device)
         )
 
-        if prompt is None or prompt == "":
-            out = self.model.generate({"image": processed_image})[0]
-        else:
-            out = self.model.generate({"image": processed_image, "prompt": prompt})[0]
+        with torch.inference_mode():
+            if prompt is None or prompt == "":
+                out = self.model.generate({"image": processed_image})[0]
+            else:
+                out = self.model.generate({"image": processed_image, "prompt": prompt})[
+                    0
+                ]
 
         return out
 

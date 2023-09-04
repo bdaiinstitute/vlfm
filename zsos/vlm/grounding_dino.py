@@ -56,13 +56,14 @@ class GroundingDINO:
         image_transformed = F.normalize(
             image_tensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
         )
-        boxes, logits, phrases = predict(
-            model=self.model,
-            image=image_transformed,
-            caption=self.classes,
-            box_threshold=self.box_threshold,
-            text_threshold=self.text_threshold,
-        )
+        with torch.inference_mode():
+            boxes, logits, phrases = predict(
+                model=self.model,
+                image=image_transformed,
+                caption=self.classes,
+                box_threshold=self.box_threshold,
+                text_threshold=self.text_threshold,
+            )
         detections = ObjectDetections(boxes, logits, phrases, image_source=image)
 
         classes = self.classes.split(" . ")
