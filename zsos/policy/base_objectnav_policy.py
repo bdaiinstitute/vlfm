@@ -399,6 +399,7 @@ class ZSOSConfig:
     text_prompt: str = "Seems like there is a target_object ahead."
     min_obstacle_height: float = 0.61
     max_obstacle_height: float = 0.88
+    vqa_prompt: str = "Is this "
 
     @classmethod
     @property
