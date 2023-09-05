@@ -403,6 +403,7 @@ class ZSOSConfig:
     text_prompt: str = "Seems like there is a target_object ahead."
     min_obstacle_height: float = 0.61
     max_obstacle_height: float = 0.88
+    use_vqa: bool = True
     vqa_prompt: str = "Is this "
     coco_threshold: float = 0.6
     non_coco_threshold: float = 0.4
