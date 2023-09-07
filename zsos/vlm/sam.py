@@ -44,8 +44,11 @@ class MobileSAM:
                 is the same size as the bbox, cropped out of the image.
 
         """
-        self.predictor.set_image(image)
-        masks, _, _ = self.predictor.predict(box=np.array(bbox), multimask_output=False)
+        with torch.inference_mode():
+            self.predictor.set_image(image)
+            masks, _, _ = self.predictor.predict(
+                box=np.array(bbox), multimask_output=False
+            )
 
         return masks[0]
 

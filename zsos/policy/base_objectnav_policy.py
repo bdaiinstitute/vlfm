@@ -13,6 +13,7 @@ from zsos.mapping.obstacle_map import ObstacleMap
 from zsos.obs_transformers.utils import image_resize
 from zsos.policy.utils.pointnav_policy import WrappedPointNavResNetPolicy
 from zsos.utils.geometry_utils import rho_theta
+from zsos.vlm.blip2 import BLIP2Client
 from zsos.vlm.coco_classes import COCO_CLASSES
 from zsos.vlm.grounding_dino import GroundingDINOClient, ObjectDetections
 from zsos.vlm.sam import MobileSAMClient
@@ -49,6 +50,10 @@ class BaseObjectNavPolicy(BasePolicy):
         max_obstacle_height: float = 0.88,
         agent_radius: float = 0.18,
         obstacle_map_area_threshold: float = 1.5,
+        use_vqa: bool = True,
+        vqa_prompt: str = "Is this ",
+        coco_threshold: float = 0.6,
+        non_coco_threshold: float = 0.4,
         *args,
         **kwargs,
     ):
@@ -60,6 +65,10 @@ class BaseObjectNavPolicy(BasePolicy):
             port=os.environ.get("YOLOV7_PORT", 12184)
         )
         self._mobile_sam = MobileSAMClient(port=os.environ.get("SAM_PORT", 12183))
+        if use_vqa:
+            self._vqa = BLIP2Client(port=os.environ.get("BLIP2_PORT", 12185))
+        else:
+            self._vqa = None
         self._pointnav_policy = WrappedPointNavResNetPolicy(pointnav_policy_path)
         self._object_map: ObjectPointCloudMap = ObjectPointCloudMap(
             erosion_size=object_map_erosion_size
@@ -68,6 +77,9 @@ class BaseObjectNavPolicy(BasePolicy):
         self._det_conf_threshold = det_conf_threshold
         self._pointnav_stop_radius = pointnav_stop_radius
         self._visualize = visualize
+        self._vqa_prompt = vqa_prompt
+        self._coco_threshold = coco_threshold
+        self._non_coco_threshold = non_coco_threshold
 
         self._num_steps = 0
         self._did_reset = False
@@ -221,7 +233,7 @@ class BaseObjectNavPolicy(BasePolicy):
     def _get_object_detections(self, img: np.ndarray) -> ObjectDetections:
         if self._target_object in COCO_CLASSES:
             detections = self._coco_object_detector.predict(img)
-            self._det_conf_threshold = 0.6
+            self._det_conf_threshold = self._coco_threshold
         else:
             detections = self._object_detector.predict(img)
             detections.phrases = [
@@ -232,7 +244,7 @@ class BaseObjectNavPolicy(BasePolicy):
                 detections.phrases = [
                     p.replace("dining table", "table") for p in detections.phrases
                 ]
-            self._det_conf_threshold = 0.4
+            self._det_conf_threshold = self._non_coco_threshold
         if self._detect_target_only:
             detections.filter_by_class([self._target_object])
         detections.filter_by_conf(self._det_conf_threshold)
@@ -321,6 +333,24 @@ class BaseObjectNavPolicy(BasePolicy):
                 [width, height, width, height]
             )
             object_mask = self._mobile_sam.segment_bbox(rgb, bbox_denorm.tolist())
+
+            # If we are using vqa, then use the BLIP2 model to visually confirm whether
+            # the contours are actually correct.
+            if self._vqa is not None:
+                contours, _ = cv2.findContours(
+                    object_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
+                )
+                annotated_rgb = cv2.drawContours(
+                    rgb.copy(), contours, -1, (255, 0, 0), 2
+                )
+                question = f"Question: {self._vqa_prompt}"
+                if not detections.phrases[idx].endswith("ing"):
+                    question += "a "
+                question += detections.phrases[idx] + "? Answer:"
+                answer = self._vqa.ask(annotated_rgb, question)
+                if not answer.lower().startswith("yes"):
+                    continue
+
             self._object_masks[object_mask > 0] = 1
             self._object_map.update_map(
                 detections.phrases[idx],
@@ -373,6 +403,10 @@ class ZSOSConfig:
     text_prompt: str = "Seems like there is a target_object ahead."
     min_obstacle_height: float = 0.61
     max_obstacle_height: float = 0.88
+    use_vqa: bool = True
+    vqa_prompt: str = "Is this "
+    coco_threshold: float = 0.6
+    non_coco_threshold: float = 0.4
 
     @classmethod
     @property
