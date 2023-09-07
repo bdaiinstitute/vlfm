@@ -1,5 +1,5 @@
 import os
-from typing import Any, Callable, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 import cv2
 import numpy as np
@@ -238,8 +238,6 @@ class ITMPolicy(BaseITMPolicy):
 
 
 class ITMPolicyV2(BaseITMPolicy):
-    _reduce_fn: Callable = np.max
-
     def act(
         self, observations, rnn_hidden_states, prev_actions, masks, deterministic=False
     ) -> Tuple[Tensor, Tensor]:
@@ -252,18 +250,14 @@ class ITMPolicyV2(BaseITMPolicy):
     def _sort_frontiers_by_value(
         self, observations: "TensorDict", frontiers: np.ndarray
     ) -> Tuple[np.ndarray, List[float]]:
-        sorted_frontiers, sorted_values = self._value_map.sort_waypoints(
-            frontiers, 0.5, reduce_fn=self._reduce_fn
-        )
+        sorted_frontiers, sorted_values = self._value_map.sort_waypoints(frontiers, 0.5)
         return sorted_frontiers, sorted_values
 
 
 class ITMPolicyV3(ITMPolicyV2):
     def __init__(self, exploration_thresh: float, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        def select_value(values: Tuple[float, float]) -> float:
-            return max(values) if values[0] < exploration_thresh else values[0]
+        self._exploration_thresh = exploration_thresh
 
         def visualize_value_map(arr: np.ndarray):
             # Get the values in the first channel
@@ -277,5 +271,35 @@ class ITMPolicyV3(ITMPolicyV2):
 
             return result
 
-        self._reduce_fn = select_value
         self._vis_reduce_fn = visualize_value_map
+
+    def _sort_frontiers_by_value(
+        self, observations: "TensorDict", frontiers: np.ndarray
+    ) -> Tuple[np.ndarray, List[float]]:
+        sorted_frontiers, sorted_values = self._value_map.sort_waypoints(
+            frontiers, 0.5, reduce_fn=self._reduce_values
+        )
+
+        return sorted_frontiers, sorted_values
+
+    def _reduce_values(self, values: List[Tuple[float, float]]) -> List[float]:
+        """
+        Reduce the values to a single value per frontier
+
+        Args:
+            values: A list of tuples of the form (target_value, exploration_value). If
+                the highest target_value of all the value tuples is below the threshold,
+                then we return the second element (exploration_value) of each tuple.
+                Otherwise, we return the first element (target_value) of each tuple.
+
+        Returns:
+            A list of values, one per frontier.
+        """
+        target_values = [v[0] for v in values]
+        max_target_value = max(target_values)
+
+        if max_target_value < self._exploration_thresh:
+            explore_values = [v[1] for v in values]
+            return explore_values
+        else:
+            return [v[0] for v in values]

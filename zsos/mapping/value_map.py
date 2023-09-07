@@ -5,7 +5,7 @@ import os.path as osp
 import shutil
 import time
 import warnings
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
@@ -127,7 +127,7 @@ class ValueMap(BaseMap):
                 json.dump(data, f)
 
     def sort_waypoints(
-        self, waypoints: np.ndarray, radius: float, reduce_fn: Callable = np.max
+        self, waypoints: np.ndarray, radius: float, reduce_fn: Callable = None
     ) -> Tuple[np.ndarray, List[float]]:
         """Selects the best waypoint from the given list of waypoints.
 
@@ -143,7 +143,7 @@ class ValueMap(BaseMap):
         """
         radius_px = int(radius * self.pixels_per_meter)
 
-        def get_value(point: np.ndarray) -> float:
+        def get_value(point: np.ndarray) -> Union[float, Tuple[float, ...]]:
             x, y = point
             px = int(-x * self.pixels_per_meter) + self._episode_pixel_origin[0]
             py = int(-y * self.pixels_per_meter) + self._episode_pixel_origin[1]
@@ -154,10 +154,16 @@ class ValueMap(BaseMap):
             ]
             if len(all_values) == 1:
                 return all_values[0]
-            value = reduce_fn(all_values)
-            return value
+            return tuple(all_values)
 
         values = [get_value(point) for point in waypoints]
+
+        if self._value_channels > 1:
+            assert (
+                reduce_fn is not None
+            ), "Must provide a reduction function when using multiple value channels."
+            values = reduce_fn(values)
+
         # Use np.argsort to get the indices of the sorted values
         sorted_inds = np.argsort([-v for v in values])  # sort in descending order
         sorted_values = [values[i] for i in sorted_inds]
