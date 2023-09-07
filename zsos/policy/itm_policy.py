@@ -18,6 +18,8 @@ try:
 except ModuleNotFoundError:
     pass
 
+PROMPT_SEPARATOR = "|"
+
 
 class BaseITMPolicy(BaseObjectNavPolicy):
     _target_object_color: Tuple[int, int, int] = (0, 255, 0)
@@ -44,7 +46,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         self._itm = BLIP2ITMClient(port=os.environ.get("BLIP2ITM_PORT", 12182))
         self._text_prompt = text_prompt
         self._value_map: ValueMap = ValueMap(
-            value_channels=len(text_prompt.split("\n")),
+            value_channels=len(text_prompt.split(PROMPT_SEPARATOR)),
             use_max_confidence=use_max_confidence,
         )
 
@@ -187,7 +189,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         cosines = [
             [
                 self._itm.cosine(rgb, p.replace("target_object", self._target_object))
-                for p in self._text_prompt.split("\n")
+                for p in self._text_prompt.split(PROMPT_SEPARATOR)
             ]
             for rgb in all_rgb
         ]
