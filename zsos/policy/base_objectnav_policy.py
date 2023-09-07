@@ -50,6 +50,7 @@ class BaseObjectNavPolicy(BasePolicy):
         max_obstacle_height: float = 0.88,
         agent_radius: float = 0.18,
         obstacle_map_area_threshold: float = 1.5,
+        hole_area_thresh: int = 100000,
         use_vqa: bool = True,
         vqa_prompt: str = "Is this ",
         coco_threshold: float = 0.6,
@@ -94,6 +95,7 @@ class BaseObjectNavPolicy(BasePolicy):
                 max_height=max_obstacle_height,
                 area_thresh=obstacle_map_area_threshold,
                 agent_radius=agent_radius,
+                hole_area_thresh=hole_area_thresh,
             )
 
     def _reset(self):
@@ -392,6 +394,7 @@ class BaseObjectNavPolicy(BasePolicy):
 @dataclass
 class ZSOSConfig:
     name: str = "HabitatITMPolicy"
+    text_prompt: str = "Seems like there is a target_object ahead."
     pointnav_policy_path: str = "data/pointnav_weights.pth"
     depth_image_shape: Tuple[int, int] = (224, 224)
     det_conf_threshold: float = 0.8
@@ -400,9 +403,9 @@ class ZSOSConfig:
     object_map_erosion_size: int = 5
     exploration_thresh: float = 0.0
     obstacle_map_area_threshold: float = 1.5  # in square meters
-    text_prompt: str = "Seems like there is a target_object ahead."
     min_obstacle_height: float = 0.61
     max_obstacle_height: float = 0.88
+    hole_area_thresh: int = 100000
     use_vqa: bool = True
     vqa_prompt: str = "Is this "
     coco_threshold: float = 0.6

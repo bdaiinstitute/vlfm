@@ -89,6 +89,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         robot_xy = self._observations_cache["robot_xy"]
         best_frontier_idx = None
 
+        os.environ["DEBUG_INFO"] = ""
         # If there is a last point pursued, then we consider sticking to pursuing it
         # if it is still in the list of frontiers and its current value is not much
         # worse than self._last_value.
@@ -127,9 +128,13 @@ class BaseITMPolicy(BaseObjectNavPolicy):
                     continue
                 best_frontier_idx = idx
                 break
+        else:
+            print("Sticking to last point.")
+            os.environ["DEBUG_INFO"] += "Sticking to last point. "
 
         if best_frontier_idx is None:
             print("All frontiers are cyclic. Just choosing the closest one.")
+            os.environ["DEBUG_INFO"] += "All frontiers are cyclic. "
             best_frontier_idx = max(
                 range(len(frontiers)),
                 key=lambda i: np.linalg.norm(frontiers[i] - robot_xy),
@@ -140,6 +145,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         self._acyclic_enforcer.add_state_action(robot_xy, best_frontier)
         self._last_value = best_value
         self._last_frontier = best_frontier
+        os.environ["DEBUG_INFO"] += f" Best value: {best_value*100:.2f}%"
 
         return best_frontier, best_value
 

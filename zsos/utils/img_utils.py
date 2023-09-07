@@ -266,7 +266,9 @@ def pixel_value_within_radius(
     overlap_values = cropped_image[circle_mask > 0]
     # Filter out any values that are 0 (i.e. pixels that weren't seen yet)
     overlap_values = overlap_values[overlap_values > 0]
-    if reduction == "mean":
+    if overlap_values.size == 0:
+        return -1
+    elif reduction == "mean":
         return np.mean(overlap_values)  # type: ignore
     elif reduction == "max":
         return np.max(overlap_values)
