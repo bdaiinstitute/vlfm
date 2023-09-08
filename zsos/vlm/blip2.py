@@ -2,10 +2,14 @@ from typing import Optional
 
 import numpy as np
 import torch
-from lavis.models import load_model_and_preprocess
 from PIL import Image
 
 from .server_wrapper import ServerMixin, host_model, send_request, str_to_image
+
+try:
+    from lavis.models import load_model_and_preprocess
+except ModuleNotFoundError:
+    print("Could not import lavis. This is OK if you are only using the client.")
 
 
 class BLIP2:

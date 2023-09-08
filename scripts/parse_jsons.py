@@ -20,6 +20,9 @@ def read_json_files(directory: str) -> List[Dict[str, Any]]:
     episode_stats = []
     for filename in os.listdir(directory):
         if filename.endswith(".json"):
+            # Ignore empty files
+            if os.path.getsize(os.path.join(directory, filename)) == 0:
+                continue
             with open(os.path.join(directory, filename), "r") as f:
                 episode_stats.append(json.load(f))
     return episode_stats
@@ -97,7 +100,7 @@ def calculate_avg_fail_per_category(stats: List[Dict[str, Any]]) -> None:
     # Add each row to the table
     for category, stats in sorted(
         category_stats.items(),
-        key=lambda x: (x[1]["fail_count"] / x[1]["total_count"]),
+        key=lambda x: x[1]["fail_count"],
         reverse=True,
     ):
         avg_failure_rate = (stats["fail_count"] / stats["total_count"]) * 100
@@ -159,6 +162,7 @@ def main() -> None:
     """
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument("directory", type=str, help="Directory to process")
+    parser.add_argument("--compact", "-c", action="store_true", help="Compact output")
     args = parser.parse_args()
 
     episode_stats = read_json_files(args.directory)
@@ -169,6 +173,9 @@ def main() -> None:
 
     print()
     calculate_avg_performance(episode_stats)
+
+    if args.compact:
+        return
 
     print()
     calculate_avg_fail_per_category(episode_stats)

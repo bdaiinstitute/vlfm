@@ -23,7 +23,7 @@ try:
     from habitat_baselines.common.tensor_dict import TensorDict
 
     from zsos.policy.base_policy import BasePolicy
-except ModuleNotFoundError:
+except Exception:
 
     class BasePolicy:
         pass

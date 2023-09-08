@@ -3,7 +3,6 @@ from typing import List
 
 import numpy as np
 import torch
-from mobile_sam import SamPredictor, sam_model_registry
 
 from .server_wrapper import (
     ServerMixin,
@@ -13,6 +12,11 @@ from .server_wrapper import (
     str_to_bool_arr,
     str_to_image,
 )
+
+try:
+    from mobile_sam import SamPredictor, sam_model_registry
+except ModuleNotFoundError:
+    print("Could not import mobile_sam. This is OK if you are only using the client.")
 
 
 class MobileSAM:

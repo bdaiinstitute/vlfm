@@ -15,7 +15,7 @@ from zsos.vlm.detections import ObjectDetections
 
 try:
     from habitat_baselines.common.tensor_dict import TensorDict
-except ModuleNotFoundError:
+except Exception:
     pass
 
 PROMPT_SEPARATOR = "|"

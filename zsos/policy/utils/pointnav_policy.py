@@ -7,15 +7,32 @@ from gym.spaces import Dict as SpaceDict
 from gym.spaces import Discrete
 from torch import Tensor
 
-try:
-    from habitat_baselines.common.tensor_dict import TensorDict
-    from habitat_baselines.rl.ddppo.policy import PointNavResNetPolicy
-    from habitat_baselines.rl.ppo.policy import PolicyActionData
+habitat_version = ""
 
-    class PointNavResNetTensorOutputPolicy(PointNavResNetPolicy):
-        def act(self, *args, **kwargs) -> Tuple[Tensor, Tensor]:
-            policy_actions: "PolicyActionData" = super().act(*args, **kwargs)
-            return policy_actions.actions, policy_actions.rnn_hidden_states
+try:
+    import habitat
+    from habitat_baselines.rl.ddppo.policy import PointNavResNetPolicy
+
+    habitat_version = habitat.__version__
+
+    if habitat_version == "0.1.5":
+        print("Using habitat 0.1.5; assuming SemExp code is being used")
+
+        class PointNavResNetTensorOutputPolicy(PointNavResNetPolicy):
+            def act(self, *args, **kwargs) -> Tuple[Tensor, Tensor]:
+                value, action, action_log_probs, rnn_hidden_states = super().act(
+                    *args, **kwargs
+                )
+                return action, rnn_hidden_states
+
+    else:
+        from habitat_baselines.common.tensor_dict import TensorDict
+        from habitat_baselines.rl.ppo.policy import PolicyActionData
+
+        class PointNavResNetTensorOutputPolicy(PointNavResNetPolicy):
+            def act(self, *args, **kwargs) -> Tuple[Tensor, Tensor]:
+                policy_actions: "PolicyActionData" = super().act(*args, **kwargs)
+                return policy_actions.actions, policy_actions.rnn_hidden_states
 
     HABITAT_BASELINES_AVAILABLE = True
 except ModuleNotFoundError:
@@ -121,8 +138,6 @@ def load_pointnav_policy(file_path: str) -> PointNavResNetTensorOutputPolicy:
     Returns:
         PointNavResNetTensorOutputPolicy: The policy.
     """
-    ckpt_dict = torch.load(file_path, map_location="cpu")
-
     if HABITAT_BASELINES_AVAILABLE:
         obs_space = SpaceDict(
             {
@@ -138,13 +153,40 @@ def load_pointnav_policy(file_path: str) -> PointNavResNetTensorOutputPolicy:
             }
         )
         action_space = Discrete(4)
-        pointnav_policy = PointNavResNetTensorOutputPolicy.from_config(
-            ckpt_dict["config"], obs_space, action_space
-        )
-        pointnav_policy.load_state_dict(ckpt_dict["state_dict"])
+        if habitat_version == "0.1.5":
+            pointnav_policy = PointNavResNetTensorOutputPolicy(
+                obs_space,
+                action_space,
+                hidden_size=512,
+                num_recurrent_layers=2,
+                rnn_type="LSTM",
+                resnet_baseplanes=32,
+                backbone="resnet18",
+                normalize_visual_inputs=False,
+                obs_transform=None,
+            )
+            # Need to overwrite the visual encoder because it uses an older version of
+            # ResNet that calculates the compression size differently
+            from zsos.policy.utils.non_habitat_policy.nh_pointnav_policy import (
+                PointNavResNetNet,
+            )
+
+            # print(pointnav_policy)
+            pointnav_policy.net = PointNavResNetNet(
+                discrete_actions=True, no_fwd_dict=True
+            )
+            state_dict = torch.load(file_path + ".state_dict", map_location="cpu")
+        else:
+            ckpt_dict = torch.load(file_path, map_location="cpu")
+            pointnav_policy = PointNavResNetTensorOutputPolicy.from_config(
+                ckpt_dict["config"], obs_space, action_space
+            )
+            state_dict = ckpt_dict["state_dict"]
+        pointnav_policy.load_state_dict(state_dict)
         return pointnav_policy
 
     else:
+        ckpt_dict = torch.load(file_path, map_location="cpu")
         pointnav_policy = PointNavResNetTensorOutputPolicy()
         current_state_dict = pointnav_policy.state_dict()
         pointnav_policy.load_state_dict(

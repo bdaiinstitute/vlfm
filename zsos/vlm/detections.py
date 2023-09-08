@@ -3,7 +3,14 @@ from typing import List, Optional, Tuple
 import cv2
 import numpy as np
 import torch
-from torchvision.ops import box_convert
+
+try:
+    from torchvision.ops import box_convert
+except ImportError:
+    print("Could not import box_convert. This is OK if you are only using the client.")
+
+    def box_convert(boxes, in_fmt, out_fmt):
+        raise NotImplementedError
 
 
 class ObjectDetections:
@@ -21,7 +28,10 @@ class ObjectDetections:
         fmt: str = "cxcywh",
     ):
         self.image_source = image_source
-        self.boxes = box_convert(boxes=boxes, in_fmt=fmt, out_fmt="xyxy")
+        if fmt != "xyxy":
+            self.boxes = box_convert(boxes=boxes, in_fmt=fmt, out_fmt="xyxy")
+        else:
+            self.boxes = boxes
         self.logits = logits
         self.phrases = phrases
         self._annotated_frame: Optional[np.ndarray] = None

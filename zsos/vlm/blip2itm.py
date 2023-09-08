@@ -1,9 +1,13 @@
 import numpy as np
 import torch
-from lavis.models import load_model_and_preprocess
 from PIL import Image
 
 from .server_wrapper import ServerMixin, host_model, send_request, str_to_image
+
+try:
+    from lavis.models import load_model_and_preprocess
+except ModuleNotFoundError:
+    print("Could not import lavis. This is OK if you are only using the client.")
 
 
 class BLIP2ITM:
@@ -55,6 +59,7 @@ class BLIP2ITMClient:
         self.url = f"http://localhost:{port}/blip2itm"
 
     def cosine(self, image: np.ndarray, txt: str) -> float:
+        print(f"BLIP2ITMClient.cosine: {image.shape}, {txt}")
         response = send_request(self.url, image=image, txt=txt)
         return float(response["response"])
 

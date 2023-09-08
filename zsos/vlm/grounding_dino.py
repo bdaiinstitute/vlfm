@@ -4,10 +4,16 @@ import numpy as np
 import torch
 import torchvision.transforms.functional as F
 
-from groundingdino.util.inference import load_model, predict
 from zsos.vlm.detections import ObjectDetections
 
 from .server_wrapper import ServerMixin, host_model, send_request, str_to_image
+
+try:
+    from groundingdino.util.inference import load_model, predict
+except ModuleNotFoundError:
+    print(
+        "Could not import groundingdino. This is OK if you are only using the client."
+    )
 
 GROUNDING_DINO_CONFIG = os.environ["GROUNDING_DINO_CONFIG"]
 GROUNDING_DINO_WEIGHTS = os.environ["GROUNDING_DINO_WEIGHTS"]
