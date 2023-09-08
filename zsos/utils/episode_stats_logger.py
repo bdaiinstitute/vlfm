@@ -1,4 +1,3 @@
-import json
 import os
 from typing import Any, Dict
 
@@ -8,6 +7,7 @@ import numpy as np
 from frontier_exploration.utils.general_utils import xyz_to_habitat
 from zsos.utils.geometry_utils import transform_points
 from zsos.utils.habitat_visualizer import sim_xy_to_grid_xy
+from zsos.utils.log_saver import log_episode
 
 
 def log_episode_stats(episode_id: int, scene_id: str, infos: Dict) -> str:
@@ -26,29 +26,15 @@ def log_episode_stats(episode_id: int, scene_id: str, infos: Dict) -> str:
         print(f"Episode {episode_id} in scene {scene} failed due to '{failure_cause}'.")
 
     if "ZSOS_LOG_DIR" in os.environ:
-        log_dir = os.environ["ZSOS_LOG_DIR"]
-        try:
-            os.makedirs(log_dir, exist_ok=True)
-        except Exception:
-            pass
-        base = f"{episode_id}_{scene}.json"
-        filename = os.path.join(log_dir, base)
-
         infos_no_map = infos.copy()
         infos_no_map.pop("top_down_map")
 
         data = {
-            "episode_id": episode_id,
-            "scene_id": scene_id,
             "failure_cause": failure_cause,
             **remove_numpy_arrays(infos_no_map),
         }
 
-        # Skip if the filename already exists AND it isn't empty
-        if not (os.path.exists(filename) and os.path.getsize(filename) > 0):
-            print(f"Logging episode {int(episode_id):04d} to {filename}")
-            with open(filename, "w") as f:
-                json.dump(data, f, indent=4)
+        log_episode(episode_id, scene, data)
 
     return failure_cause
 

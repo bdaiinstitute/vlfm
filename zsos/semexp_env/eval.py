@@ -10,6 +10,7 @@ from moviepy.editor import ImageSequenceClip
 
 from zsos.semexp_env.semexp_policy import SemExpITMPolicyV3
 from zsos.utils.img_utils import reorient_rescale_map, resize_images
+from zsos.utils.log_saver import is_evaluated, log_episode
 
 os.environ["OMP_NUM_THREADS"] = "1"
 
@@ -57,29 +58,46 @@ def main():
     torch.set_num_threads(1)
     envs = make_vec_envs(args)
     obs, infos = envs.reset()
-
+    ep_id, scene_id, target_object = None, None, None
     for ep_num in range(num_episodes):
         vis_imgs = []
         for step in range(args.max_episode_length):
-            obs_dict = merge_obs_infos(obs, infos)
             if step == 0:
                 masks = torch.zeros(1, 1, device=obs.device)
+                ep_id, scene_id = infos[0]["episode_id"], infos[0]["scene_id"]
+                target_object = infos[0]["goal_name"]
+                print("Episode:", ep_id, "Scene:", scene_id)
             else:
                 masks = torch.ones(1, 1, device=obs.device)
-            action, policy_infos = policy.act(obs_dict, masks)
 
-            if "VIDEO_DIR" in os.environ:
-                vis_imgs.append(create_frame(policy_infos))
+            if "ZSOS_LOG_DIR" in os.environ and is_evaluated(ep_id, scene_id):
+                print(f"Episode {ep_id} in scene {scene_id} already evaluated")
+                # Call stop action to move on to the next episode
+                obs, rew, done, infos = envs.step(torch.tensor([0], dtype=torch.long))
+            else:
+                obs_dict = merge_obs_infos(obs, infos)
+                action, policy_infos = policy.act(obs_dict, masks)
 
-            action = action.squeeze(0)
+                if "VIDEO_DIR" in os.environ:
+                    vis_imgs.append(create_frame(policy_infos))
 
-            obs, rew, done, infos = envs.step(action)
+                action = action.squeeze(0)
+
+                obs, rew, done, infos = envs.step(action)
 
             if done:
                 print("Success:", infos[0]["success"])
                 print("SPL:", infos[0]["spl"])
+                data = {
+                    "success": infos[0]["success"],
+                    "spl": infos[0]["spl"],
+                    "distance_to_goal": infos[0]["distance_to_goal"],
+                    "target_object": target_object,
+                }
                 if "VIDEO_DIR" in os.environ:
-                    generate_video(vis_imgs, infos[0])
+                    generate_video(vis_imgs, ep_id, scene_id, data)
+                if "ZSOS_LOG_DIR" in os.environ and not is_evaluated(ep_id, scene_id):
+                    log_episode(ep_id, scene_id, data)
                 break
 
     print("Test successfully completed")
@@ -136,7 +154,9 @@ def create_frame(policy_infos: Dict[str, Any]) -> np.ndarray:
     return vis_img
 
 
-def generate_video(frames: List[np.ndarray], infos: Dict[str, Any]) -> None:
+def generate_video(
+    frames: List[np.ndarray], ep_id: str, scene_id: str, infos: Dict[str, Any]
+) -> None:
     """
     Saves the given list of rgb frames as a video at 10 FPS. Uses the infos to get the
     files name, which should contain the following:
@@ -151,16 +171,16 @@ def generate_video(frames: List[np.ndarray], infos: Dict[str, Any]) -> None:
     video_dir = os.environ.get("VIDEO_DIR", "video_dir")
     if not os.path.exists(video_dir):
         os.makedirs(video_dir)
-    episode_id = int(infos["episode_id"])
-    scene_id = infos["scene_id"]
+    episode_id = int(ep_id)
     success = int(infos["success"])
     spl = infos["spl"]
     dtg = infos["distance_to_goal"]
-    goal_name = infos["goal_name"]
+    goal_name = infos["target_object"]
     filename = (
         f"epid={episode_id:03d}-scid={scene_id}-succ={success}-spl={spl:.2f}"
-        f"-dtg={dtg:.2f}-goal={goal_name}.mp4"
+        f"-dtg={dtg:.2f}-target={goal_name}.mp4"
     )
+
     filename = os.path.join(video_dir, filename)
     # Create a video clip from the frames
     clip = ImageSequenceClip(frames, fps=10)
