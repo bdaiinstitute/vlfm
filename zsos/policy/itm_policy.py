@@ -90,6 +90,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         )
         robot_xy = self._observations_cache["robot_xy"]
         best_frontier_idx = None
+        top_two_values = tuple(sorted_values[:2])
 
         os.environ["DEBUG_INFO"] = ""
         # If there is a last point pursued, then we consider sticking to pursuing it
@@ -118,21 +119,22 @@ class BaseITMPolicy(BaseObjectNavPolicy):
                 if curr_value + 0.01 > self._last_value:
                     # The last point pursued is still in the list of frontiers and its
                     # value is not much worse than self._last_value
+                    print("Sticking to last point.")
+                    os.environ["DEBUG_INFO"] += "Sticking to last point. "
                     best_frontier_idx = curr_index
 
         # If there is no last point pursued, then just take the best point, given that
         # it is not cyclic.
         if best_frontier_idx is None:
             for idx, frontier in enumerate(sorted_pts):
-                cyclic = self._acyclic_enforcer.check_cyclic(robot_xy, frontier)
+                cyclic = self._acyclic_enforcer.check_cyclic(
+                    robot_xy, frontier, top_two_values
+                )
                 if cyclic:
                     print("Suppressed cyclic frontier.")
                     continue
                 best_frontier_idx = idx
                 break
-        else:
-            print("Sticking to last point.")
-            os.environ["DEBUG_INFO"] += "Sticking to last point. "
 
         if best_frontier_idx is None:
             print("All frontiers are cyclic. Just choosing the closest one.")
@@ -144,7 +146,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
 
         best_frontier = sorted_pts[best_frontier_idx]
         best_value = sorted_values[best_frontier_idx]
-        self._acyclic_enforcer.add_state_action(robot_xy, best_frontier)
+        self._acyclic_enforcer.add_state_action(robot_xy, best_frontier, top_two_values)
         self._last_value = best_value
         self._last_frontier = best_frontier
         os.environ["DEBUG_INFO"] += f" Best value: {best_value*100:.2f}%"

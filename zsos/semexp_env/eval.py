@@ -11,6 +11,7 @@ from moviepy.editor import ImageSequenceClip
 from zsos.semexp_env.semexp_policy import SemExpITMPolicyV3
 from zsos.utils.img_utils import reorient_rescale_map, resize_images
 from zsos.utils.log_saver import is_evaluated, log_episode
+from zsos.utils.visualization import add_text_to_image
 
 os.environ["OMP_NUM_THREADS"] = "1"
 
@@ -79,7 +80,9 @@ def main():
                 action, policy_infos = policy.act(obs_dict, masks)
 
                 if "VIDEO_DIR" in os.environ:
-                    vis_imgs.append(create_frame(policy_infos))
+                    frame = create_frame(policy_infos)
+                    frame = add_text_to_image(frame, "Step: " + str(step), top=True)
+                    vis_imgs.append(frame)
 
                 action = action.squeeze(0)
 

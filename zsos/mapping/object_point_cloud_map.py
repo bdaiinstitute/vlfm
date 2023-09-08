@@ -40,9 +40,12 @@ class ObjectPointCloudMap:
         if len(local_cloud) == 0:
             return
 
-        # Mark all points of local_cloud whose distance from the camera is too far
-        # as being out of range
-        within_range = local_cloud[:, 0] <= max_depth * 0.95  # 5% margin
+        if too_offset(object_mask):
+            within_range = np.zeros_like(local_cloud[:, 0])
+        else:
+            # Mark all points of local_cloud whose distance from the camera is too far
+            # as being out of range
+            within_range = local_cloud[:, 0] <= max_depth * 0.95  # 5% margin
         global_cloud = transform_points(tf_camera_to_episodic, local_cloud)
         global_cloud = np.concatenate((global_cloud, within_range[:, None]), axis=1)
 
@@ -234,3 +237,25 @@ def get_random_subarray(points: np.ndarray, size: int) -> np.ndarray:
         return points
     indices = np.random.choice(len(points), size, replace=False)
     return points[indices]
+
+
+def too_offset(mask: np.ndarray) -> bool:
+    """
+    This will return true if the entire bounding rectangle of the mask is either on the
+    left or right third of the mask. This is used to determine if the object is too far
+    to the side of the image to be a reliable detection.
+
+    Args:
+        mask (numpy array): A 2D numpy array of 0s and 1s representing the mask of the
+            object.
+    Returns:
+        bool: True if the object is too offset, False otherwise.
+    """
+    # Find the bounding rectangle of the mask
+    x, y, w, h = cv2.boundingRect(mask)
+
+    # Calculate the thirds of the mask
+    third = mask.shape[1] // 3
+
+    # Check if the entire bounding rectangle is in the left or right third of the mask
+    return x + w <= third or x >= 2 * third

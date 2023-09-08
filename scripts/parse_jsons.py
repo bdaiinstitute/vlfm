@@ -59,7 +59,8 @@ def calculate_avg_performance(stats: List[Dict[str, Any]]) -> None:
         stats (List[Dict[str, Any]]): A list of stats for each episode.
     """
     success, spl, soft_spl = [
-        [episode[k] for episode in stats] for k in ["success", "spl", "soft_spl"]
+        [episode.get(k, -1) for episode in stats]
+        for k in ["success", "spl", "soft_spl"]
     ]
 
     # Create a table with headers
@@ -168,11 +169,11 @@ def main() -> None:
     episode_stats = read_json_files(args.directory)
     print(f"\nTotal episodes: {len(episode_stats)}\n")
 
-    failure_causes = [episode["failure_cause"] for episode in episode_stats]
-    calculate_frequencies(failure_causes)
-
     print()
     calculate_avg_performance(episode_stats)
+
+    failure_causes = [episode["failure_cause"] for episode in episode_stats]
+    calculate_frequencies(failure_causes)
 
     if args.compact:
         return

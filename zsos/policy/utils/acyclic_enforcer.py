@@ -4,28 +4,26 @@ import numpy as np
 
 
 class StateAction:
-    def __init__(self, position: np.ndarray, action: Any):
+    def __init__(self, position: np.ndarray, action: Any, other: Any = None):
         self.position = position
         self.action = action
-
-    def __eq__(self, other: "StateAction") -> bool:
-        dist1 = np.linalg.norm(self.position - other.position)
-        dist2 = np.linalg.norm(self.action - other.action)
-        return dist1 < 0.5 and dist2 < 0.5
+        self.other = other
 
     def __hash__(self) -> int:
-        string_repr = f"{self.position}_{self.action}"
+        string_repr = f"{self.position}_{self.action}_{self.other}"
         return hash(string_repr)
 
 
 class AcyclicEnforcer:
     history: Set[StateAction] = set()
 
-    def check_cyclic(self, position: np.ndarray, action: Any) -> bool:
-        state_action = StateAction(position, action)
+    def check_cyclic(
+        self, position: np.ndarray, action: Any, other: Any = None
+    ) -> bool:
+        state_action = StateAction(position, action, other)
         cyclic = state_action in self.history
         return cyclic
 
-    def add_state_action(self, position: np.ndarray, action: Any):
-        state_action = StateAction(position, action)
+    def add_state_action(self, position: np.ndarray, action: Any, other: Any = None):
+        state_action = StateAction(position, action, other)
         self.history.add(state_action)
