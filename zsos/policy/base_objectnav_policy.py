@@ -12,7 +12,7 @@ from zsos.mapping.object_point_cloud_map import ObjectPointCloudMap
 from zsos.mapping.obstacle_map import ObstacleMap
 from zsos.obs_transformers.utils import image_resize
 from zsos.policy.utils.pointnav_policy import WrappedPointNavResNetPolicy
-from zsos.utils.geometry_utils import rho_theta
+from zsos.utils.geometry_utils import get_fov, rho_theta
 from zsos.vlm.blip2 import BLIP2Client
 from zsos.vlm.coco_classes import COCO_CLASSES
 from zsos.vlm.grounding_dino import GroundingDINOClient, ObjectDetections
@@ -86,7 +86,6 @@ class BaseObjectNavPolicy(BasePolicy):
         self._did_reset = False
         self._last_goal = np.zeros(2)
         self._done_initializing = False
-        self._target_detected = False
         self._called_stop = False
         self._compute_frontiers = compute_frontiers
         if compute_frontiers:
@@ -105,7 +104,6 @@ class BaseObjectNavPolicy(BasePolicy):
         self._last_goal = np.zeros(2)
         self._num_steps = 0
         self._done_initializing = False
-        self._target_detected = False
         self._called_stop = False
         if self._compute_frontiers:
             self._obstacle_map.reset()
@@ -173,7 +171,6 @@ class BaseObjectNavPolicy(BasePolicy):
 
     def _get_target_object_location(self, position) -> Union[None, np.ndarray]:
         if self._object_map.has_object(self._target_object):
-            self._target_detected = True
             return self._object_map.get_best_object(self._target_object, position)
         else:
             return None
@@ -187,7 +184,7 @@ class BaseObjectNavPolicy(BasePolicy):
             "target_object": self._target_object,
             "gps": str(self._observations_cache["robot_xy"] * np.array([1, -1])),
             "yaw": np.rad2deg(self._observations_cache["robot_heading"]),
-            "target_detected": self._target_detected,
+            "target_detected": self._object_map.has_object(self._target_object),
             "target_point_cloud": target_point_cloud,
             "nav_goal": self._last_goal,
             "stop_called": self._called_stop,
@@ -365,7 +362,8 @@ class BaseObjectNavPolicy(BasePolicy):
                 fy,
             )
 
-        self._object_map.update_explored(tf_camera_to_episodic)
+        cone_fov = get_fov(fx, depth.shape[1])
+        self._object_map.update_explored(tf_camera_to_episodic, max_depth, cone_fov)
 
         return detections
 

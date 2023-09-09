@@ -98,24 +98,27 @@ def within_fov_cone(
     cone_angle: float,
     cone_fov: float,
     cone_range: float,
-    point: np.ndarray,
-) -> bool:
-    """Checks if a point is within a cone of a given origin, angle, fov, and range.
+    points: np.ndarray,
+) -> np.ndarray:
+    """Checks if points are within a cone of a given origin, angle, fov, and range.
 
     Args:
         cone_origin (np.ndarray): The origin of the cone.
         cone_angle (float): The angle of the cone in radians.
         cone_fov (float): The field of view of the cone in radians.
         cone_range (float): The range of the cone.
-        point (np.ndarray): The point to check.
+        points (np.ndarray): The points to check.
 
+    Returns:
+        np.ndarray: The subarray of points that are within the cone.
     """
-    direction = point - cone_origin
-    dist = np.linalg.norm(direction)
-    angle = np.arctan2(direction[1], direction[0])
-    angle_diff = wrap_heading(angle - cone_angle)
+    directions = points[:, :3] - cone_origin
+    dists = np.linalg.norm(directions, axis=1)
+    angles = np.arctan2(directions[:, 1], directions[:, 0])
+    angle_diffs = np.mod(angles - cone_angle + np.pi, 2 * np.pi) - np.pi
 
-    return dist <= cone_range and abs(angle_diff) <= cone_fov / 2
+    mask = np.logical_and(dists <= cone_range, np.abs(angle_diffs) <= cone_fov / 2)
+    return points[mask]
 
 
 def convert_to_global_frame(

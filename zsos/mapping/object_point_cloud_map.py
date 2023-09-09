@@ -4,7 +4,12 @@ import cv2
 import numpy as np
 import open3d as o3d
 
-from zsos.utils.geometry_utils import get_point_cloud, transform_points
+from zsos.utils.geometry_utils import (
+    extract_yaw,
+    get_point_cloud,
+    transform_points,
+    within_fov_cone,
+)
 
 
 class ObjectPointCloudMap:
@@ -20,7 +25,7 @@ class ObjectPointCloudMap:
         self.last_target_coord = None
 
     def has_object(self, target_class: str) -> bool:
-        return target_class in self.clouds
+        return target_class in self.clouds and len(self.clouds[target_class]) > 0
 
     def update_map(
         self,
@@ -40,12 +45,20 @@ class ObjectPointCloudMap:
         if len(local_cloud) == 0:
             return
 
+        # For second-class, bad detections that are too offset or out of range, we
+        # assign a random number to the last column of its point cloud that can later
+        # be used to identify which points came from the same detection.
         if too_offset(object_mask):
-            within_range = np.zeros_like(local_cloud[:, 0])
+            within_range = np.ones_like(local_cloud[:, 0]) * np.random.rand()
         else:
             # Mark all points of local_cloud whose distance from the camera is too far
             # as being out of range
             within_range = local_cloud[:, 0] <= max_depth * 0.95  # 5% margin
+            # All values of 1 in within_range will be considered within range, and all
+            # values of 0 will be considered out of range; these 0s need to be
+            # assigned with a random number so that they can be identified later.
+            within_range = within_range.astype(np.float32)
+            within_range[within_range == 0] = np.random.rand()
         global_cloud = transform_points(tf_camera_to_episodic, local_cloud)
         global_cloud = np.concatenate((global_cloud, within_range[:, None]), axis=1)
 
@@ -93,8 +106,41 @@ class ObjectPointCloudMap:
 
         return self.last_target_coord
 
-    def update_explored(self, *args, **kwargs):
-        pass
+    def update_explored(
+        self, tf_camera_to_episodic: np.ndarray, max_depth: float, cone_fov: float
+    ) -> None:
+        """
+        This method will remove all point clouds in self.clouds that were originally
+        detected to be out-of-range, but are now within range. This is just a heuristic
+        that suppresses ephemeral false positives that we now confirm are not actually
+        target objects.
+
+        Args:
+            tf_camera_to_episodic: The transform from the camera to the episode frame.
+            max_depth: The maximum distance from the camera that we consider to be
+                within range.
+            cone_fov: The field of view of the camera.
+        """
+        camera_coordinates = tf_camera_to_episodic[:3, 3]
+        camera_yaw = extract_yaw(tf_camera_to_episodic)
+
+        for obj in self.clouds:
+            within_range = within_fov_cone(
+                camera_coordinates,
+                camera_yaw,
+                cone_fov,
+                max_depth * 0.5,
+                self.clouds[obj],
+            )
+            range_ids = set(within_range[..., -1].tolist())
+            for range_id in range_ids:
+                if range_id == 1:
+                    # Detection was originally within range
+                    continue
+                # Remove all points from self.clouds[obj] that have the same range_id
+                self.clouds[obj] = self.clouds[obj][
+                    self.clouds[obj][..., -1] != range_id
+                ]
 
     def get_target_cloud(self, target_class: str) -> np.ndarray:
         target_cloud = self.clouds[target_class].copy()

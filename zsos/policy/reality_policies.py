@@ -93,7 +93,6 @@ class RealityMixin:
                 fx,
                 fy,
                 topdown_fov,
-                observations["robot_xy"],
             )
         self._obstacle_map.update_agent_traj(
             observations["robot_xy"], observations["robot_heading"]
