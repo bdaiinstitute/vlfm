@@ -35,7 +35,6 @@ def main():
         text_prompt="Seems like there is a target_object ahead.",
         pointnav_policy_path="data/pointnav_weights.pth",
         depth_image_shape=(224, 224),
-        det_conf_threshold=0.8,
         pointnav_stop_radius=0.9,
         use_max_confidence=False,
         object_map_erosion_size=5,

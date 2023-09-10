@@ -41,7 +41,6 @@ class BaseObjectNavPolicy(BasePolicy):
         self,
         pointnav_policy_path: str,
         depth_image_shape: Tuple[int, int],
-        det_conf_threshold: float,
         pointnav_stop_radius: float,
         object_map_erosion_size: float,
         visualize: bool = True,
@@ -75,7 +74,6 @@ class BaseObjectNavPolicy(BasePolicy):
             erosion_size=object_map_erosion_size
         )
         self._depth_image_shape = tuple(depth_image_shape)
-        self._det_conf_threshold = det_conf_threshold
         self._pointnav_stop_radius = pointnav_stop_radius
         self._visualize = visualize
         self._vqa_prompt = vqa_prompt
@@ -232,7 +230,7 @@ class BaseObjectNavPolicy(BasePolicy):
     def _get_object_detections(self, img: np.ndarray) -> ObjectDetections:
         if self._target_object in COCO_CLASSES:
             detections = self._coco_object_detector.predict(img)
-            self._det_conf_threshold = self._coco_threshold
+            det_conf_threshold = self._coco_threshold
         else:
             detections = self._object_detector.predict(img)
             detections.phrases = [
@@ -243,10 +241,10 @@ class BaseObjectNavPolicy(BasePolicy):
                 detections.phrases = [
                     p.replace("dining table", "table") for p in detections.phrases
                 ]
-            self._det_conf_threshold = self._non_coco_threshold
+            det_conf_threshold = self._non_coco_threshold
         if self._detect_target_only:
             detections.filter_by_class([self._target_object])
-        detections.filter_by_conf(self._det_conf_threshold)
+        detections.filter_by_conf(det_conf_threshold)
 
         return detections
 
@@ -395,7 +393,6 @@ class ZSOSConfig:
     text_prompt: str = "Seems like there is a target_object ahead."
     pointnav_policy_path: str = "data/pointnav_weights.pth"
     depth_image_shape: Tuple[int, int] = (224, 224)
-    det_conf_threshold: float = 0.8
     pointnav_stop_radius: float = 0.9
     use_max_confidence: bool = False
     object_map_erosion_size: int = 5

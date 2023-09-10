@@ -7,7 +7,6 @@ policy:
     name: "RealityITMPolicyV2"
     pointnav_policy_path: "data/pointnav_weights.pth"
     depth_image_shape: [212, 240]  # height, width
-    det_conf_threshold: 0.6
     pointnav_stop_radius: 1.2
     use_max_confidence: False
     object_map_erosion_size: 5
