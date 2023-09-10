@@ -21,7 +21,8 @@ from zsos.utils.img_utils import (
 
 DEBUG = False
 SAVE_VISUALIZATIONS = False
-RECORDING = False
+RECORDING = os.environ.get("RECORD_VALUE_MAP", "0") == "1"
+PLAYING = os.environ.get("PLAY_VALUE_MAP", "0") == "1"
 RECORDING_DIR = "value_map_recordings"
 JSON_PATH = osp.join(RECORDING_DIR, "data.json")
 KWARGS_JSON = osp.join(RECORDING_DIR, "kwargs.json")
@@ -120,8 +121,11 @@ class ValueMap(BaseMap):
             with open(JSON_PATH, "r") as f:
                 data = json.load(f)
             data[img_path] = {
-                "tf_camera_to_episodic": tf_camera_to_episodic.tolist(),
                 "values": values.tolist(),
+                "tf_camera_to_episodic": tf_camera_to_episodic.tolist(),
+                "min_depth": min_depth,
+                "max_depth": max_depth,
+                "fov": fov,
             }
             with open(JSON_PATH, "w") as f:
                 json.dump(data, f)
@@ -421,19 +425,22 @@ def replay_from_dir():
     with open(JSON_PATH, "r") as f:
         data = json.load(f)
 
-    v = ValueMap(
-        value_channels=kwargs["value_channels"],
-        size=kwargs["size"],
-        use_max_confidence=kwargs["use_max_confidence"],
-    )
+    v = ValueMap(**kwargs)
 
     sorted_keys = sorted(list(data.keys()))
 
     for img_path in sorted_keys:
         tf_camera_to_episodic = np.array(data[img_path]["tf_camera_to_episodic"])
-        value = np.array(data[img_path]["values"])
+        values = np.array(data[img_path]["values"])
         depth = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE).astype(np.float32) / 255.0
-        v.update_map(depth, tf_camera_to_episodic, value)
+        v.update_map(
+            values,
+            depth,
+            tf_camera_to_episodic,
+            float(data[img_path]["min_depth"]),
+            float(data[img_path]["max_depth"]),
+            float(data[img_path]["fov"]),
+        )
 
         img = v.visualize()
         cv2.imshow("img", img)
@@ -443,8 +450,9 @@ def replay_from_dir():
 
 
 if __name__ == "__main__":
-    # replay_from_dir()
-    # quit()
+    if PLAYING:
+        replay_from_dir()
+        quit()
 
     v = ValueMap(value_channels=1)
     depth = cv2.imread("depth.png", cv2.IMREAD_GRAYSCALE).astype(np.float32) / 255.0
