@@ -8,7 +8,7 @@ from arguments import get_args
 from envs import make_vec_envs
 from moviepy.editor import ImageSequenceClip
 
-from zsos.semexp_env.semexp_policy import SemExpITMPolicyV3
+from zsos.semexp_env.semexp_policy import SemExpITMPolicyV2, SemExpITMPolicyV3
 from zsos.utils.img_utils import reorient_rescale_map, resize_images
 from zsos.utils.log_saver import is_evaluated, log_episode
 from zsos.utils.visualization import add_text_to_image
@@ -31,7 +31,7 @@ def main():
     num_episodes = int(args.num_eval_episodes)
     args.device = torch.device("cuda:0" if args.cuda else "cpu")
 
-    policy = SemExpITMPolicyV3(
+    policy_kwargs = dict(
         text_prompt="Seems like there is a target_object ahead.",
         pointnav_policy_path="data/pointnav_weights.pth",
         depth_image_shape=(224, 224),
@@ -54,6 +54,19 @@ def main():
         image_width=640,
         visualize=True,
     )
+
+    exp_thresh = float(os.environ.get("EXPLORATION_THRESH", 0.0))
+    if exp_thresh > 0.0:
+        policy_cls = SemExpITMPolicyV3
+        policy_kwargs["exploration_thresh"] = exp_thresh
+        policy_kwargs["text_prompt"] = (
+            "Seems like there is a target_object ahead.|There is a lot of area to"
+            " explore ahead."
+        )
+    else:
+        policy_cls = SemExpITMPolicyV2
+
+    policy = policy_cls(**policy_kwargs)
 
     torch.set_num_threads(1)
     envs = make_vec_envs(args)
