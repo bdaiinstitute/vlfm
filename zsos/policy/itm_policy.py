@@ -190,7 +190,10 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         all_rgb = [i[0] for i in self._observations_cache["value_map_rgbd"]]
         cosines = [
             [
-                self._itm.cosine(rgb, p.replace("target_object", self._target_object))
+                self._itm.cosine(
+                    rgb,
+                    p.replace("target_object", self._target_object.replace("|", "/")),
+                )
                 for p in self._text_prompt.split(PROMPT_SEPARATOR)
             ]
             for rgb in all_rgb

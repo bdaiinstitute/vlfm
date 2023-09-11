@@ -245,7 +245,7 @@ class ValueMap(BaseMap):
         contour = np.concatenate((start, np.stack((y, x), axis=1), end), axis=0)
 
         # Draw the contour onto the cone mask, in filled-in black
-        visible_mask = cv2.drawContours(cone_mask, [contour], -1, 0, -1)
+        visible_mask = cv2.drawContours(cone_mask, [contour], -1, 0, -1)  # type: ignore
 
         if DEBUG:
             vis = cv2.cvtColor((cone_mask * 255).astype(np.uint8), cv2.COLOR_GRAY2RGB)
@@ -311,7 +311,7 @@ class ValueMap(BaseMap):
         """Generate a FOV cone without any obstacles considered"""
         size = int(max_depth * self.pixels_per_meter)
         cone_mask = np.zeros((size * 2 + 1, size * 2 + 1))
-        cone_mask = cv2.ellipse(
+        cone_mask = cv2.ellipse(  # type: ignore
             cone_mask,
             (size, size),  # center_pixel
             (size, size),  # axes lengths
@@ -358,7 +358,7 @@ class ValueMap(BaseMap):
 
         # Any values in the given map that are less confident than
         # self._decision_threshold AND less than the new_map in the existing map
-        # will be re-assigned with a new_map of 0
+        # will be silenced into 0s
         new_map_mask = np.logical_and(
             new_map < self._decision_threshold, new_map < self._map
         )

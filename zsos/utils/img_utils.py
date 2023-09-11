@@ -74,11 +74,12 @@ def monochannel_to_inferno_rgb(image: np.ndarray) -> np.ndarray:
         numpy.ndarray: The RGB image with Inferno colormap.
     """
     # Normalize the input image to the range [0, 1]
-    peak_to_peak = np.max(image) - np.min(image)
+    min_val, max_val = np.min(image), np.max(image)
+    peak_to_peak = max_val - min_val
     if peak_to_peak == 0:
         normalized_image = np.zeros_like(image)
     else:
-        normalized_image = (image - np.min(image)) / peak_to_peak
+        normalized_image = (image - min_val) / peak_to_peak
 
     # Apply the Inferno colormap
     inferno_colormap = cv2.applyColorMap(

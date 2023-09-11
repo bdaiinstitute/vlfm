@@ -26,7 +26,7 @@ from .itm_policy import ITMPolicy, ITMPolicyV2, ITMPolicyV3
 HM3D_ID_TO_NAME = ["chair", "bed", "potted plant", "toilet", "tv", "couch"]
 MP3D_ID_TO_NAME = [
     "chair",
-    "table",
+    "table|dining table|coffee table|side table|desk",  # "table",
     "framed photograph",  # "picture",
     "cabinet",
     "pillow",  # "cushion",
@@ -130,6 +130,9 @@ class HabitatMixin:
             obs_dict[ObjectGoalSensor.cls_uuid]: str = HM3D_ID_TO_NAME[object_id]
         elif self._dataset_type == "mp3d":
             obs_dict[ObjectGoalSensor.cls_uuid]: str = MP3D_ID_TO_NAME[object_id]
+            self._non_coco_caption = (
+                " . ".join(MP3D_ID_TO_NAME).replace("|", " . ") + " ."
+            )
         else:
             raise ValueError(f"Dataset type {self._dataset_type} not recognized")
         parent_cls: BaseObjectNavPolicy = super()  # type: ignore

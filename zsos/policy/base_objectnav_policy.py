@@ -32,10 +32,10 @@ except Exception:
 class BaseObjectNavPolicy(BasePolicy):
     _target_object: str = ""
     _policy_info: Dict[str, Any] = {}
-    _detect_target_only: bool = True
     _object_masks: np.ndarray = None  # set by ._update_object_map()
     _stop_action: Tensor = None  # MUST BE SET BY SUBCLASS
     _observations_cache: Dict[str, Any] = {}
+    _non_coco_caption = ""
 
     def __init__(
         self,
@@ -179,7 +179,7 @@ class BaseObjectNavPolicy(BasePolicy):
         else:
             target_point_cloud = np.array([])
         policy_info = {
-            "target_object": self._target_object,
+            "target_object": self._target_object.split("|")[0],
             "gps": str(self._observations_cache["robot_xy"] * np.array([1, -1])),
             "yaw": np.rad2deg(self._observations_cache["robot_heading"]),
             "target_detected": self._object_map.has_object(self._target_object),
@@ -228,23 +228,28 @@ class BaseObjectNavPolicy(BasePolicy):
         return policy_info
 
     def _get_object_detections(self, img: np.ndarray) -> ObjectDetections:
-        if self._target_object in COCO_CLASSES:
-            detections = self._coco_object_detector.predict(img)
-            det_conf_threshold = self._coco_threshold
-        else:
-            detections = self._object_detector.predict(img)
-            detections.phrases = [
-                p.replace("cupboard", "cabinet") for p in detections.phrases
-            ]
-            if self._target_object == "table" and detections.num_detections == 0:
-                detections = self._coco_object_detector.predict(img)
-                detections.phrases = [
-                    p.replace("dining table", "table") for p in detections.phrases
-                ]
-            det_conf_threshold = self._non_coco_threshold
-        if self._detect_target_only:
-            detections.filter_by_class([self._target_object])
+        target_classes = self._target_object.split("|")
+        has_coco = any(c in COCO_CLASSES for c in target_classes)
+        has_non_coco = any(c not in COCO_CLASSES for c in target_classes)
+
+        detections = (
+            self._coco_object_detector.predict(img)
+            if has_coco
+            else self._object_detector.predict(img, caption=self._non_coco_caption)
+        )
+        detections.filter_by_class(target_classes)
+        det_conf_threshold = (
+            self._coco_threshold if has_coco else self._non_coco_threshold
+        )
         detections.filter_by_conf(det_conf_threshold)
+
+        if has_coco and has_non_coco and detections.num_detections == 0:
+            # Retry with non-coco object detector
+            detections = self._object_detector.predict(
+                img, caption=self._non_coco_caption
+            )
+            detections.filter_by_class(target_classes)
+            detections.filter_by_conf(self._non_coco_threshold)
 
         return detections
 
@@ -350,7 +355,7 @@ class BaseObjectNavPolicy(BasePolicy):
 
             self._object_masks[object_mask > 0] = 1
             self._object_map.update_map(
-                detections.phrases[idx],
+                self._target_object,
                 depth,
                 object_mask,
                 tf_camera_to_episodic,
