@@ -172,8 +172,9 @@ def main() -> None:
     print()
     calculate_avg_performance(episode_stats)
 
-    failure_causes = [episode["failure_cause"] for episode in episode_stats]
-    calculate_frequencies(failure_causes)
+    if "failure_cause" in episode_stats[0]:
+        failure_causes = [episode["failure_cause"] for episode in episode_stats]
+        calculate_frequencies(failure_causes)
 
     if args.compact:
         return

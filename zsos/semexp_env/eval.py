@@ -1,4 +1,5 @@
 import os
+import time
 from typing import Any, Dict, List, Tuple
 
 import cv2
@@ -19,6 +20,8 @@ args = get_args()
 args.agent = "zsos"  # Doesn't really matter as long as it's not "sem_exp"
 args.split = "val"
 args.task_config = "objnav_gibson_zsos.yaml"
+# Ensure a random seed
+args.seed = int(time.time() * 1000) % 2**32
 
 np.random.seed(args.seed)
 torch.manual_seed(args.seed)
