@@ -43,6 +43,7 @@ class ValueMap(BaseMap):
         value_channels: int,
         size: int = 1000,
         use_max_confidence: bool = True,
+        fusion_type: str = "default",
     ):
         """
         Args:
@@ -55,6 +56,7 @@ class ValueMap(BaseMap):
         self._value_map = np.zeros((size, size, value_channels), np.float32)
         self._value_channels = value_channels
         self._use_max_confidence = use_max_confidence
+        self._fusion_type = fusion_type
 
         if RECORDING:
             if osp.isdir(RECORDING_DIR):
@@ -355,6 +357,26 @@ class ValueMap(BaseMap):
             "Incorrect number of values given "
             f"({len(values)}). Expected {self._value_channels}."
         )
+
+        if self._fusion_type == "replace":
+            # Ablation. The values from the current observation will overwrite any
+            # existing values
+            print("VALUE MAP ABLATION:", self._fusion_type)
+            new_value_map = np.zeros_like(self._value_map)
+            new_value_map[new_map > 0] = values
+            self._map[new_map > 0] = new_map[new_map > 0]
+            self._value_map[new_map > 0] = new_value_map[new_map > 0]
+            return
+        elif self._fusion_type == "equal_weighting":
+            # Ablation. Updated values will always be the mean of the current and
+            # new values, meaning that confidence scores are forced to be the same.
+            print("VALUE MAP ABLATION:", self._fusion_type)
+            self._map[self._map > 0] = 1
+            new_map[new_map > 0] = 1
+        else:
+            assert (
+                self._fusion_type == "default"
+            ), f"Unknown fusion type {self._fusion_type}"
 
         # Any values in the given map that are less confident than
         # self._decision_threshold AND less than the new_map in the existing map

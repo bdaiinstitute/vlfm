@@ -113,7 +113,10 @@ def main():
                     "target_object": target_object,
                 }
                 if "VIDEO_DIR" in os.environ:
-                    generate_video(vis_imgs, ep_id, scene_id, data)
+                    try:
+                        generate_video(vis_imgs, ep_id, scene_id, data)
+                    except Exception:
+                        print("Error generating video")
                 if "ZSOS_LOG_DIR" in os.environ and not is_evaluated(ep_id, scene_id):
                     log_episode(ep_id, scene_id, data)
                 break
