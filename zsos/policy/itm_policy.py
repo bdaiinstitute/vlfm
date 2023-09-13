@@ -39,6 +39,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         self,
         text_prompt: str,
         use_max_confidence: bool = True,
+        sync_explored_areas: bool = False,
         *args,
         **kwargs,
     ):
@@ -48,6 +49,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         self._value_map: ValueMap = ValueMap(
             value_channels=len(text_prompt.split(PROMPT_SEPARATOR)),
             use_max_confidence=use_max_confidence,
+            obstacle_map=self._obstacle_map if sync_explored_areas else None,
         )
 
     def _reset(self):

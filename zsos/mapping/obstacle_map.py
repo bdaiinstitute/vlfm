@@ -30,9 +30,9 @@ class ObstacleMap(BaseMap):
         size: int = 1000,
     ):
         super().__init__(size)
+        self.explored_area = np.zeros((size, size), dtype=bool)
         self._map = np.zeros((size, size), dtype=bool)
         self._navigable_map = np.zeros((size, size), dtype=bool)
-        self._explored_area = np.zeros((size, size), dtype=bool)
         self._min_height = min_height
         self._max_height = max_height
         self._area_thresh_in_pixels = area_thresh * (self.pixels_per_meter**2)
@@ -45,7 +45,7 @@ class ObstacleMap(BaseMap):
     def reset(self):
         super().reset()
         self._navigable_map.fill(0)
-        self._explored_area.fill(0)
+        self.explored_area.fill(0)
         self._frontiers_px = np.array([])
         self.frontiers = np.array([])
 
@@ -118,10 +118,10 @@ class ObstacleMap(BaseMap):
         new_explored_area = cv2.dilate(
             new_explored_area, np.ones((3, 3), np.uint8), iterations=1
         )
-        self._explored_area[new_explored_area > 0] = 1
-        self._explored_area[self._navigable_map == 0] = 0
+        self.explored_area[new_explored_area > 0] = 1
+        self.explored_area[self._navigable_map == 0] = 0
         contours, _ = cv2.findContours(
-            self._explored_area.astype(np.uint8),
+            self.explored_area.astype(np.uint8),
             cv2.RETR_EXTERNAL,
             cv2.CHAIN_APPROX_SIMPLE,
         )
@@ -138,9 +138,9 @@ class ObstacleMap(BaseMap):
                 elif abs(dist) < min_dist:
                     min_dist = abs(dist)
                     best_idx = idx
-            new_area = np.zeros_like(self._explored_area, dtype=np.uint8)
+            new_area = np.zeros_like(self.explored_area, dtype=np.uint8)
             cv2.drawContours(new_area, contours, best_idx, 1, -1)  # type: ignore
-            self._explored_area = new_area.astype(bool)
+            self.explored_area = new_area.astype(bool)
 
         # Compute frontier locations
         self._frontiers_px = self._get_frontiers()
@@ -154,7 +154,7 @@ class ObstacleMap(BaseMap):
         # Dilate the explored area slightly to prevent small gaps between the explored
         # area and the unnavigable area from being detected as frontiers.
         explored_area = cv2.dilate(
-            self._explored_area.astype(np.uint8),
+            self.explored_area.astype(np.uint8),
             np.ones((5, 5), np.uint8),
             iterations=1,
         )
@@ -169,7 +169,7 @@ class ObstacleMap(BaseMap):
         """Visualizes the map."""
         vis_img = np.ones((*self._map.shape[:2], 3), dtype=np.uint8) * 255
         # Draw explored area in light green
-        vis_img[self._explored_area == 1] = (200, 255, 200)
+        vis_img[self.explored_area == 1] = (200, 255, 200)
         # Draw unnavigable areas in gray
         vis_img[self._navigable_map == 0] = (100, 100, 100)
         # Draw obstacles in black

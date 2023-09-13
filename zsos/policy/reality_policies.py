@@ -28,7 +28,7 @@ class RealityMixin:
     )
 
     def __init__(self: BaseObjectNavPolicy, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
+        super().__init__(sync_explored_areas=True, *args, **kwargs)
         self._depth_model = torch.hub.load(
             "isl-org/ZoeDepth", "ZoeD_NK", config_mode="eval", pretrained=True
         ).to("cuda" if torch.cuda.is_available() else "cpu")

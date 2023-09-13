@@ -44,6 +44,7 @@ class ValueMap(BaseMap):
         size: int = 1000,
         use_max_confidence: bool = True,
         fusion_type: str = "default",
+        obstacle_map: Optional["ObstacleMap"] = None,  # noqa: F821
     ):
         """
         Args:
@@ -51,12 +52,20 @@ class ValueMap(BaseMap):
             size: The size of the value map in pixels.
             use_max_confidence: Whether to use the maximum confidence value in the value
                 map or a weighted average confidence value.
+            fusion_type: The type of fusion to use when combining the value map with the
+                obstacle map.
+            obstacle_map: An optional obstacle map to use for overriding the occluded
+                areas of the FOV
         """
         super().__init__(size)
         self._value_map = np.zeros((size, size, value_channels), np.float32)
         self._value_channels = value_channels
         self._use_max_confidence = use_max_confidence
         self._fusion_type = fusion_type
+        self._obstacle_map = obstacle_map
+        if self._obstacle_map is not None:
+            assert self._obstacle_map.pixels_per_meter == self.pixels_per_meter
+            assert self._obstacle_map.size == self.size
 
         if RECORDING:
             if osp.isdir(RECORDING_DIR):
@@ -357,6 +366,14 @@ class ValueMap(BaseMap):
             "Incorrect number of values given "
             f"({len(values)}). Expected {self._value_channels}."
         )
+
+        if self._obstacle_map is not None:
+            # If an obstacle map is provided, we will use it to mask out the
+            # new map
+            explored_area = self._obstacle_map.explored_area
+            new_map[explored_area == 0] = 0
+            self._map[explored_area == 0] = 0
+            self._value_map[explored_area == 0] *= 0
 
         if self._fusion_type == "replace":
             # Ablation. The values from the current observation will overwrite any
