@@ -21,6 +21,11 @@ class RealityMixin:
     """
 
     _stop_action: Tensor = torch.tensor([[0.0, 0.0]], dtype=torch.float32)
+    _load_yolo: bool = False
+    _non_coco_caption: str = (
+        "chair . table . tv . laptop . microwave . toaster . sink . refrigerator . book"
+        " . clock . vase . scissors . teddy bear . hair drier . toothbrush ."
+    )
 
     def __init__(self: BaseObjectNavPolicy, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)

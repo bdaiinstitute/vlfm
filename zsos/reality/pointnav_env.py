@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
-from zsos.reality.robots.base_robot import BaseRobot
+from zsos.reality.robots.bdsw_robot import BDSWRobot
 from zsos.reality.robots.camera_ids import SpotCamIds
 from zsos.utils.geometry_utils import convert_to_global_frame, rho_theta
 
@@ -18,8 +18,7 @@ class PointNavEnv:
 
     def __init__(
         self,
-        robot: BaseRobot,
-        # robot: BDSWRobot,
+        robot: BDSWRobot,
         max_body_cam_depth: float = 3.5,  # max depth (in meters) for body cameras
         max_lin_dist: float = 0.25,
         max_ang_dist: float = np.deg2rad(30),
@@ -33,6 +32,7 @@ class PointNavEnv:
         self._max_lin_dist = max_lin_dist
         self._max_ang_dist = max_ang_dist
         self._time_step = time_step
+        self._cmd_id = None
 
     def reset(self, goal: Any, relative=True, *args, **kwargs) -> Dict[str, np.ndarray]:
         assert isinstance(goal, np.ndarray)
@@ -46,15 +46,42 @@ class PointNavEnv:
         return self._get_obs()
 
     def step(self, action: Dict[str, np.ndarray]) -> Tuple[Dict, float, bool, Dict]:
-        ang_vel, lin_vel = self._compute_velocities(action)
-        # self.robot.command_base_velocity(ang_vel, lin_vel)
-        time.sleep(self._time_step)
-        self.robot.command_base_velocity(0.0, 0.0)
-        done = ang_vel == 0.0 and lin_vel == 0.0
+        if self._cmd_id is not None:
+            cmd_status = 0
+            while cmd_status != 1:
+                feedback_resp = self.robot.spot.get_cmd_feedback(self._cmd_id)
+                cmd_status = (
+                    feedback_resp.feedback.synchronized_feedback
+                ).mobility_command_feedback.se2_trajectory_feedback.status
+                if cmd_status != 1:
+                    time.sleep(0.1)
+
+        ang_dist, lin_dist = self._compute_displacements(action)
+        self._cmd_id = self.robot.spot.set_base_position(
+            x_pos=lin_dist,
+            y_pos=0,
+            yaw=ang_dist,
+            end_time=100,
+            relative=True,
+            max_fwd_vel=1.0,
+            max_hor_vel=0.5,
+            max_ang_vel=np.deg2rad(60),
+            disable_obstacle_avoidance=False,
+            blocking=False,
+        )
+        done = ang_dist == 0.0 and lin_dist == 0.0
         return self._get_obs(), 0.0, done, {}  # not using info dict yet
 
     def _compute_velocities(self, action: Dict[str, np.ndarray]) -> Tuple[float, float]:
-        velocities = []
+        ang_dist, lin_dist = self._compute_displacements(action)
+        ang_vel = ang_dist / self._time_step
+        lin_vel = lin_dist / self._time_step
+        return ang_vel, lin_vel
+
+    def _compute_displacements(
+        self, action: Dict[str, np.ndarray]
+    ) -> Tuple[float, float]:
+        displacements = []
         for action_key, max_dist in (
             ["angular", self._max_ang_dist],
             ["linear", self._max_lin_dist],
@@ -62,9 +89,9 @@ class PointNavEnv:
             act_val = action.get(action_key, 0.0)  # default to 0.0 if key not present
             dist = np.clip(act_val, -1.0, 1.0)  # clip to [-1, 1]
             dist *= max_dist  # scale to max distance
-            velocities.append(dist / self._time_step)  # convert to velocity
-        ang_vel, lin_vel = velocities
-        return ang_vel, lin_vel
+            displacements.append(dist)  # convert to velocity
+        ang_dist, lin_dist = displacements
+        return ang_dist, lin_dist
 
     def _get_obs(self) -> Dict[str, np.ndarray]:
         return {

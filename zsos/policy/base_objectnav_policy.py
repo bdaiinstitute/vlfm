@@ -36,6 +36,7 @@ class BaseObjectNavPolicy(BasePolicy):
     _stop_action: Tensor = None  # MUST BE SET BY SUBCLASS
     _observations_cache: Dict[str, Any] = {}
     _non_coco_caption = ""
+    _load_yolo: bool = True
 
     def __init__(
         self,
@@ -50,7 +51,7 @@ class BaseObjectNavPolicy(BasePolicy):
         agent_radius: float = 0.18,
         obstacle_map_area_threshold: float = 1.5,
         hole_area_thresh: int = 100000,
-        use_vqa: bool = True,
+        use_vqa: bool = False,
         vqa_prompt: str = "Is this ",
         coco_threshold: float = 0.6,
         non_coco_threshold: float = 0.4,
@@ -229,7 +230,7 @@ class BaseObjectNavPolicy(BasePolicy):
 
     def _get_object_detections(self, img: np.ndarray) -> ObjectDetections:
         target_classes = self._target_object.split("|")
-        has_coco = any(c in COCO_CLASSES for c in target_classes)
+        has_coco = any(c in COCO_CLASSES for c in target_classes) and self._load_yolo
         has_non_coco = any(c not in COCO_CLASSES for c in target_classes)
 
         detections = (
@@ -406,7 +407,7 @@ class ZSOSConfig:
     min_obstacle_height: float = 0.61
     max_obstacle_height: float = 0.88
     hole_area_thresh: int = 100000
-    use_vqa: bool = True
+    use_vqa: bool = False
     vqa_prompt: str = "Is this "
     coco_threshold: float = 0.6
     non_coco_threshold: float = 0.4
