@@ -304,4 +304,13 @@ def too_offset(mask: np.ndarray) -> bool:
     third = mask.shape[1] // 3
 
     # Check if the entire bounding rectangle is in the left or right third of the mask
-    return x + w <= third or x >= 2 * third
+    if x + w <= third:
+        # Check if the leftmost point is at the edge of the image
+        # return x == 0
+        return x <= int(0.05 * mask.shape[1])
+    elif x >= 2 * third:
+        # Check if the rightmost point is at the edge of the image
+        # return x + w == mask.shape[1]
+        return x + w >= int(0.95 * mask.shape[1])
+    else:
+        return False

@@ -58,6 +58,8 @@ class ObstacleMap(BaseMap):
         fx: float,
         fy: float,
         topdown_fov: float,
+        explore: bool = True,
+        update_obstacles: bool = True,
     ):
         """
         Adds all obstacles from the current view to the map. Also updates the area
@@ -75,34 +77,40 @@ class ObstacleMap(BaseMap):
             fy (float): The focal length of the camera in the y direction.
             topdown_fov (float): The field of view of the depth camera projected onto
                 the topdown map.
+            explore (bool): Whether to update the explored area.
+            update_obstacles (bool): Whether to update the obstacle map.
         """
-        if self._hole_area_thresh == -1:
-            filled_depth = depth.copy()
-            filled_depth[depth == 0] = 1.0
-        else:
-            filled_depth = fill_small_holes(depth, self._hole_area_thresh)
-        scaled_depth = filled_depth * (max_depth - min_depth) + min_depth
-        mask = scaled_depth < max_depth
-        point_cloud_camera_frame = get_point_cloud(scaled_depth, mask, fx, fy)
-        point_cloud_episodic_frame = transform_points(
-            tf_camera_to_episodic, point_cloud_camera_frame
-        )
-        obstacle_cloud = filter_points_by_height(
-            point_cloud_episodic_frame, self._min_height, self._max_height
-        )
+        if update_obstacles:
+            if self._hole_area_thresh == -1:
+                filled_depth = depth.copy()
+                filled_depth[depth == 0] = 1.0
+            else:
+                filled_depth = fill_small_holes(depth, self._hole_area_thresh)
+            scaled_depth = filled_depth * (max_depth - min_depth) + min_depth
+            mask = scaled_depth < max_depth
+            point_cloud_camera_frame = get_point_cloud(scaled_depth, mask, fx, fy)
+            point_cloud_episodic_frame = transform_points(
+                tf_camera_to_episodic, point_cloud_camera_frame
+            )
+            obstacle_cloud = filter_points_by_height(
+                point_cloud_episodic_frame, self._min_height, self._max_height
+            )
 
-        # Populate topdown map with obstacle locations
-        xy_points = obstacle_cloud[:, :2]
-        pixel_points = self._xy_to_px(xy_points)
-        self._map[pixel_points[:, 1], pixel_points[:, 0]] = 1
+            # Populate topdown map with obstacle locations
+            xy_points = obstacle_cloud[:, :2]
+            pixel_points = self._xy_to_px(xy_points)
+            self._map[pixel_points[:, 1], pixel_points[:, 0]] = 1
 
-        # Update the navigable area, which is an inverse of the obstacle map after a
-        # dilation operation to accommodate the robot's radius.
-        self._navigable_map = 1 - cv2.dilate(
-            self._map.astype(np.uint8),
-            self._navigable_kernel,
-            iterations=1,
-        ).astype(bool)
+            # Update the navigable area, which is an inverse of the obstacle map after a
+            # dilation operation to accommodate the robot's radius.
+            self._navigable_map = 1 - cv2.dilate(
+                self._map.astype(np.uint8),
+                self._navigable_kernel,
+                iterations=1,
+            ).astype(bool)
+
+        if not explore:
+            return
 
         # Update the explored area
         agent_xy_location = tf_camera_to_episodic[:2, 3]

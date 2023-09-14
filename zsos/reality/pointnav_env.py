@@ -33,6 +33,7 @@ class PointNavEnv:
         self._max_ang_dist = max_ang_dist
         self._time_step = time_step
         self._cmd_id = None
+        self._num_steps = 0
 
     def reset(self, goal: Any, relative=True, *args, **kwargs) -> Dict[str, np.ndarray]:
         assert isinstance(goal, np.ndarray)
@@ -70,6 +71,7 @@ class PointNavEnv:
             blocking=False,
         )
         done = ang_dist == 0.0 and lin_dist == 0.0
+        self._num_steps += 1
         return self._get_obs(), 0.0, done, {}  # not using info dict yet
 
     def _compute_velocities(self, action: Dict[str, np.ndarray]) -> Tuple[float, float]:

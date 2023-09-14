@@ -14,24 +14,24 @@ from zsos.utils.img_utils import reorient_rescale_map, resize_images
 
 LEFT_CROP = 124
 RIGHT_CROP = 60
-NOMINAL_ARM_POSE = np.deg2rad([0, -170, 120, 0, 75, 0])
+NOMINAL_ARM_POSE = np.deg2rad([0, -170, 120, 0, 55, 0])
 
 VALUE_MAP_CAMS = [
-    SpotCamIds.BACK_FISHEYE,
-    SpotCamIds.BACK_DEPTH_IN_VISUAL_FRAME,
-    SpotCamIds.LEFT_FISHEYE,
-    SpotCamIds.LEFT_DEPTH_IN_VISUAL_FRAME,
-    SpotCamIds.RIGHT_FISHEYE,
-    SpotCamIds.RIGHT_DEPTH_IN_VISUAL_FRAME,
+    # SpotCamIds.BACK_FISHEYE,
+    # SpotCamIds.BACK_DEPTH_IN_VISUAL_FRAME,
+    # SpotCamIds.LEFT_FISHEYE,
+    # SpotCamIds.LEFT_DEPTH_IN_VISUAL_FRAME,
+    # SpotCamIds.RIGHT_FISHEYE,
+    # SpotCamIds.RIGHT_DEPTH_IN_VISUAL_FRAME,
     SpotCamIds.HAND_COLOR,
 ]
 
 POINT_CLOUD_CAMS = [
-    SpotCamIds.RIGHT_DEPTH_IN_VISUAL_FRAME,
     SpotCamIds.FRONTLEFT_DEPTH,
     SpotCamIds.FRONTRIGHT_DEPTH,
     SpotCamIds.BACK_DEPTH_IN_VISUAL_FRAME,
     SpotCamIds.LEFT_DEPTH_IN_VISUAL_FRAME,
+    SpotCamIds.RIGHT_DEPTH_IN_VISUAL_FRAME,
 ]
 
 ALL_CAMS = list(set(VALUE_MAP_CAMS + POINT_CLOUD_CAMS))
@@ -95,9 +95,17 @@ class ObjectNavEnv(PointNavEnv):
         cv2.imshow("Visualization", cv2.resize(vis_img, (0, 0), fx=0.5, fy=0.5))
         cv2.waitKey(1)
 
-        if "gripper_camera_pan" in action:
-            self._pan_gripper_camera(action["gripper_camera_pan"])
-        return super().step(action)
+        if action["arm_yaw"] == -1:
+            return super().step(action)
+
+        new_pose = np.array(NOMINAL_ARM_POSE)
+        new_pose[0] = action["arm_yaw"]
+        self.robot.set_arm_joints(new_pose, travel_time=0.5)
+        time.sleep(0.75)
+        done = False
+        self._num_steps += 1
+
+        return self._get_obs(), 0.0, done, {}  # not using info dict yet
 
     def _get_obs(self) -> Dict[str, np.ndarray]:
         robot_xy, robot_heading = self._get_gps(), self._get_compass()
@@ -174,7 +182,11 @@ class ObjectNavEnv(PointNavEnv):
         # Obstacle map output is a list of (depth, tf, min_depth, max_depth, fx, fy,
         # topdown_fov) for each of the cameras in POINT_CLOUD_CAMS
         obstacle_map_depths = []
-        for src in POINT_CLOUD_CAMS:
+        if self._num_steps <= 10:
+            srcs = POINT_CLOUD_CAMS.copy()
+        else:
+            srcs = POINT_CLOUD_CAMS[:2]
+        for src in srcs:
             depth = cam_data[src]["image"]
             fx, fy = cam_data[src]["fx"], cam_data[src]["fy"]
             tf = cam_data[src]["tf_camera_to_global"]
@@ -184,6 +196,15 @@ class ObjectNavEnv(PointNavEnv):
                 fov = get_fov(fx, depth.shape[1])
             src_data = (depth, tf, min_depth, self._max_body_cam_depth, fx, fy, fov)
             obstacle_map_depths.append(src_data)
+
+        tf = cam_data[SpotCamIds.HAND_COLOR]["tf_camera_to_global"]
+        fx, fy = (
+            cam_data[SpotCamIds.HAND_COLOR]["fx"],
+            cam_data[SpotCamIds.HAND_COLOR]["fy"],
+        )
+        fov = get_fov(fx, cam_data[src]["image"].shape[1])
+        src_data = (None, tf, min_depth, self._max_body_cam_depth, fx, fy, fov)
+        obstacle_map_depths.append(src_data)
 
         # Value map output is a list of (rgb, depth, tf_camera_to_episodic, min_depth,
         # max_depth, fov) for each of the cameras in VALUE_MAP_CAMS
@@ -231,8 +252,3 @@ class ObjectNavEnv(PointNavEnv):
         global_yaw = self.robot.xy_yaw[1]
         episodic_yaw = wrap_heading(global_yaw - self.episodic_start_yaw)
         return episodic_yaw
-
-    def _pan_gripper_camera(self, yaw):
-        new_pose = np.array(NOMINAL_ARM_POSE)
-        new_pose[0] = yaw[0]
-        self.robot.set_arm_joints(new_pose, travel_time=self.time_step * 0.9)

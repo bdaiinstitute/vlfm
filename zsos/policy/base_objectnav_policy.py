@@ -411,6 +411,7 @@ class ZSOSConfig:
     vqa_prompt: str = "Is this "
     coco_threshold: float = 0.6
     non_coco_threshold: float = 0.4
+    agent_radius: float = 0.18
 
     @classmethod
     @property

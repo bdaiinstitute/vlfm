@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Dict, Union
+from typing import Any, Dict, List, Union
 
 import numpy as np
 import torch
@@ -10,6 +10,8 @@ from torch import Tensor
 from zsos.mapping.obstacle_map import ObstacleMap
 from zsos.policy.base_objectnav_policy import BaseObjectNavPolicy, ZSOSConfig
 from zsos.policy.itm_policy import ITMPolicyV2
+
+INITIAL_ARM_YAWS = np.deg2rad([-90, -60, -30, 0, 30, 60, 90, 0]).tolist()
 
 
 class RealityMixin:
@@ -26,6 +28,7 @@ class RealityMixin:
         "chair . table . tv . laptop . microwave . toaster . sink . refrigerator . book"
         " . clock . vase . scissors . teddy bear . hair drier . toothbrush ."
     )
+    _initial_yaws: List = INITIAL_ARM_YAWS.copy()
 
     def __init__(self: BaseObjectNavPolicy, *args: Any, **kwargs: Any) -> None:
         super().__init__(sync_explored_areas=True, *args, **kwargs)
@@ -42,13 +45,17 @@ class RealityMixin:
         return cls(**kwargs)
 
     def act(
-        self: BaseObjectNavPolicy,
+        self: Union["RealityMixin", BaseObjectNavPolicy],
         observations: Dict[str, Any],
         rnn_hidden_states: Any,
         prev_actions: Any,
         masks: Tensor,
         deterministic=False,
     ) -> Dict[str, Any]:
+        if observations["objectgoal"] not in self._non_coco_caption:
+            self._non_coco_caption = (
+                observations["objectgoal"] + " . " + self._non_coco_caption
+            )
         parent_cls: BaseObjectNavPolicy = super()  # type: ignore
         action: Tensor = parent_cls.act(
             observations, rnn_hidden_states, prev_actions, masks, deterministic
@@ -58,11 +65,22 @@ class RealityMixin:
         # is the linear velocity and the second element is the angular velocity. We
         # convert this numpy array to a dictionary with keys "angular" and "linear" so
         # that it can be passed to the Spot robot.
-        action_dict = {
-            "angular": action[0][0].item(),
-            "linear": action[0][1].item(),
-            "info": self._policy_info,
-        }
+        if self._done_initializing:
+            action_dict = {
+                "angular": action[0][0].item(),
+                "linear": action[0][1].item(),
+                "arm_yaw": -1,
+                "info": self._policy_info,
+            }
+        else:
+            action_dict = {
+                "angular": 0,
+                "linear": 0,
+                "arm_yaw": action[0][0].item(),
+                "info": self._policy_info,
+            }
+
+        self._done_initializing = len(self._initial_yaws) == 0
 
         return action_dict
 
@@ -74,7 +92,12 @@ class RealityMixin:
     def _reset(self: BaseObjectNavPolicy) -> None:
         parent_cls: BaseObjectNavPolicy = super()  # type: ignore
         parent_cls._reset()
-        self._done_initializing = True
+        self._initial_yaws = INITIAL_ARM_YAWS.copy()
+        self._done_initializing = False
+
+    def _initialize(self) -> Tensor:
+        yaw = self._initial_yaws.pop(0)
+        return torch.tensor([[yaw]], dtype=torch.float32)
 
     def _cache_observations(
         self: Union["RealityMixin", BaseObjectNavPolicy], observations: Dict[str, Any]
@@ -88,7 +111,7 @@ class RealityMixin:
             return
 
         self._obstacle_map: ObstacleMap
-        for obs_map_data in observations["obstacle_map_depths"]:
+        for obs_map_data in observations["obstacle_map_depths"][:-1]:
             depth, tf, min_depth, max_depth, fx, fy, topdown_fov = obs_map_data
             self._obstacle_map.update_map(
                 depth,
@@ -98,7 +121,24 @@ class RealityMixin:
                 fx,
                 fy,
                 topdown_fov,
+                explore=False,
             )
+
+        _, tf, min_depth, max_depth, fx, fy, topdown_fov = observations[
+            "obstacle_map_depths"
+        ][-1]
+        self._obstacle_map.update_map(
+            None,
+            tf,
+            min_depth,
+            max_depth,
+            fx,
+            fy,
+            topdown_fov,
+            explore=True,
+            update_obstacles=False,
+        )
+
         self._obstacle_map.update_agent_traj(
             observations["robot_xy"], observations["robot_heading"]
         )
