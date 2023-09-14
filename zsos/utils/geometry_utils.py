@@ -268,3 +268,20 @@ def get_fov(focal_length: float, image_height_or_width: int) -> float:
     # Calculate the field of view using the formula
     fov = 2 * math.atan((image_height_or_width / 2) / focal_length)
     return fov
+
+
+def pt_from_rho_theta(rho: float, theta: float) -> np.ndarray:
+    """
+    Given a rho and theta, computes the x and y coordinates.
+
+    Args:
+        rho: Distance from the origin.
+        theta: Angle from the x-axis.
+
+    Returns:
+        numpy.ndarray: x and y coordinates.
+    """
+    x = rho * math.cos(theta)
+    y = rho * math.sin(theta)
+
+    return np.array([x, y])

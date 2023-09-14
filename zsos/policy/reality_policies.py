@@ -80,6 +80,9 @@ class RealityMixin:
                 "info": self._policy_info,
             }
 
+        if "rho_theta" in self._policy_info:
+            action_dict["rho_theta"] = self._policy_info["rho_theta"]
+
         self._done_initializing = len(self._initial_yaws) == 0
 
         return action_dict

@@ -98,10 +98,16 @@ class ObjectNavEnv(PointNavEnv):
         if action["arm_yaw"] == -1:
             return super().step(action)
 
-        new_pose = np.array(NOMINAL_ARM_POSE)
-        new_pose[0] = action["arm_yaw"]
-        self.robot.set_arm_joints(new_pose, travel_time=0.5)
-        time.sleep(0.75)
+        if action["arm_yaw"] == 0:
+            cmd_id = self.robot.spot.move_gripper_to_point(
+                np.array([0.35, 0.0, 0.6]), np.deg2rad([0.0, 0.0, 0.0])
+            )
+            self.robot.spot.block_until_arm_arrives(cmd_id, timeout_sec=1.5)
+        else:
+            new_pose = np.array(NOMINAL_ARM_POSE)
+            new_pose[0] = action["arm_yaw"]
+            self.robot.set_arm_joints(new_pose, travel_time=0.5)
+            time.sleep(0.75)
         done = False
         self._num_steps += 1
 

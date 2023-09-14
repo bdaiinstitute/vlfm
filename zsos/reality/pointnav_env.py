@@ -5,7 +5,11 @@ import numpy as np
 
 from zsos.reality.robots.bdsw_robot import BDSWRobot
 from zsos.reality.robots.camera_ids import SpotCamIds
-from zsos.utils.geometry_utils import convert_to_global_frame, rho_theta
+from zsos.utils.geometry_utils import (
+    convert_to_global_frame,
+    pt_from_rho_theta,
+    rho_theta,
+)
 
 
 class PointNavEnv:
@@ -58,19 +62,37 @@ class PointNavEnv:
                     time.sleep(0.1)
 
         ang_dist, lin_dist = self._compute_displacements(action)
+        done = action["linear"] == 0.0 and action["angular"] == 0.0
+        print("ang/lin:", ang_dist, lin_dist)
+
+        if "rho_theta" in action:
+            rho, theta = action["rho_theta"]
+            x_pos, y_pos = pt_from_rho_theta(rho, theta)
+            yaw = theta
+            print("RHO", rho)
+        else:
+            x_pos = lin_dist
+            y_pos = 0
+            yaw = ang_dist
+
+        if done:
+            self.robot.command_base_velocity(0.0, 0.0)
+
         self._cmd_id = self.robot.spot.set_base_position(
-            x_pos=lin_dist,
-            y_pos=0,
-            yaw=ang_dist,
+            x_pos=x_pos,
+            y_pos=y_pos,
+            yaw=yaw,
             end_time=100,
             relative=True,
-            max_fwd_vel=1.0,
-            max_hor_vel=0.5,
+            max_fwd_vel=0.3,
+            max_hor_vel=0.2,
             max_ang_vel=np.deg2rad(60),
             disable_obstacle_avoidance=False,
             blocking=False,
         )
-        done = ang_dist == 0.0 and lin_dist == 0.0
+        if "rho_theta" in action:
+            self._cmd_id = None
+
         self._num_steps += 1
         return self._get_obs(), 0.0, done, {}  # not using info dict yet
 

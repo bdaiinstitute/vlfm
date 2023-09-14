@@ -141,7 +141,7 @@ class BaseObjectNavPolicy(BasePolicy):
         if len(action_numpy) == 1:
             action_numpy = action_numpy[0]
         print(f"Step: {self._num_steps} | Mode: {mode} | Action: {action_numpy}")
-        self._policy_info = self._get_policy_info(detections[0])  # a little hacky
+        self._policy_info.update(self._get_policy_info(detections[0]))
         self._num_steps += 1
 
         self._observations_cache = {}
@@ -287,6 +287,8 @@ class BaseObjectNavPolicy(BasePolicy):
             ),
             "pointgoal_with_gps_compass": rho_theta_tensor,
         }
+        self._policy_info["rho_theta"] = np.array([rho, theta])
+        print("injecting into self._policy_info")
         if rho < self._pointnav_stop_radius and stop:
             self._called_stop = True
             return self._stop_action
