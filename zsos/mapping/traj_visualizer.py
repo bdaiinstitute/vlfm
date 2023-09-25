@@ -13,6 +13,7 @@ class TrajectoryVisualizer:
     agent_line_thickness: int = 3
     path_color: tuple = (0, 255, 0)
     path_thickness: int = 3
+    scale_factor: float = 1.0
 
     def __init__(self, origin_in_img: np.ndarray, pixels_per_meter: float):
         self._origin_in_img = origin_in_img
@@ -70,7 +71,7 @@ class TrajectoryVisualizer:
             tuple(px_a[::-1]),
             tuple(px_b[::-1]),
             255,
-            self.path_thickness,
+            int(self.path_thickness * self.scale_factor),
         )
 
         return img
@@ -80,17 +81,29 @@ class TrajectoryVisualizer:
     ) -> np.ndarray:
         """Draws the agent on the image and returns it"""
         px_position = self._metric_to_pixel(camera_position)
-        cv2.circle(img, tuple(px_position[::-1]), 8, (255, 192, 15), -1)
+        cv2.circle(
+            img,
+            tuple(px_position[::-1]),
+            int(8 * self.scale_factor),
+            (255, 192, 15),
+            -1,
+        )
         heading_end_pt = (
-            int(px_position[0] - self.agent_line_length * np.cos(camera_yaw)),
-            int(px_position[1] - self.agent_line_length * np.sin(camera_yaw)),
+            int(
+                px_position[0]
+                - self.agent_line_length * self.scale_factor * np.cos(camera_yaw)
+            ),
+            int(
+                px_position[1]
+                - self.agent_line_length * self.scale_factor * np.sin(camera_yaw)
+            ),
         )
         cv2.line(
             img,
             tuple(px_position[::-1]),
             tuple(heading_end_pt[::-1]),
             (0, 0, 0),
-            self.agent_line_thickness,
+            int(self.agent_line_thickness * self.scale_factor),
         )
 
         return img
