@@ -19,6 +19,7 @@ class ObstacleMap(BaseMap):
     _map_dtype: np.dtype = bool
     _frontiers_px: np.ndarray = np.array([])
     frontiers: np.ndarray = np.array([])
+    radius_padding_color: tuple = (100, 100, 100)
 
     def __init__(
         self,
@@ -28,8 +29,9 @@ class ObstacleMap(BaseMap):
         area_thresh: float = 3.0,  # square meters
         hole_area_thresh: int = 100000,  # square pixels
         size: int = 1000,
+        pixels_per_meter: int = 20,
     ):
-        super().__init__(size)
+        super().__init__(size, pixels_per_meter)
         self.explored_area = np.zeros((size, size), dtype=bool)
         self._map = np.zeros((size, size), dtype=bool)
         self._navigable_map = np.zeros((size, size), dtype=bool)
