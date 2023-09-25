@@ -11,12 +11,13 @@ class BaseMap:
     _last_camera_yaw: float = None
     _map_dtype: np.dtype = np.float32
 
-    def __init__(self, size: int = 1000, *args, **kwargs):
+    def __init__(self, size: int = 1000, pixels_per_meter: int = 20, *args, **kwargs):
         """
         Args:
             size: The size of the map in pixels.
         """
-        self.pixels_per_meter = 20
+        self.pixels_per_meter = pixels_per_meter
+        self.size = size
         self._map = np.zeros((size, size), dtype=self._map_dtype)
         self._episode_pixel_origin = np.array([size // 2, size // 2])
         self._traj_vis = TrajectoryVisualizer(
