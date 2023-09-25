@@ -29,9 +29,9 @@ VALUE_MAP_CAMS = [
 POINT_CLOUD_CAMS = [
     SpotCamIds.FRONTLEFT_DEPTH,
     SpotCamIds.FRONTRIGHT_DEPTH,
-    SpotCamIds.BACK_DEPTH_IN_VISUAL_FRAME,
     SpotCamIds.LEFT_DEPTH_IN_VISUAL_FRAME,
     SpotCamIds.RIGHT_DEPTH_IN_VISUAL_FRAME,
+    SpotCamIds.BACK_DEPTH_IN_VISUAL_FRAME,
 ]
 
 ALL_CAMS = list(set(VALUE_MAP_CAMS + POINT_CLOUD_CAMS))
@@ -71,8 +71,10 @@ class ObjectNavEnv(PointNavEnv):
         # Parent class only moves the base; if we want to move the gripper camera,
         # we need to do it here
         vis_imgs = []
+        time_id = time.time()
         for k in ["annotated_rgb", "annotated_depth", "obstacle_map", "value_map"]:
             img = cv2.cvtColor(action["info"][k], cv2.COLOR_RGB2BGR)
+            cv2.imwrite(f"vis/{self._vis_dir}/{time_id}_{k}.png", img)
             if "map" in k:
                 img = reorient_rescale_map(img)
             if k == "annotated_depth" and np.array_equal(img, np.ones_like(img) * 255):
@@ -90,17 +92,17 @@ class ObjectNavEnv(PointNavEnv):
                 )
             vis_imgs.append(img)
         vis_img = np.hstack(resize_images(vis_imgs, match_dimension="height"))
-        time_id = time.time()
         cv2.imwrite(f"vis/{self._vis_dir}/{time_id}.jpg", vis_img)
-        cv2.imshow("Visualization", cv2.resize(vis_img, (0, 0), fx=0.5, fy=0.5))
-        cv2.waitKey(1)
+        if os.environ.get("ZSOS_DISPLAY", "0") == "1":
+            cv2.imshow("Visualization", cv2.resize(vis_img, (0, 0), fx=0.5, fy=0.5))
+            cv2.waitKey(1)
 
         if action["arm_yaw"] == -1:
             return super().step(action)
 
         if action["arm_yaw"] == 0:
             cmd_id = self.robot.spot.move_gripper_to_point(
-                np.array([0.35, 0.0, 0.6]), np.deg2rad([0.0, 0.0, 0.0])
+                np.array([0.35, 0.0, 0.3]), np.deg2rad([0.0, 0.0, 0.0])
             )
             self.robot.spot.block_until_arm_arrives(cmd_id, timeout_sec=1.5)
         else:
