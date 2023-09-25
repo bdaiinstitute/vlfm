@@ -13,13 +13,13 @@ policy:
     exploration_thresh: 0.0
     obstacle_map_area_threshold: 1.5  # in square meters
     text_prompt: "Seems like there is a target_object ahead."
-    min_obstacle_height: 0.3
+    min_obstacle_height: 0.1
     max_obstacle_height: 1.5
     agent_radius: 0.2
 
 env:
   max_body_cam_depth: 3.5
-  max_gripper_cam_depth: 10.0
+  max_gripper_cam_depth: 5.0
   max_lin_dist: 0.2
   max_ang_dist: 0.523599
   time_step: 0.7
