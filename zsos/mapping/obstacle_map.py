@@ -181,7 +181,7 @@ class ObstacleMap(BaseMap):
         # Draw explored area in light green
         vis_img[self.explored_area == 1] = (200, 255, 200)
         # Draw unnavigable areas in gray
-        vis_img[self._navigable_map == 0] = (100, 100, 100)
+        vis_img[self._navigable_map == 0] = self.radius_padding_color
         # Draw obstacles in black
         vis_img[self._map == 1] = (0, 0, 0)
         # Draw frontiers in blue (200, 0, 0)
