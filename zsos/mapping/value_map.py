@@ -57,6 +57,8 @@ class ValueMap(BaseMap):
             obstacle_map: An optional obstacle map to use for overriding the occluded
                 areas of the FOV
         """
+        if PLAYING:
+            size = 2000
         super().__init__(size)
         self._value_map = np.zeros((size, size, value_channels), np.float32)
         self._value_channels = value_channels
@@ -66,6 +68,8 @@ class ValueMap(BaseMap):
         if self._obstacle_map is not None:
             assert self._obstacle_map.pixels_per_meter == self.pixels_per_meter
             assert self._obstacle_map.size == self.size
+        if os.environ.get("MAP_FUSION_TYPE", "") != "":
+            self._fusion_type = os.environ["MAP_FUSION_TYPE"]
 
         if RECORDING:
             if osp.isdir(RECORDING_DIR):
@@ -190,10 +194,13 @@ class ValueMap(BaseMap):
         self,
         markers: Optional[List[Tuple[np.ndarray, Dict[str, Any]]]] = None,
         reduce_fn: Callable = lambda i: np.max(i, axis=-1),
+        obstacle_map: Optional["ObstacleMap"] = None,  # noqa: F821
     ) -> np.ndarray:
         """Return an image representation of the map"""
         # Must negate the y values to get the correct orientation
-        reduced_map = reduce_fn(self._value_map)
+        reduced_map = reduce_fn(self._value_map).copy()
+        if obstacle_map is not None:
+            reduced_map[obstacle_map.explored_area == 0] = 0
         map_img = np.flipud(reduced_map)
         # Make all 0s in the value map equal to the max value, so they don't throw off
         # the color mapping (will revert later)
@@ -303,6 +310,11 @@ class ValueMap(BaseMap):
 
         # Rotate this new data to match the camera's orientation
         yaw = extract_yaw(tf_camera_to_episodic)
+        if PLAYING:
+            if yaw > 0:
+                yaw = 0
+            else:
+                yaw = np.deg2rad(30)
         curr_data = rotate_image(curr_data, -yaw)
 
         # Determine where this mask should be overlaid
