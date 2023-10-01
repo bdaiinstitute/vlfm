@@ -2,7 +2,7 @@ import os
 
 import cv2
 
-from zsos.utils.visualization import generate_text_image
+from vlfm.utils.visualization import generate_text_image
 
 
 def test_visualization():
