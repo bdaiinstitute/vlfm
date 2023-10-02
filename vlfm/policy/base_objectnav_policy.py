@@ -53,7 +53,7 @@ class BaseObjectNavPolicy(BasePolicy):
         hole_area_thresh: int = 100000,
         use_vqa: bool = False,
         vqa_prompt: str = "Is this ",
-        coco_threshold: float = 0.6,
+        coco_threshold: float = 0.8,
         non_coco_threshold: float = 0.4,
         *args,
         **kwargs,
@@ -288,7 +288,6 @@ class BaseObjectNavPolicy(BasePolicy):
             "pointgoal_with_gps_compass": rho_theta_tensor,
         }
         self._policy_info["rho_theta"] = np.array([rho, theta])
-        print("injecting into self._policy_info")
         if rho < self._pointnav_stop_radius and stop:
             self._called_stop = True
             return self._stop_action

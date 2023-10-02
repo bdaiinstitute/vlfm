@@ -1,4 +1,4 @@
-# llm-object-search
+# Vision-Language Frontier Maps
 
 ## 1. Installation
 
@@ -9,7 +9,11 @@ conda create -n $conda_env_name python=3.9 -y &&
 conda activate $conda_env_name
 ```
 
-Then, follow the instructions in [readmes/installing_habitat.md](readmes/installing_habitat.md) to install Habitat and relevant datasets.
+Install all the dependencies:
+```bash
+pip install -e .[habitat]
+git clone git@github.com:WongKinYiu/yolov7.git  # if using YOLOv7
+```
 
 ## 2. Downloading the HM3D dataset
 First, set the following variables during installation (don't need to put in .bashrc):

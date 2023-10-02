@@ -1,4 +1,3 @@
-import os
 from typing import Optional
 
 import numpy as np
@@ -16,15 +15,9 @@ except ModuleNotFoundError:
         "Could not import groundingdino. This is OK if you are only using the client."
     )
 
-GROUNDING_DINO_CONFIG = os.environ["GROUNDING_DINO_CONFIG"]
-GROUNDING_DINO_WEIGHTS = os.environ["GROUNDING_DINO_WEIGHTS"]
-
-if "CLASSES_PATH" in os.environ:
-    with open(os.environ["CLASSES_PATH"]) as f:
-        CLASSES = " . ".join(f.read().splitlines()) + " ."
-else:
-    print("[grounding_dino.py] WARNING: $CLASSES_PATH not set, using default classes")
-    CLASSES = "chair . person . dog ."  # default classes
+GROUNDING_DINO_CONFIG = "GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py"
+GROUNDING_DINO_WEIGHTS = "data/groundingdino_swint_ogc.pth"
+CLASSES = "chair . person . dog ."  # Default classes. Can be overridden at inference.
 
 
 class GroundingDINO:
@@ -32,7 +25,7 @@ class GroundingDINO:
         self,
         config_path: str = GROUNDING_DINO_CONFIG,
         weights_path: str = GROUNDING_DINO_WEIGHTS,
-        classes: str = CLASSES,
+        caption: str = CLASSES,
         box_threshold: float = 0.35,
         text_threshold: float = 0.25,
         device: torch.device = torch.device("cuda"),
@@ -40,7 +33,7 @@ class GroundingDINO:
         self.model = load_model(
             model_config_path=config_path, model_checkpoint_path=weights_path
         ).to(device)
-        self.classes = classes
+        self.caption = caption
         self.box_threshold = box_threshold
         self.text_threshold = text_threshold
 
@@ -66,7 +59,7 @@ class GroundingDINO:
             image_tensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
         )
         if caption == "":
-            caption = self.classes
+            caption = self.caption
         print("Caption:", caption)
         with torch.inference_mode():
             boxes, logits, phrases = predict(
@@ -78,14 +71,9 @@ class GroundingDINO:
             )
         detections = ObjectDetections(boxes, logits, phrases, image_source=image)
 
-        classes = caption[:-2].split(" . ")
-        keep = torch.tensor(
-            [p in classes for p in detections.phrases], dtype=torch.bool
-        )
-
-        detections.boxes = detections.boxes[keep]
-        detections.logits = detections.logits[keep]
-        detections.phrases = [p for i, p in enumerate(detections.phrases) if keep[i]]
+        # Remove detections whose class names do not exactly match the provided classes
+        classes = caption[: -len(" .")].split(" . ")
+        detections.filter_by_class(classes)
 
         return detections
 

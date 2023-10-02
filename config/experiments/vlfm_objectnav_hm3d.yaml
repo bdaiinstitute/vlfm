@@ -28,7 +28,7 @@ habitat:
 
 habitat_baselines:
   evaluate: True
-  eval_ckpt_path_dir: dummy_policy.pth
+  eval_ckpt_path_dir: data/dummy_policy.pth
   num_environments: 1
   load_resume_state_config: False
 
@@ -37,7 +37,7 @@ habitat_baselines:
   video_dir: "video_dir"
   test_episode_count: -1
   checkpoint_folder: "data/new_checkpoints"
-  trainer_name: "ddppo"
+  trainer_name: "vlfm"
   num_updates: 270000
   log_interval: 10
   num_checkpoints: 100
@@ -51,7 +51,7 @@ habitat_baselines:
   rl:
 
     policy:
-      name: "PointNavResNetPolicy"
+      name: "HabitatITMPolicyV2"
 
     ppo:
       # ppo params
