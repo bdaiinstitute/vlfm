@@ -1,25 +1,16 @@
 import os
 
-import torch
 from habitat_baselines.common.baseline_registry import baseline_registry  # noqa
 
-from zsos.run import get_config
+from vlfm.utils.generate_dummy_policy import save_dummy_policy
 
 
 def test_load_and_save_config():
     if not os.path.exists("build"):
         os.makedirs("build")
 
-    # Save a dummy state_dict using torch.save
-    config = get_config("config/experiments/llm_objectnav_hm3d.yaml")
-    dummy_dict = {
-        "config": config,
-        "extra_state": {"step": 0},
-        "state_dict": {},
-    }
-
     filename = "build/dummy_policy.pth"
-    torch.save(dummy_dict, filename)
+    save_dummy_policy(filename)
 
     # Get the file size of the output PDF
     file_size = os.path.getsize(filename)

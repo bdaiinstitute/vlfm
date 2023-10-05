@@ -1,23 +1,62 @@
-# llm-object-search
+# Vision-Language Frontier Maps
 
-## Installation
+## 1. Installation
 
 Create the conda environment:
 ```bash
-conda_env_name=zsos # 'zero-shot object search'
+conda_env_name=vlfm
 conda create -n $conda_env_name python=3.9 -y &&
-conda activate $conda_env_name &&
-
-# Mamba is used for much, much faster installation.
-conda install mamba -y -c conda-forge &&
-mamba install \
-  habitat-sim=0.2.4 headless pytorch pytorch-cuda \
-  transformers \
-  -c aihabitat -c pytorch -c huggingface \
-  -c nvidia -c conda-forge -y
+conda activate $conda_env_name
 ```
 
-Then, follow the instructions in [readmes/installing_habitat.md](readmes/installing_habitat.md) to install Habitat and relevant datasets.
+Install all the dependencies:
+```bash
+pip install -e .[habitat]
+git clone git@github.com:WongKinYiu/yolov7.git  # if using YOLOv7
+```
+
+## 2. Downloading the HM3D dataset
+First, set the following variables during installation (don't need to put in .bashrc):
+```bash
+MATTERPORT_TOKEN_ID=<FILL IN FROM YOUR ACCOUNT INFO IN MATTERPORT>
+MATTERPORT_TOKEN_SECRET=<FILL IN FROM YOUR ACCOUNT INFO IN MATTERPORT>
+DATA_DIR=</path/to/vlfm/data>
+
+# Link to the HM3D ObjectNav episodes dataset, listed here:
+# https://github.com/facebookresearch/habitat-lab/blob/main/DATASETS.md#task-datasets
+# From the above page, locate the link to the HM3D ObjectNav dataset.
+# Verify that it is the same as the next two lines.
+HM3D_OBJECTNAV=https://dl.fbaipublicfiles.com/habitat/data/datasets/objectnav/hm3d/v2/objectnav_hm3d_v2.zip
+```
+
+### Clone and install habitat-lab, then download datasets
+*Ensure that the correct conda environment is activated!!*
+```bash
+# Download HM3D 3D scans (scenes_dataset)
+python -m habitat_sim.utils.datasets_download \
+  --username $MATTERPORT_TOKEN_ID --password $MATTERPORT_TOKEN_SECRET \
+  --uids hm3d_train_v0.2 \
+  --data-path $DATA_DIR &&
+python -m habitat_sim.utils.datasets_download \
+  --username $MATTERPORT_TOKEN_ID --password $MATTERPORT_TOKEN_SECRET \
+  --uids hm3d_val_v0.2 \
+  --data-path $DATA_DIR &&
+
+# Download HM3D ObjectNav dataset episodes
+wget $HM3D_OBJECTNAV &&
+unzip objectnav_hm3d_v2.zip &&
+mkdir -p $DATA_DIR/datasets/objectnav/hm3d  &&
+mv objectnav_hm3d_v2 $DATA_DIR/datasets/objectnav/hm3d/v2 &&
+rm objectnav_hm3d_v2.zip
+```
+
+
+## 3. Downloading weights for various models
+The weights for MobileSAM, GroundingDINO, and PointNav must be saved to the `data/` directory. The weights can be downloaded from the following links:
+- `mobile_sam.pt`:  https://github.com/ChaoningZhang/MobileSAM
+- `groundingdino_swint_ogc.pth`: https://github.com/IDEA-Research/GroundingDINO
+- `yolov7-e6e.pt`: https://github.com/WongKinYiu/yolov7
+- `pointnav_weights.pth`:
 
 ### Installing GroundingDINO
 To install GroundingDINO, you will need `CUDA_HOME` set as an environment variable. If you would like to install a certain version of CUDA that is compatible with the one used to compile your version of pytorch, and you are using conda, you can run the following commands to install CUDA and set `CUDA_HOME`:
@@ -37,7 +76,3 @@ ln -s ${CONDA_PREFIX}/lib/python3.9/site-packages/nvidia/cublas/include/*  ${CON
 ln -s ${CONDA_PREFIX}/lib/python3.9/site-packages/nvidia/cusolver/include/*  ${CONDA_PREFIX}/include/ &&
 export CUDA_HOME=${CONDA_PREFIX}
 ```
-
-### TODO
-1. Add instructions for installing `frontier_exploration`
-2. Add instructions for installing FastChat
