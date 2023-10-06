@@ -87,3 +87,11 @@ The weights for MobileSAM, GroundingDINO, and PointNav must be saved to the `dat
 - `pointnav_weights.pth`:
 
 ## 4. Evaluation within Habitat
+Run the following to evaluate on the HM3D dataset:
+```bash
+python -m vlfm.run
+```
+To evaluate on MP3D, run the following:
+```bash
+python -m vlfm.run habitat.dataset.data_path=data/datasets/objectnav/mp3d/val/val.json.gz
+```
