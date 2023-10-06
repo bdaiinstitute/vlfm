@@ -1,5 +1,5 @@
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 
@@ -27,19 +27,21 @@ class PointNavEnv:
         max_lin_dist: float = 0.25,
         max_ang_dist: float = np.deg2rad(30),
         time_step: float = 0.5,
-        *args,
-        **kwargs,
-    ):
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         self.robot = robot
 
         self._max_body_cam_depth = max_body_cam_depth
         self._max_lin_dist = max_lin_dist
         self._max_ang_dist = max_ang_dist
         self._time_step = time_step
-        self._cmd_id = None
+        self._cmd_id: Union[None, Any] = None
         self._num_steps = 0
 
-    def reset(self, goal: Any, relative=True, *args, **kwargs) -> Dict[str, np.ndarray]:
+    def reset(
+        self, goal: Any, relative: bool = True, *args: Any, **kwargs: Any
+    ) -> Dict[str, np.ndarray]:
         assert isinstance(goal, np.ndarray)
         if relative:
             # Transform (x,y) goal from robot frame to global frame
@@ -107,10 +109,13 @@ class PointNavEnv:
     ) -> Tuple[float, float]:
         displacements = []
         for action_key, max_dist in (
-            ["angular", self._max_ang_dist],
-            ["linear", self._max_lin_dist],
+            ("angular", self._max_ang_dist),
+            ("linear", self._max_lin_dist),
         ):
-            act_val = action.get(action_key, 0.0)  # default to 0.0 if key not present
+            if action_key not in action:
+                displacements.append(0.0)
+                continue
+            act_val = action[action_key]
             dist = np.clip(act_val, -1.0, 1.0)  # clip to [-1, 1]
             dist *= max_dist  # scale to max distance
             displacements.append(dist)  # convert to velocity

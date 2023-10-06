@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import Any, List, Union
 
 import cv2
 import numpy as np
@@ -19,7 +19,7 @@ class TrajectoryVisualizer:
         self._origin_in_img = origin_in_img
         self._pixels_per_meter = pixels_per_meter
 
-    def reset(self):
+    def reset(self) -> None:
         self._num_drawn_points = 1
         self._cached_path_mask = None
 
@@ -109,7 +109,7 @@ class TrajectoryVisualizer:
         return img
 
     def draw_circle(
-        self, img: np.ndarray, position: np.ndarray, **kwargs
+        self, img: np.ndarray, position: np.ndarray, **kwargs: Any
     ) -> np.ndarray:
         """Draws the point as a circle on the image and returns it"""
         px_position = self._metric_to_pixel(position)

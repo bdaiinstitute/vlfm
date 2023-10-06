@@ -39,7 +39,9 @@ class Resize(ObservationTransformer):
         self.trans_keys: Tuple[str, ...] = trans_keys
         self.semantic_key = semantic_key
 
-    def transform_observation_space(self, observation_space: spaces.Dict):
+    def transform_observation_space(
+        self, observation_space: spaces.Dict
+    ) -> spaces.Dict:
         observation_space = copy.deepcopy(observation_space)
         for key in observation_space.spaces:
             if key in self.trans_keys:
@@ -81,9 +83,9 @@ class Resize(ObservationTransformer):
         return observations
 
     @classmethod
-    def from_config(cls, config: "DictConfig"):
+    def from_config(cls, config: "DictConfig") -> "Resize":
         return cls(
-            tuple(config.size),
+            (int(config.size[0]), int(config.size[1])),
             config.channels_last,
             config.trans_keys,
             config.semantic_key,

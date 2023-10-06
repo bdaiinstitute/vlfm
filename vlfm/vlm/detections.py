@@ -9,9 +9,6 @@ try:
 except ImportError:
     print("Could not import box_convert. This is OK if you are only using the client.")
 
-    def box_convert(boxes, in_fmt, out_fmt):
-        raise NotImplementedError
-
 
 class ObjectDetections:
     """
@@ -37,7 +34,7 @@ class ObjectDetections:
         self._annotated_frame: Optional[np.ndarray] = None
 
     @property
-    def annotated_frame(self):
+    def annotated_frame(self) -> np.ndarray:
         if self._annotated_frame is None:
             self._annotated_frame = annotate(
                 image_source=self.image_source,
@@ -52,7 +49,7 @@ class ObjectDetections:
         """Returns the number of detections."""
         return len(self.phrases)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Print each detection's class, score, and box"""
         dets = [
             f"{phrase} ({logit:.2f}): {box.tolist()}"
@@ -62,7 +59,7 @@ class ObjectDetections:
             return "No detections"
         return "\n".join(dets)
 
-    def filter_by_conf(self, conf_thresh: float):
+    def filter_by_conf(self, conf_thresh: float) -> None:
         """Filters detections by confidence threshold in-place.
 
         Args:
@@ -71,7 +68,7 @@ class ObjectDetections:
         keep: torch.Tensor[bool] = torch.ge(self.logits, conf_thresh)  # >=
         self._filter(keep)
 
-    def filter_by_class(self, classes: List[str]):
+    def filter_by_class(self, classes: List[str]) -> None:
         """Filters detections by class in-place.
 
         Args:
@@ -111,7 +108,7 @@ class ObjectDetections:
         cls,
         json_dict: dict,
         image_source: Optional[np.ndarray] = None,
-    ):
+    ) -> "ObjectDetections":
         """
         Converts the object detections from a JSON serializable format.
 
@@ -224,7 +221,7 @@ def draw_bounding_box(
     else:
         # Convert RGB to BGR
         color = color[::-1]
-    color = [int(c) for c in color]
+    color = [int(c) for c in color]  # type: ignore
 
     # Draw bounding box on image
     box_thickness = 2

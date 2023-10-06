@@ -12,7 +12,7 @@ from .rnn_state_encoder import LSTMStateEncoder
 class ResNetEncoder(nn.Module):
     visual_keys = ["depth"]
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.running_mean_and_var = nn.Sequential()
         self.backbone = resnet18(1, 32, 16)
@@ -67,9 +67,9 @@ class PointNavResNetNet(nn.Module):
     def forward(
         self,
         observations: Dict[str, torch.Tensor],
-        rnn_hidden_states,
-        prev_actions,
-        masks,
+        rnn_hidden_states: torch.Tensor,
+        prev_actions: torch.Tensor,
+        masks: torch.Tensor,
         rnn_build_seq_info: Optional[Dict[str, torch.Tensor]] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
         x = []
@@ -144,19 +144,19 @@ class GaussianNet(nn.Module):
 
 
 class PointNavResNetPolicy(nn.Module):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.net = PointNavResNetNet()
         self.action_distribution = GaussianNet(512, 2)
 
     def act(
         self,
-        observations,
-        rnn_hidden_states,
-        prev_actions,
-        masks,
-        deterministic=False,
-    ):
+        observations: Dict[str, torch.Tensor],
+        rnn_hidden_states: torch.Tensor,
+        prev_actions: torch.Tensor,
+        masks: torch.Tensor,
+        deterministic: bool = False,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         features, rnn_hidden_states, _ = self.net(
             observations, rnn_hidden_states, prev_actions, masks
         )

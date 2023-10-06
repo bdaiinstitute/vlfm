@@ -28,9 +28,11 @@ class SemExpMixin:
 
     _stop_action: Tensor = TorchActionIDs.STOP
     _start_yaw: Union[float, None] = None  # must be set by _reset() method
+    _observations_cache: Dict[str, Any] = {}
+    _policy_info: Dict[str, Any] = {}
 
     def __init__(
-        self: BaseObjectNavPolicy,
+        self: Union["SemExpMixin", BaseObjectNavPolicy],
         camera_height: float,
         min_depth: float,
         max_depth: float,
@@ -39,7 +41,7 @@ class SemExpMixin:
         *args: Any,
         **kwargs: Any,
     ) -> None:
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)  # type: ignore
         assert self._compute_frontiers, "Must set self._compute_frontiers = True"
         self._camera_height = camera_height
         self._min_depth = min_depth
@@ -48,11 +50,15 @@ class SemExpMixin:
         self._camera_fov = camera_fov_rad
         self._fx = self._fy = image_width / (2 * np.tan(camera_fov_rad / 2))
 
+        self._compute_frontiers: bool = super()._compute_frontiers  # type: ignore
+
     def act(
         self: Union["SemExpMixin", BaseObjectNavPolicy],
         observations: Dict[str, Union[Tensor, str]],
+        rnn_hidden_states: Any,
+        prev_actions: Any,
         masks: Tensor,
-        deterministic=True,
+        deterministic: bool = True,
     ) -> Tuple[Tensor, Dict[str, Any]]:
         """Converts object ID to string name, returns action as PolicyActionData"""
         parent_cls: BaseObjectNavPolicy = super()  # type: ignore
@@ -89,7 +95,7 @@ class SemExpMixin:
 
     def _cache_observations(
         self: Union["SemExpMixin", BaseObjectNavPolicy], observations: Dict[str, Any]
-    ):
+    ) -> None:
         """Caches the rgb, depth, and camera transform from the observations.
 
         Args:

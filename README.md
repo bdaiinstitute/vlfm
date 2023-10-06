@@ -8,11 +8,40 @@ conda_env_name=vlfm
 conda create -n $conda_env_name python=3.9 -y &&
 conda activate $conda_env_name
 ```
-
-Install all the dependencies:
+If you are using habitat and are doing simulation experiments, install this repo into your env with the following:
 ```bash
 pip install -e .[habitat]
+```
+If you are using the Spot robot, install this repo into your env with the following:
+```bash
+pip install -e .[reality]
+```
+Install all the dependencies:
+```bash
 git clone git@github.com:WongKinYiu/yolov7.git  # if using YOLOv7
+git clone git@github.com:IDEA-Research/GroundingDINO.git
+```
+Follow the install directions for GroundingDINO. Nothing needs to be done for YOLOv7, but it needs to be cloned into the repo.
+
+### Installing GroundingDINO (Only if using conda-installed CUDA)
+Only attempt if the installation instructions in the GroundingDINO repo do not work.
+
+To install GroundingDINO, you will need `CUDA_HOME` set as an environment variable. If you would like to install a certain version of CUDA that is compatible with the one used to compile your version of pytorch, and you are using conda, you can run the following commands to install CUDA and set `CUDA_HOME`:
+```bash
+# This example is specifically for CUDA 11.8
+mamba install \
+    cub \
+    thrust \
+    cuda-runtime \
+    cudatoolkit=11.8 \
+    cuda-nvcc==11.8.89 \
+    -c "nvidia/label/cuda-11.8.0" \
+    -c nvidia &&
+ln -s ${CONDA_PREFIX}/lib/python3.9/site-packages/nvidia/cuda_runtime/include/*  ${CONDA_PREFIX}/include/ &&
+ln -s ${CONDA_PREFIX}/lib/python3.9/site-packages/nvidia/cusparse/include/*  ${CONDA_PREFIX}/include/ &&
+ln -s ${CONDA_PREFIX}/lib/python3.9/site-packages/nvidia/cublas/include/*  ${CONDA_PREFIX}/include/ &&
+ln -s ${CONDA_PREFIX}/lib/python3.9/site-packages/nvidia/cusolver/include/*  ${CONDA_PREFIX}/include/ &&
+export CUDA_HOME=${CONDA_PREFIX}
 ```
 
 ## 2. Downloading the HM3D dataset
@@ -50,7 +79,6 @@ mv objectnav_hm3d_v2 $DATA_DIR/datasets/objectnav/hm3d/v2 &&
 rm objectnav_hm3d_v2.zip
 ```
 
-
 ## 3. Downloading weights for various models
 The weights for MobileSAM, GroundingDINO, and PointNav must be saved to the `data/` directory. The weights can be downloaded from the following links:
 - `mobile_sam.pt`:  https://github.com/ChaoningZhang/MobileSAM
@@ -58,21 +86,4 @@ The weights for MobileSAM, GroundingDINO, and PointNav must be saved to the `dat
 - `yolov7-e6e.pt`: https://github.com/WongKinYiu/yolov7
 - `pointnav_weights.pth`:
 
-### Installing GroundingDINO
-To install GroundingDINO, you will need `CUDA_HOME` set as an environment variable. If you would like to install a certain version of CUDA that is compatible with the one used to compile your version of pytorch, and you are using conda, you can run the following commands to install CUDA and set `CUDA_HOME`:
-```bash
-# This example is specifically for CUDA 11.8
-mamba install \
-    cub \
-    thrust \
-    cuda-runtime \
-    cudatoolkit=11.8 \
-    cuda-nvcc==11.8.89 \
-    -c "nvidia/label/cuda-11.8.0" \
-    -c nvidia &&
-ln -s ${CONDA_PREFIX}/lib/python3.9/site-packages/nvidia/cuda_runtime/include/*  ${CONDA_PREFIX}/include/ &&
-ln -s ${CONDA_PREFIX}/lib/python3.9/site-packages/nvidia/cusparse/include/*  ${CONDA_PREFIX}/include/ &&
-ln -s ${CONDA_PREFIX}/lib/python3.9/site-packages/nvidia/cublas/include/*  ${CONDA_PREFIX}/include/ &&
-ln -s ${CONDA_PREFIX}/lib/python3.9/site-packages/nvidia/cusolver/include/*  ${CONDA_PREFIX}/include/ &&
-export CUDA_HOME=${CONDA_PREFIX}
-```
+## 4. Evaluation within Habitat

@@ -1,4 +1,5 @@
 import sys
+from typing import List, Optional
 
 import cv2
 import numpy as np
@@ -25,7 +26,9 @@ sys.path.pop(0)
 
 
 class YOLOv7:
-    def __init__(self, weights: str, image_size: int = 640, half_precision=True):
+    def __init__(
+        self, weights: str, image_size: int = 640, half_precision: bool = True
+    ):
         """Loads the model and saves it to a field."""
         self.device = (
             torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -51,10 +54,10 @@ class YOLOv7:
     def predict(
         self,
         image: np.ndarray,
-        conf_thres=0.25,
-        iou_thres=0.45,
-        classes=None,
-        agnostic_nms=False,
+        conf_thres: float = 0.25,
+        iou_thres: float = 0.45,
+        classes: Optional[List[str]] = None,
+        agnostic_nms: bool = False,
     ) -> ObjectDetections:
         """
         Outputs bounding box and class prediction data for the given image.

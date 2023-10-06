@@ -34,7 +34,7 @@ def rho_theta(
     return rho, theta
 
 
-def get_rotation_matrix(angle: float, ndims=2) -> np.ndarray:
+def get_rotation_matrix(angle: float, ndims: int = 2) -> np.ndarray:
     """Returns a 2x2 or 3x3 rotation matrix for a given angle; if 3x3, the z-axis is
     rotated."""
     if ndims == 2:

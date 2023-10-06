@@ -1,41 +1,36 @@
+from typing import Any, Generator
+
 import torch
-from gym import spaces
 from habitat import get_config
 from habitat_baselines.common.baseline_registry import baseline_registry
+from habitat_baselines.common.tensor_dict import TensorDict
 from habitat_baselines.rl.ppo import Policy
 from habitat_baselines.rl.ppo.policy import PolicyActionData
-from omegaconf import DictConfig
 
 
 @baseline_registry.register_policy
 class BasePolicy(Policy):
     """The bare minimum needed to load a policy for evaluation using ppo_trainer.py"""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__()
 
     @property
-    def should_load_agent_state(self):
+    def should_load_agent_state(self) -> bool:
         return False
 
     @classmethod
-    def from_config(
-        cls,
-        config: DictConfig,
-        observation_space: spaces.Dict,
-        action_space,
-        **kwargs,
-    ):
+    def from_config(cls, *args: Any, **kwargs: Any) -> Any:
         return cls()
 
     def act(
         self,
-        observations,
-        rnn_hidden_states,
-        prev_actions,
-        masks,
-        deterministic=False,
-    ):
+        observations: TensorDict,
+        rnn_hidden_states: torch.Tensor,
+        prev_actions: torch.Tensor,
+        masks: torch.Tensor,
+        deterministic: bool = False,
+    ) -> PolicyActionData:
         # Just moves forwards
         num_envs = observations["rgb"].shape[0]
         action = torch.ones(num_envs, 1, dtype=torch.long)
@@ -43,13 +38,13 @@ class BasePolicy(Policy):
 
     # used in ppo_trainer.py eval:
 
-    def to(self, *args, **kwargs):
+    def to(self, *args: Any, **kwargs: Any) -> None:
         return
 
-    def eval(self):
+    def eval(self) -> None:
         return
 
-    def parameters(self):
+    def parameters(self) -> Generator:
         yield torch.zeros(1)
 
 

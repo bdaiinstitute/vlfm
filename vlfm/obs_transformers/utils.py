@@ -8,7 +8,7 @@ def image_resize(
     img: Tensor,
     size: Tuple[int, int],
     channels_last: bool = False,
-    interpolation_mode="area",
+    interpolation_mode: str = "area",
 ) -> torch.Tensor:
     """Resizes an img.
 

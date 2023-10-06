@@ -3,7 +3,7 @@ import os
 import random
 import socket
 import time
-from typing import Any
+from typing import Any, Dict
 
 import cv2
 import numpy as np
@@ -12,21 +12,21 @@ from flask import Flask, jsonify, request
 
 
 class ServerMixin:
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
     def process_payload(self, payload: dict) -> dict:
         raise NotImplementedError
 
 
-def host_model(model: Any, name: str, port: int = 5000):
+def host_model(model: Any, name: str, port: int = 5000) -> None:
     """
     Hosts a model as a REST API using Flask.
     """
     app = Flask(__name__)
 
     @app.route(f"/{name}", methods=["POST"])
-    def process_request():
+    def process_request() -> Dict[str, Any]:
         payload = request.json
         return jsonify(model.process_payload(payload))
 
@@ -54,24 +54,26 @@ def str_to_bool_arr(s: str, shape: tuple) -> np.ndarray:
     return unpacked
 
 
-def image_to_str(img_np, quality=90):
+def image_to_str(img_np: np.ndarray, quality: float = 90.0) -> str:
     encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
     retval, buffer = cv2.imencode(".jpg", img_np, encode_param)
     img_str = base64.b64encode(buffer).decode("utf-8")
     return img_str
 
 
-def str_to_image(img_str):
+def str_to_image(img_str: str) -> np.ndarray:
     img_bytes = base64.b64decode(img_str)
     img_arr = np.frombuffer(img_bytes, dtype=np.uint8)
     img_np = cv2.imdecode(img_arr, cv2.IMREAD_ANYCOLOR)
     return img_np
 
 
-def send_request(url, **kwargs) -> dict:
+def send_request(url: str, **kwargs: Any) -> dict:
+    response = {}
     for attempt in range(10):
         try:
-            return _send_request(url, **kwargs)
+            response = _send_request(url, **kwargs)
+            break
         except Exception as e:
             if attempt == 9:
                 print(e)
@@ -80,8 +82,10 @@ def send_request(url, **kwargs) -> dict:
                 print(f"Error: {e}. Retrying in 20-30 seconds...")
                 time.sleep(20 + random.random() * 10)
 
+    return response
 
-def _send_request(url, **kwargs) -> dict:
+
+def _send_request(url: str, **kwargs: Any) -> dict:
     lockfiles_dir = "lockfiles"
     if not os.path.exists(lockfiles_dir):
         os.makedirs(lockfiles_dir)

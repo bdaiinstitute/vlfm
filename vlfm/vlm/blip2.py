@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 import torch
@@ -17,8 +17,8 @@ class BLIP2:
         self,
         name: str = "blip2_t5",
         model_type: str = "pretrain_flant5xxl",
-        device: str = None,
-    ):
+        device: Optional[Any] = None,
+    ) -> None:
         if device is None:
             device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
 
@@ -30,7 +30,7 @@ class BLIP2:
         )
         self.device = device
 
-    def ask(self, image, prompt=None) -> str:
+    def ask(self, image: np.ndarray, prompt: Optional[str] = None) -> str:
         """Generates a caption for the given image.
 
         Args:

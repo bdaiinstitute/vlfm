@@ -19,17 +19,17 @@ from vlfm.utils.visualization import add_text_to_image, pad_images
 
 
 class HabitatVis:
-    def __init__(self):
-        self.rgb = []
-        self.depth = []
-        self.maps = []
-        self.vis_maps = []
-        self.texts = []
+    def __init__(self) -> None:
+        self.rgb: List[np.ndarray] = []
+        self.depth: List[np.ndarray] = []
+        self.maps: List[np.ndarray] = []
+        self.vis_maps: List[List[np.ndarray]] = []
+        self.texts: List[List[str]] = []
         self.using_vis_maps = False
         self.using_annotated_rgb = False
         self.using_annotated_depth = False
 
-    def reset(self):
+    def reset(self) -> None:
         self.rgb = []
         self.depth = []
         self.maps = []
@@ -43,7 +43,7 @@ class HabitatVis:
         observations: TensorDict,
         infos: List[Dict[str, Any]],
         policy_info: List[Dict[str, Any]],
-    ):
+    ) -> None:
         assert len(infos) == 1, "Only support one environment for now"
 
         if "annotated_depth" in policy_info[0]:
@@ -226,7 +226,9 @@ def sim_xy_to_grid_xy(
     return grid_xy
 
 
-def color_point_cloud_on_map(infos, policy_info):
+def color_point_cloud_on_map(
+    infos: List[Dict[str, Any]], policy_info: List[Dict[str, Any]]
+) -> None:
     if len(policy_info[0]["target_point_cloud"]) == 0:
         return
 

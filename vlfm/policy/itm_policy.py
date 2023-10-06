@@ -27,12 +27,11 @@ class BaseITMPolicy(BaseObjectNavPolicy):
     _frontier_color: Tuple[int, int, int] = (0, 0, 255)
     _circle_marker_thickness: int = 2
     _circle_marker_radius: int = 5
-    _acyclic_enforcer: AcyclicEnforcer = None  # must be set by ._reset()
     _last_value: float = float("-inf")
     _last_frontier: np.ndarray = np.zeros(2)
 
     @staticmethod
-    def _vis_reduce_fn(i):
+    def _vis_reduce_fn(i: np.ndarray) -> np.ndarray:
         return np.max(i, axis=-1)
 
     def __init__(
@@ -40,19 +39,20 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         text_prompt: str,
         use_max_confidence: bool = True,
         sync_explored_areas: bool = False,
-        *args,
-        **kwargs,
+        *args: Any,
+        **kwargs: Any,
     ):
         super().__init__(*args, **kwargs)
-        self._itm = BLIP2ITMClient(port=os.environ.get("BLIP2ITM_PORT", 12182))
+        self._itm = BLIP2ITMClient(port=int(os.environ.get("BLIP2ITM_PORT", "12182")))
         self._text_prompt = text_prompt
         self._value_map: ValueMap = ValueMap(
             value_channels=len(text_prompt.split(PROMPT_SEPARATOR)),
             use_max_confidence=use_max_confidence,
             obstacle_map=self._obstacle_map if sync_explored_areas else None,
         )
+        self._acyclic_enforcer = AcyclicEnforcer()
 
-    def _reset(self):
+    def _reset(self) -> None:
         super()._reset()
         self._value_map.reset()
         self._acyclic_enforcer = AcyclicEnforcer()
@@ -164,13 +164,13 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         markers = []
 
         # Draw frontiers on to the cost map
-        base_kwargs = {
-            "radius": self._circle_marker_radius,
-            "thickness": self._circle_marker_thickness,
-        }
         frontiers = self._observations_cache["frontier_sensor"]
         for frontier in frontiers:
-            marker_kwargs = {"color": self._frontier_color, **base_kwargs}
+            marker_kwargs = {
+                "radius": self._circle_marker_radius,
+                "thickness": self._circle_marker_thickness,
+                "color": self._frontier_color,
+            }
             markers.append((frontier[:2], marker_kwargs))
 
         if not np.array_equal(self._last_goal, np.zeros(2)):
@@ -179,7 +179,11 @@ class BaseITMPolicy(BaseObjectNavPolicy):
                 color = self._selected__frontier_color
             else:
                 color = self._target_object_color
-            marker_kwargs = {"color": color, **base_kwargs}
+            marker_kwargs = {
+                "radius": self._circle_marker_radius,
+                "thickness": self._circle_marker_thickness,
+                "color": color,
+            }
             markers.append((self._last_goal, marker_kwargs))
         policy_info["value_map"] = cv2.cvtColor(
             self._value_map.visualize(markers, reduce_fn=self._vis_reduce_fn),
@@ -188,7 +192,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
 
         return policy_info
 
-    def _update_value_map(self):
+    def _update_value_map(self) -> None:
         all_rgb = [i[0] for i in self._observations_cache["value_map_rgbd"]]
         cosines = [
             [
@@ -219,12 +223,17 @@ class BaseITMPolicy(BaseObjectNavPolicy):
 
 
 class ITMPolicy(BaseITMPolicy):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._frontier_map: FrontierMap = FrontierMap()
 
     def act(
-        self, observations, rnn_hidden_states, prev_actions, masks, deterministic=False
+        self,
+        observations: Dict,
+        rnn_hidden_states: Any,
+        prev_actions: Any,
+        masks: Tensor,
+        deterministic: bool = False,
     ) -> Tuple[Tensor, Tensor]:
         self._pre_step(observations, masks)
         if self._visualize:
@@ -233,7 +242,7 @@ class ITMPolicy(BaseITMPolicy):
             observations, rnn_hidden_states, prev_actions, masks, deterministic
         )
 
-    def _reset(self):
+    def _reset(self) -> None:
         super()._reset()
         self._frontier_map.reset()
 
@@ -248,7 +257,12 @@ class ITMPolicy(BaseITMPolicy):
 
 class ITMPolicyV2(BaseITMPolicy):
     def act(
-        self, observations, rnn_hidden_states, prev_actions, masks, deterministic=False
+        self,
+        observations: Dict,
+        rnn_hidden_states: Any,
+        prev_actions: Any,
+        masks: Tensor,
+        deterministic: bool = False,
     ) -> Tuple[Tensor, Tensor]:
         self._pre_step(observations, masks)
         self._update_value_map()
@@ -264,11 +278,11 @@ class ITMPolicyV2(BaseITMPolicy):
 
 
 class ITMPolicyV3(ITMPolicyV2):
-    def __init__(self, exploration_thresh: float, *args, **kwargs):
+    def __init__(self, exploration_thresh: float, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._exploration_thresh = exploration_thresh
 
-        def visualize_value_map(arr: np.ndarray):
+        def visualize_value_map(arr: np.ndarray) -> np.ndarray:
             # Get the values in the first channel
             first_channel = arr[:, :, 0]
             # Get the max values across the two channels
@@ -280,7 +294,7 @@ class ITMPolicyV3(ITMPolicyV2):
 
             return result
 
-        self._vis_reduce_fn = visualize_value_map
+        self._vis_reduce_fn = visualize_value_map  # type: ignore
 
     def _sort_frontiers_by_value(
         self, observations: "TensorDict", frontiers: np.ndarray

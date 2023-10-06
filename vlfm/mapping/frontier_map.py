@@ -17,12 +17,12 @@ class FrontierMap:
     def __init__(self, encoding_type: str = "cosine"):
         self.encoder: BLIP2ITMClient = BLIP2ITMClient()
 
-    def reset(self):
+    def reset(self) -> None:
         self.frontiers = []
 
     def update(
         self, frontier_locations: List[np.ndarray], curr_image: np.ndarray, text: str
-    ):
+    ) -> None:
         """
         Takes in a list of frontier coordinates and the current image observation from
         the robot. Any stored frontiers that are not present in the given list are

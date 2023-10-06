@@ -14,7 +14,7 @@ from vlfm.reality.robots.bdsw_robot import BDSWRobot
 @hydra.main(
     version_base=None, config_path="../../config/", config_name="experiments/reality"
 )
-def main(cfg: RealityConfig):
+def main(cfg: RealityConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     policy = RealityITMPolicyV2.from_config(cfg)
 
@@ -41,7 +41,7 @@ def main(cfg: RealityConfig):
         run_env(env, policy, goal)
 
 
-def run_env(env: ObjectNavEnv, policy: RealityITMPolicyV2, goal: str):
+def run_env(env: ObjectNavEnv, policy: RealityITMPolicyV2, goal: str) -> None:
     observations = env.reset(goal)
     done = False
     mask = torch.zeros(1, 1, device="cuda", dtype=torch.bool)

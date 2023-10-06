@@ -1,4 +1,4 @@
-from typing import List
+from typing import Any, List
 
 import numpy as np
 
@@ -8,10 +8,12 @@ from vlfm.mapping.traj_visualizer import TrajectoryVisualizer
 class BaseMap:
     _confidence_mask: np.ndarray = None
     _camera_positions: List[np.ndarray] = []
-    _last_camera_yaw: float = None
+    _last_camera_yaw: float = 0.0
     _map_dtype: np.dtype = np.float32
 
-    def __init__(self, size: int = 1000, pixels_per_meter: int = 20, *args, **kwargs):
+    def __init__(
+        self, size: int = 1000, pixels_per_meter: int = 20, *args: Any, **kwargs: Any
+    ):
         """
         Args:
             size: The size of the map in pixels.
@@ -24,14 +26,14 @@ class BaseMap:
             self._episode_pixel_origin, self.pixels_per_meter
         )
 
-    def reset(self):
+    def reset(self) -> None:
         self._map.fill(0)
         self._camera_positions = []
         self._traj_vis = TrajectoryVisualizer(
             self._episode_pixel_origin, self.pixels_per_meter
         )
 
-    def update_agent_traj(self, robot_xy, robot_heading):
+    def update_agent_traj(self, robot_xy: np.ndarray, robot_heading: float) -> None:
         self._camera_positions.append(robot_xy)
         self._last_camera_yaw = robot_heading
 

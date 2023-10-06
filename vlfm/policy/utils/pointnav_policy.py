@@ -1,4 +1,4 @@
-from typing import Dict, Tuple, Union
+from typing import Any, Dict, Tuple, Union
 
 import numpy as np
 import torch
@@ -19,7 +19,7 @@ try:
         print("Using habitat 0.1.5; assuming SemExp code is being used")
 
         class PointNavResNetTensorOutputPolicy(PointNavResNetPolicy):
-            def act(self, *args, **kwargs) -> Tuple[Tensor, Tensor]:
+            def act(self, *args: Any, **kwargs: Any) -> Tuple[Tensor, Tensor]:
                 value, action, action_log_probs, rnn_hidden_states = super().act(
                     *args, **kwargs
                 )
@@ -29,8 +29,8 @@ try:
         from habitat_baselines.common.tensor_dict import TensorDict
         from habitat_baselines.rl.ppo.policy import PolicyActionData
 
-        class PointNavResNetTensorOutputPolicy(PointNavResNetPolicy):
-            def act(self, *args, **kwargs) -> Tuple[Tensor, Tensor]:
+        class PointNavResNetTensorOutputPolicy(PointNavResNetPolicy):  # type: ignore
+            def act(self, *args: Any, **kwargs: Any) -> Tuple[Tensor, Tensor]:
                 policy_actions: "PolicyActionData" = super().act(*args, **kwargs)
                 return policy_actions.actions, policy_actions.rnn_hidden_states
 
@@ -40,7 +40,7 @@ except ModuleNotFoundError:
         PointNavResNetPolicy,
     )
 
-    class PointNavResNetTensorOutputPolicy(PointNavResNetPolicy):
+    class PointNavResNetTensorOutputPolicy(PointNavResNetPolicy):  # type: ignore
         """Already outputs a tensor, so no need to convert."""
 
         pass

@@ -59,20 +59,20 @@ class GroundingDINO:
             image_tensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
         )
         if caption == "":
-            caption = self.caption
-        print("Caption:", caption)
+            caption_to_use = self.caption
+        print("Caption:", caption_to_use)
         with torch.inference_mode():
             boxes, logits, phrases = predict(
                 model=self.model,
                 image=image_transformed,
-                caption=caption,
+                caption=caption_to_use,
                 box_threshold=self.box_threshold,
                 text_threshold=self.text_threshold,
             )
         detections = ObjectDetections(boxes, logits, phrases, image_source=image)
 
         # Remove detections whose class names do not exactly match the provided classes
-        classes = caption[: -len(" .")].split(" . ")
+        classes = caption_to_use[: -len(" .")].split(" . ")
         detections.filter_by_class(classes)
 
         return detections

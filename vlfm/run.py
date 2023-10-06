@@ -37,7 +37,7 @@ register_hydra_plugin(HabitatConfigPlugin)
     config_path="../config",
     config_name="experiments/vlfm_objectnav_hm3d",
 )
-def main(cfg: DictConfig):
+def main(cfg: DictConfig) -> None:
     assert os.path.isdir("data"), "Missing 'data/' directory!"
     if not os.path.isfile("data/dummy_policy.pth"):
         print("Dummy policy weights not found! Please run the following command first:")

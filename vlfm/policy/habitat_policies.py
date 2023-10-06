@@ -65,6 +65,8 @@ class HabitatMixin:
 
     _stop_action: Tensor = TorchActionIDs.STOP
     _start_yaw: Union[float, None] = None  # must be set by _reset() method
+    _observations_cache: Dict[str, Any] = {}
+    _policy_info: Dict[str, Any] = {}
 
     def __init__(
         self,
@@ -86,8 +88,12 @@ class HabitatMixin:
         self._fx = self._fy = image_width / (2 * np.tan(camera_fov_rad / 2))
         self._dataset_type = dataset_type
 
+        self._compute_frontiers = super()._compute_frontiers  # type: ignore
+
     @classmethod
-    def from_config(cls, config: DictConfig, *args_unused, **kwargs_unused):
+    def from_config(
+        cls, config: DictConfig, *args_unused: Any, **kwargs_unused: Any
+    ) -> "HabitatMixin":
         policy_config: ZSOSPolicyConfig = config.habitat_baselines.rl.policy
         kwargs = {
             k: policy_config[k] for k in ZSOSPolicyConfig.kwaarg_names  # type: ignore
@@ -121,15 +127,15 @@ class HabitatMixin:
         rnn_hidden_states: Any,
         prev_actions: Any,
         masks: Tensor,
-        deterministic=False,
+        deterministic: bool = False,
     ) -> PolicyActionData:
         """Converts object ID to string name, returns action as PolicyActionData"""
         object_id: int = observations[ObjectGoalSensor.cls_uuid][0].item()
         obs_dict = observations.to_tree()
         if self._dataset_type == "hm3d":
-            obs_dict[ObjectGoalSensor.cls_uuid]: str = HM3D_ID_TO_NAME[object_id]
+            obs_dict[ObjectGoalSensor.cls_uuid] = HM3D_ID_TO_NAME[object_id]
         elif self._dataset_type == "mp3d":
-            obs_dict[ObjectGoalSensor.cls_uuid]: str = MP3D_ID_TO_NAME[object_id]
+            obs_dict[ObjectGoalSensor.cls_uuid] = MP3D_ID_TO_NAME[object_id]
             self._non_coco_caption = (
                 " . ".join(MP3D_ID_TO_NAME).replace("|", " . ") + " ."
             )
@@ -173,7 +179,7 @@ class HabitatMixin:
 
     def _cache_observations(
         self: Union["HabitatMixin", BaseObjectNavPolicy], observations: TensorDict
-    ):
+    ) -> None:
         """Caches the rgb, depth, and camera transform from the observations.
 
         Args:
@@ -251,7 +257,11 @@ class OracleFBEPolicy(HabitatMixin, BaseObjectNavPolicy):
 @baseline_registry.register_policy
 class SuperOracleFBEPolicy(HabitatMixin, BaseObjectNavPolicy):
     def act(
-        self, observations: TensorDict, rnn_hidden_states: Any, *args, **kwargs
+        self,
+        observations: TensorDict,
+        rnn_hidden_states: Any,  # can be anything because it is not used
+        *args: Any,
+        **kwargs: Any,
     ) -> PolicyActionData:
         return PolicyActionData(
             actions=observations[BaseExplorer.cls_uuid],

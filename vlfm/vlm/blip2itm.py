@@ -1,3 +1,5 @@
+from typing import Any, Optional
+
 import numpy as np
 import torch
 from PIL import Image
@@ -17,8 +19,8 @@ class BLIP2ITM:
         self,
         name: str = "blip2_image_text_matching",
         model_type: str = "pretrain",
-        device: str = None,
-    ):
+        device: Optional[Any] = None,
+    ) -> None:
         if device is None:
             device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
 

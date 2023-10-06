@@ -34,7 +34,7 @@ class ValueMap(BaseMap):
 
     _confidence_masks: Dict[Tuple[float, float], np.ndarray] = {}
     _camera_positions: List[np.ndarray] = []
-    _last_camera_yaw: float = None
+    _last_camera_yaw: float = 0.0
     _min_confidence: float = 0.25
     _decision_threshold: float = 0.35
 
@@ -44,8 +44,8 @@ class ValueMap(BaseMap):
         size: int = 1000,
         use_max_confidence: bool = True,
         fusion_type: str = "default",
-        obstacle_map: Optional["ObstacleMap"] = None,  # noqa: F821
-    ):
+        obstacle_map: Optional["ObstacleMap"] = None,  # type: ignore # noqa: F821
+    ) -> None:
         """
         Args:
             value_channels: The number of channels in the value map.
@@ -92,7 +92,7 @@ class ValueMap(BaseMap):
             with open(JSON_PATH, "w") as f:
                 f.write("{}")
 
-    def reset(self):
+    def reset(self) -> None:
         super().reset()
         self._value_map.fill(0)
 
@@ -104,7 +104,7 @@ class ValueMap(BaseMap):
         min_depth: float,
         max_depth: float,
         fov: float,
-    ):
+    ) -> None:
         """Updates the value map with the given depth image, pose, and value to use.
 
         Args:
@@ -146,7 +146,7 @@ class ValueMap(BaseMap):
                 json.dump(data, f)
 
     def sort_waypoints(
-        self, waypoints: np.ndarray, radius: float, reduce_fn: Callable = None
+        self, waypoints: np.ndarray, radius: float, reduce_fn: Optional[Callable] = None
     ) -> Tuple[np.ndarray, List[float]]:
         """Selects the best waypoint from the given list of waypoints.
 
@@ -184,7 +184,7 @@ class ValueMap(BaseMap):
             values = reduce_fn(values)
 
         # Use np.argsort to get the indices of the sorted values
-        sorted_inds = np.argsort([-v for v in values])  # sort in descending order
+        sorted_inds = np.argsort([-v for v in values])  # type: ignore
         sorted_values = [values[i] for i in sorted_inds]
         sorted_frontiers = np.array([waypoints[i] for i in sorted_inds])
 
@@ -194,7 +194,7 @@ class ValueMap(BaseMap):
         self,
         markers: Optional[List[Tuple[np.ndarray, Dict[str, Any]]]] = None,
         reduce_fn: Callable = lambda i: np.max(i, axis=-1),
-        obstacle_map: Optional["ObstacleMap"] = None,  # noqa: F821
+        obstacle_map: Optional["ObstacleMap"] = None,  # type: ignore # noqa: F821
     ) -> np.ndarray:
         """Return an image representation of the map"""
         # Must negate the y values to get the correct orientation
@@ -470,7 +470,7 @@ def remap(
     return (value - from_low) * (to_high - to_low) / (from_high - from_low) + to_low
 
 
-def replay_from_dir():
+def replay_from_dir() -> None:
     with open(KWARGS_JSON, "r") as f:
         kwargs = json.load(f)
     with open(JSON_PATH, "r") as f:

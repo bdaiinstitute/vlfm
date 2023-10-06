@@ -19,7 +19,7 @@ class RNNStateEncoder(nn.Module):
     timesteps to handle episodes ending in the middle of a rollout.
     """
 
-    def layer_init(self):
+    def layer_init(self) -> None:
         for name, param in self.rnn.named_parameters():
             if "weight" in name:
                 nn.init.orthogonal_(param)
@@ -33,7 +33,7 @@ class RNNStateEncoder(nn.Module):
         return hidden_states.contiguous()
 
     def single_forward(
-        self, x, hidden_states, masks
+        self, x: torch.Tensor, hidden_states: torch.Tensor, masks: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         r"""Forward for a non-sequence input"""
 
@@ -49,9 +49,9 @@ class RNNStateEncoder(nn.Module):
 
     def seq_forward(
         self,
-        x,
-        hidden_states,
-        masks,
+        x: torch.Tensor,
+        hidden_states: torch.Tensor,
+        masks: torch.Tensor,
         rnn_build_seq_info: Dict[str, torch.Tensor],
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         r"""Forward for a sequence of length T
@@ -69,8 +69,8 @@ class RNNStateEncoder(nn.Module):
         ) = build_rnn_inputs(x, hidden_states, masks, rnn_build_seq_info)
 
         rnn_ret = self.rnn(x_seq, self.unpack_hidden(hidden_states))
-        x_seq: PackedSequence = rnn_ret[0]
-        hidden_states: torch.Tensor = rnn_ret[1]
+        x_seq: PackedSequence = rnn_ret[0]  # type: ignore
+        hidden_states: torch.Tensor = rnn_ret[1]  # type: ignore
         hidden_states = self.pack_hidden(hidden_states)
 
         x, hidden_states = build_rnn_out_from_seq(
@@ -83,9 +83,9 @@ class RNNStateEncoder(nn.Module):
 
     def forward(
         self,
-        x,
-        hidden_states,
-        masks,
+        x: torch.Tensor,
+        hidden_states: torch.Tensor,
+        masks: torch.Tensor,
         rnn_build_seq_info: Optional[Dict[str, torch.Tensor]] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         hidden_states = hidden_states.permute(1, 0, 2)
@@ -127,7 +127,9 @@ class LSTMStateEncoder(RNNStateEncoder):
     ) -> torch.Tensor:
         return torch.cat(hidden_states, 0)
 
-    def unpack_hidden(self, hidden_states) -> Tuple[torch.Tensor, torch.Tensor]:
+    def unpack_hidden(
+        self, hidden_states: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         lstm_states = torch.chunk(hidden_states.contiguous(), 2, 0)
         return (lstm_states[0], lstm_states[1])
 
@@ -135,8 +137,8 @@ class LSTMStateEncoder(RNNStateEncoder):
 def build_rnn_inputs(
     x: torch.Tensor,
     rnn_states: torch.Tensor,
-    not_dones,
-    rnn_build_seq_info,
+    not_dones: torch.Tensor,
+    rnn_build_seq_info: Dict[str, torch.Tensor],
 ) -> Tuple[PackedSequence, torch.Tensor,]:
     r"""Create a PackedSequence input for an RNN such that each
     set of steps that are part of the same episode are all part of
@@ -189,8 +191,8 @@ def build_rnn_inputs(
 
 def build_rnn_out_from_seq(
     x_seq: PackedSequence,
-    hidden_states,
-    rnn_build_seq_info,
+    hidden_states: torch.Tensor,
+    rnn_build_seq_info: Dict[str, torch.Tensor],
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     r"""Construct the output of the rnn from a packed sequence returned by
         forward propping an RNN on the packed sequence returned by :ref:`build_rnn_inputs`.

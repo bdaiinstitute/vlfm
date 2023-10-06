@@ -30,7 +30,7 @@ if args.cuda:
     torch.cuda.manual_seed(args.seed)
 
 
-def main():
+def main() -> None:
     num_episodes = int(args.num_eval_episodes)
     args.device = torch.device("cuda:0" if args.cuda else "cpu")
 
@@ -69,12 +69,12 @@ def main():
     else:
         policy_cls = SemExpITMPolicyV2
 
-    policy = policy_cls(**policy_kwargs)
+    policy = policy_cls(**policy_kwargs)  # type: ignore
 
     torch.set_num_threads(1)
     envs = make_vec_envs(args)
     obs, infos = envs.reset()
-    ep_id, scene_id, target_object = None, None, None
+    ep_id, scene_id, target_object = "", "", ""
     for ep_num in range(num_episodes):
         vis_imgs = []
         for step in range(args.max_episode_length):
@@ -92,7 +92,7 @@ def main():
                 obs, rew, done, infos = envs.step(torch.tensor([0], dtype=torch.long))
             else:
                 obs_dict = merge_obs_infos(obs, infos)
-                action, policy_infos = policy.act(obs_dict, masks)
+                action, policy_infos = policy.act(obs_dict, None, None, masks)
 
                 if "VIDEO_DIR" in os.environ:
                     frame = create_frame(policy_infos)

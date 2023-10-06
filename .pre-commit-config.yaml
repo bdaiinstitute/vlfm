@@ -6,21 +6,15 @@ repos:
     hooks:
     -   id: ruff
         args: ['--fix', '--config', 'pyproject.toml']
-        exclude: 'dreamerv3/.*|grpc_infra/.*'
 
 -   repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
     hooks:
     -   id: end-of-file-fixer
-        exclude: 'dreamerv3/.*|grpc_infra/.*'
     -   id: trailing-whitespace
-        exclude: 'dreamerv3/.*|grpc_infra/.*'
     -   id: check-yaml
-        exclude: 'dreamerv3/.*|grpc_infra/.*'
     -   id: check-added-large-files
-        exclude: 'dreamerv3/.*|grpc_infra/.*'
     -   id: check-toml
-        exclude: 'dreamerv3/.*|grpc_infra/.*'
 
 -   repo: https://github.com/psf/black
     rev: 23.3.0
@@ -28,19 +22,18 @@ repos:
     -   id: black
         language_version: python3.9
         args: ['--config', 'pyproject.toml']
-        exclude: 'dreamerv3/.*|grpc_infra/.*'
         verbose: true
 
-# -   repo: https://github.com/pre-commit/mirrors-mypy
-#     rev: v1.2.0
-#     hooks:
-#     -   id: mypy
-#         pass_filenames: false
-#         additional_dependencies:
-#         - types-protobuf
-#         - types-requests
-#         - types-simplejson
-#         - types-ujson
-#         - types-PyYAML
-#         - types-toml
-#         - types-six
+-   repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.2.0
+    hooks:
+    -   id: mypy
+        pass_filenames: false
+        additional_dependencies:
+        - types-protobuf
+        - types-requests
+        - types-simplejson
+        - types-ujson
+        - types-PyYAML
+        - types-toml
+        - types-six

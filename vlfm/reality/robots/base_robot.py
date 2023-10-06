@@ -28,7 +28,7 @@ class BaseRobot:
         """
         raise NotImplementedError
 
-    def command_base_velocity(self, ang_vel: float, lin_vel: float):
+    def command_base_velocity(self, ang_vel: float, lin_vel: float) -> None:
         """Commands the base to execute given angular/linear velocities, non-blocking
 
         Args:
@@ -49,7 +49,7 @@ class BaseRobot:
         """
         raise NotImplementedError
 
-    def set_arm_joints(self, joints: np.ndarray, travel_time: float):
+    def set_arm_joints(self, joints: np.ndarray, travel_time: float) -> None:
         """Moves each of the 6 arm joints to the specified angle
 
         Args:
@@ -58,7 +58,7 @@ class BaseRobot:
         """
         raise NotImplementedError
 
-    def open_gripper(self):
+    def open_gripper(self) -> None:
         """Opens the gripper"""
         raise NotImplementedError
 
@@ -106,17 +106,17 @@ class FakeRobot(BaseRobot):
         }
         return self.reorient_images(images)
 
-    def command_base_velocity(self, ang_vel: float, lin_vel: float):
+    def command_base_velocity(self, ang_vel: float, lin_vel: float) -> None:
         pass
 
     def get_transform(self, frame: str = SpotFrameIds.BODY) -> np.ndarray:
         return np.eye(4)
 
-    def set_arm_joints(self, joints: np.ndarray, travel_time: float):
+    def set_arm_joints(self, joints: np.ndarray, travel_time: float) -> None:
         pass
 
-    def open_gripper(self):
+    def open_gripper(self) -> None:
         pass
 
-    def get_camera_data(self, src: List[str]):
+    def get_camera_data(self, src: List[str]) -> Dict[str, np.ndarray]:
         raise NotImplementedError

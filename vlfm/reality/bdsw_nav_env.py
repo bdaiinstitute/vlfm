@@ -7,7 +7,9 @@ from vlfm.reality.pointnav_env import PointNavEnv
 from vlfm.reality.robots.bdsw_robot import BDSWRobot
 
 
-def run_env(env: PointNavEnv, policy: WrappedPointNavResNetPolicy, goal: np.ndarray):
+def run_env(
+    env: PointNavEnv, policy: WrappedPointNavResNetPolicy, goal: np.ndarray
+) -> None:
     observations = env.reset(goal)
     done = False
     mask = torch.zeros(1, 1, device=policy.device, dtype=torch.bool)
@@ -37,7 +39,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     pointnav_ckpt_path = args.pointnav_ckpt_path
-    policy = WrappedPointNavResNetPolicy(pointnav_ckpt_path, discrete_actions=False)
+    policy = WrappedPointNavResNetPolicy(pointnav_ckpt_path)
     goal = np.array([float(x) for x in args.goal.split(",")])
 
     spot = Spot("BDSW_env")  # just a name, can be anything

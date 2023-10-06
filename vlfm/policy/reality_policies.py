@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 import torch
@@ -8,7 +8,7 @@ from PIL import Image
 from torch import Tensor
 
 from vlfm.mapping.obstacle_map import ObstacleMap
-from vlfm.policy.base_objectnav_policy import BaseObjectNavPolicy, ZSOSConfig
+from vlfm.policy.base_objectnav_policy import ZSOSConfig
 from vlfm.policy.itm_policy import ITMPolicyV2
 
 INITIAL_ARM_YAWS = np.deg2rad([-90, -60, -30, 0, 30, 60, 90, 0]).tolist()
@@ -16,9 +16,9 @@ INITIAL_ARM_YAWS = np.deg2rad([-90, -60, -30, 0, 30, 60, 90, 0]).tolist()
 
 class RealityMixin:
     """
-    This Python mixin only contains code relevant for running a BaseObjectNavPolicy
+    This Python mixin only contains code relevant for running a ITMPolicyV2
     explicitly in the real world (vs. Habitat), and will endow any parent class
-    (that is a subclass of BaseObjectNavPolicy) with the necessary methods to run on the
+    (that is a subclass of ITMPolicyV2) with the necessary methods to run on the
     Spot robot in the real world.
     """
 
@@ -29,34 +29,41 @@ class RealityMixin:
         " . clock . vase . scissors . teddy bear . hair drier . toothbrush ."
     )
     _initial_yaws: List = INITIAL_ARM_YAWS.copy()
+    _observations_cache: Dict[str, Any] = {}
+    _policy_info: Dict[str, Any] = {}
+    _done_initializing: bool = False
 
-    def __init__(self: BaseObjectNavPolicy, *args: Any, **kwargs: Any) -> None:
-        super().__init__(sync_explored_areas=True, *args, **kwargs)
+    def __init__(
+        self: Union["RealityMixin", ITMPolicyV2], *args: Any, **kwargs: Any
+    ) -> None:
+        super().__init__(sync_explored_areas=True, *args, **kwargs)  # type: ignore
         self._depth_model = torch.hub.load(
             "isl-org/ZoeDepth", "ZoeD_NK", config_mode="eval", pretrained=True
         ).to("cuda" if torch.cuda.is_available() else "cpu")
-        self._object_map.use_dbscan = False
+        self._object_map.use_dbscan = False  # type: ignore
 
     @classmethod
-    def from_config(cls, config: DictConfig, *args_unused, **kwargs_unused):
+    def from_config(
+        cls, config: DictConfig, *args_unused: Any, **kwargs_unused: Any
+    ) -> Any:
         policy_config: ZSOSConfig = config.policy
         kwargs = {k: policy_config[k] for k in ZSOSConfig.kwaarg_names}  # type: ignore
 
         return cls(**kwargs)
 
     def act(
-        self: Union["RealityMixin", BaseObjectNavPolicy],
+        self: Union["RealityMixin", ITMPolicyV2],
         observations: Dict[str, Any],
-        rnn_hidden_states: Any,
+        rnn_hidden_states: Tensor,
         prev_actions: Any,
         masks: Tensor,
-        deterministic=False,
-    ) -> Dict[str, Any]:
+        deterministic: bool = False,
+    ) -> Tuple[Tensor, Tensor]:
         if observations["objectgoal"] not in self._non_coco_caption:
             self._non_coco_caption = (
                 observations["objectgoal"] + " . " + self._non_coco_caption
             )
-        parent_cls: BaseObjectNavPolicy = super()  # type: ignore
+        parent_cls: ITMPolicyV2 = super()  # type: ignore
         action: Tensor = parent_cls.act(
             observations, rnn_hidden_states, prev_actions, masks, deterministic
         )[0]
@@ -66,34 +73,39 @@ class RealityMixin:
         # convert this numpy array to a dictionary with keys "angular" and "linear" so
         # that it can be passed to the Spot robot.
         if self._done_initializing:
-            action_dict = {
-                "angular": action[0][0].item(),
-                "linear": action[0][1].item(),
-                "arm_yaw": -1,
-                "info": self._policy_info,
-            }
+            angular = action[0][0].item()
+            linear = action[0][1].item()
+            arm_yaw = -1
         else:
-            action_dict = {
-                "angular": 0,
-                "linear": 0,
-                "arm_yaw": action[0][0].item(),
-                "info": self._policy_info,
-            }
-
-        if "rho_theta" in self._policy_info:
-            action_dict["rho_theta"] = self._policy_info["rho_theta"]
+            angular = 0
+            linear = 0
+            arm_yaw = action[0][0].item()
 
         self._done_initializing = len(self._initial_yaws) == 0
 
-        return action_dict
+        action = torch.tensor([[angular, linear, arm_yaw]], dtype=torch.float32)
+
+        return action, rnn_hidden_states
 
     def get_action(
         self, observations: Dict[str, Any], masks: Tensor, deterministic: bool = True
     ) -> Dict[str, Any]:
-        return self.act(observations, None, None, masks, deterministic=deterministic)
+        actions, _ = self.act(
+            observations, None, None, masks, deterministic=deterministic
+        )
+        action_dict = {
+            "angular": actions[0],
+            "linear": actions[1],
+            "arm_yaw": actions[2],
+            "info": self._policy_info,
+        }
+        if "rho_theta" in self._policy_info:
+            action_dict["rho_theta"] = self._policy_info["rho_theta"]
 
-    def _reset(self: BaseObjectNavPolicy) -> None:
-        parent_cls: BaseObjectNavPolicy = super()  # type: ignore
+        return action_dict
+
+    def _reset(self: Union["RealityMixin", ITMPolicyV2]) -> None:
+        parent_cls: ITMPolicyV2 = super()  # type: ignore
         parent_cls._reset()
         self._initial_yaws = INITIAL_ARM_YAWS.copy()
         self._done_initializing = False
@@ -103,8 +115,8 @@ class RealityMixin:
         return torch.tensor([[yaw]], dtype=torch.float32)
 
     def _cache_observations(
-        self: Union["RealityMixin", BaseObjectNavPolicy], observations: Dict[str, Any]
-    ):
+        self: Union["RealityMixin", ITMPolicyV2], observations: Dict[str, Any]
+    ) -> None:
         """Caches the rgb, depth, and camera transform from the observations.
 
         Args:

@@ -37,6 +37,12 @@ habitat = [
     "habitat-baselines == 0.2.420230405",
     "habitat-lab == 0.2.420230405",
 ]
+reality = [
+    "spot_wrapper @ git+https://github.com/naokiyokoyama/bd_spot_wrapper.git",
+    "bosdyn-client >= 3.3.2",
+    "bosdyn-api >= 3.3.2",
+    "six >= 1.16.0",
+]
 
 [project.urls]
 "Homepage" = "theaiinstitute.com"
@@ -120,5 +126,5 @@ strict_equality = true
 warn_unreachable = true
 warn_redundant_casts = true
 no_implicit_optional = true
-files = ['projects', 'src', 'ws']
+files = ['vlfm']
 exclude = '^(docker|.*external|.*thirdparty|.*install|.*build|.*_experimental)/'

@@ -4,7 +4,7 @@
 # https://github.com/facebookresearch/habitat-lab/blob/main/habitat-baselines/habitat_baselines/rl/ddppo/policy/resnet.py
 # This is a filtered down version that only support ResNet-18
 
-from typing import List, Type, cast
+from typing import List, Optional, Type, cast
 
 from torch import Tensor
 from torch import nn as nn
@@ -17,13 +17,13 @@ class BasicBlock(nn.Module):
 
     def __init__(
         self,
-        inplanes,
-        planes,
-        ngroups,
-        stride=1,
-        downsample=None,
-        cardinality=1,
-    ):
+        inplanes: int,
+        planes: int,
+        ngroups: int,
+        stride: int = 1,
+        downsample: Optional[nn.Module] = None,
+        cardinality: int = 1,
+    ) -> None:
         super(BasicBlock, self).__init__()
         self.convs = nn.Sequential(
             conv3x3(inplanes, planes, stride, groups=cardinality),
@@ -35,7 +35,7 @@ class BasicBlock(nn.Module):
         self.downsample = downsample
         self.relu = nn.ReLU(True)
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         residual = x
 
         out = self.convs(x)
@@ -96,15 +96,17 @@ class ResNet(nn.Module):
         if block.resneXt:
             base_planes *= 2
 
-        self.layer1 = self._make_layer(block, ngroups, base_planes, layers[0])
+        self.layer1 = self._make_layer(
+            block, ngroups, base_planes, layers[0]  # type: ignore
+        )
         self.layer2 = self._make_layer(
-            block, ngroups, base_planes * 2, layers[1], stride=2
+            block, ngroups, base_planes * 2, layers[1], stride=2  # type: ignore
         )
         self.layer3 = self._make_layer(
-            block, ngroups, base_planes * 2 * 2, layers[2], stride=2
+            block, ngroups, base_planes * 2 * 2, layers[2], stride=2  # type: ignore
         )
         self.layer4 = self._make_layer(
-            block, ngroups, base_planes * 2 * 2 * 2, layers[3], stride=2
+            block, ngroups, base_planes * 2 * 2 * 2, layers[3], stride=2  # type: ignore
         )
 
         self.final_channels = self.inplanes
@@ -142,7 +144,7 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:
         x = self.conv1(x)
         x = self.maxpool(x)
         x = cast(Tensor, x)
@@ -154,7 +156,7 @@ class ResNet(nn.Module):
         return x
 
 
-def resnet18(in_channels, base_planes, ngroups):
+def resnet18(in_channels: int, base_planes: int, ngroups: int) -> ResNet:
     model = ResNet(in_channels, base_planes, ngroups, BasicBlock, [2, 2, 2, 2])
 
     return model

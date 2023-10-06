@@ -25,7 +25,7 @@ try:
     from vlfm.policy.base_policy import BasePolicy
 except Exception:
 
-    class BasePolicy:
+    class BasePolicy:  # type: ignore
         pass
 
 
@@ -55,21 +55,22 @@ class BaseObjectNavPolicy(BasePolicy):
         vqa_prompt: str = "Is this ",
         coco_threshold: float = 0.8,
         non_coco_threshold: float = 0.4,
-        *args,
-        **kwargs,
-    ):
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         super().__init__()
         self._object_detector = GroundingDINOClient(
-            port=os.environ.get("GROUNDING_DINO_PORT", 12181)
+            port=int(os.environ.get("GROUNDING_DINO_PORT", "12181"))
         )
         self._coco_object_detector = YOLOv7Client(
-            port=os.environ.get("YOLOV7_PORT", 12184)
+            port=int(os.environ.get("YOLOV7_PORT", "12184"))
         )
-        self._mobile_sam = MobileSAMClient(port=os.environ.get("SAM_PORT", 12183))
+        self._mobile_sam = MobileSAMClient(
+            port=int(os.environ.get("SAM_PORT", "12183"))
+        )
+        self._use_vqa = use_vqa
         if use_vqa:
-            self._vqa = BLIP2Client(port=os.environ.get("BLIP2_PORT", 12185))
-        else:
-            self._vqa = None
+            self._vqa = BLIP2Client(port=int(os.environ.get("BLIP2_PORT", "12185")))
         self._pointnav_policy = WrappedPointNavResNetPolicy(pointnav_policy_path)
         self._object_map: ObjectPointCloudMap = ObjectPointCloudMap(
             erosion_size=object_map_erosion_size
@@ -96,7 +97,7 @@ class BaseObjectNavPolicy(BasePolicy):
                 hole_area_thresh=hole_area_thresh,
             )
 
-    def _reset(self):
+    def _reset(self) -> None:
         self._target_object = ""
         self._pointnav_policy.reset()
         self._object_map.reset()
@@ -109,7 +110,12 @@ class BaseObjectNavPolicy(BasePolicy):
         self._did_reset = True
 
     def act(
-        self, observations, rnn_hidden_states, prev_actions, masks, deterministic=False
+        self,
+        observations: Dict,
+        rnn_hidden_states: Any,
+        prev_actions: Any,
+        masks: Tensor,
+        deterministic: bool = False,
     ) -> Tuple[Tensor, Tensor]:
         """
         Starts the episode by 'initializing' and allowing robot to get its bearings
@@ -168,7 +174,9 @@ class BaseObjectNavPolicy(BasePolicy):
     def _explore(self, observations: "TensorDict") -> Tensor:
         raise NotImplementedError
 
-    def _get_target_object_location(self, position) -> Union[None, np.ndarray]:
+    def _get_target_object_location(
+        self, position: np.ndarray
+    ) -> Union[None, np.ndarray]:
         if self._object_map.has_object(self._target_object):
             return self._object_map.get_best_object(self._target_object, position)
         else:
@@ -254,7 +262,7 @@ class BaseObjectNavPolicy(BasePolicy):
 
         return detections
 
-    def _pointnav(self, goal: np.ndarray, stop=False) -> Tensor:
+    def _pointnav(self, goal: np.ndarray, stop: bool = False) -> Tensor:
         """
         Calculates rho and theta from the robot's current position to the goal using the
         gps and heading sensors within the observations and the given goal, then uses
@@ -281,7 +289,7 @@ class BaseObjectNavPolicy(BasePolicy):
         obs_pointnav = {
             "depth": image_resize(
                 self._observations_cache["nav_depth"],
-                self._depth_image_shape,
+                (self._depth_image_shape[0], self._depth_image_shape[1]),
                 channels_last=True,
                 interpolation_mode="area",
             ),
@@ -340,7 +348,7 @@ class BaseObjectNavPolicy(BasePolicy):
 
             # If we are using vqa, then use the BLIP2 model to visually confirm whether
             # the contours are actually correct.
-            if self._vqa is not None:
+            if self._use_vqa is not None:
                 contours, _ = cv2.findContours(
                     object_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
                 )
@@ -372,7 +380,7 @@ class BaseObjectNavPolicy(BasePolicy):
 
         return detections
 
-    def _cache_observations(self, observations: "TensorDict"):
+    def _cache_observations(self, observations: "TensorDict") -> None:
         """Extracts the rgb, depth, and camera transform from the observations.
 
         Args:
@@ -414,7 +422,7 @@ class ZSOSConfig:
     non_coco_threshold: float = 0.4
     agent_radius: float = 0.18
 
-    @classmethod
+    @classmethod  # type: ignore
     @property
     def kwaarg_names(cls) -> List[str]:
         # This returns all the fields listed above, except the name field

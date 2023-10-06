@@ -1,12 +1,9 @@
-import json
-
 import cv2
 import numpy as np
 
 from frontier_exploration.frontier_detection import detect_frontier_waypoints
 from frontier_exploration.utils.fog_of_war import reveal_fog_of_war
 from vlfm.mapping.base_map import BaseMap
-from vlfm.mapping.value_map import JSON_PATH, KWARGS_JSON
 from vlfm.utils.geometry_utils import extract_yaw, get_point_cloud, transform_points
 from vlfm.utils.img_utils import fill_small_holes
 
@@ -44,7 +41,7 @@ class ObstacleMap(BaseMap):
         kernel_size = int(kernel_size) + (int(kernel_size) % 2 == 0)
         self._navigable_kernel = np.ones((kernel_size, kernel_size), np.uint8)
 
-    def reset(self):
+    def reset(self) -> None:
         super().reset()
         self._navigable_map.fill(0)
         self.explored_area.fill(0)
@@ -62,7 +59,7 @@ class ObstacleMap(BaseMap):
         topdown_fov: float,
         explore: bool = True,
         update_obstacles: bool = True,
-    ):
+    ) -> None:
         """
         Adds all obstacles from the current view to the map. Also updates the area
         that the robot has explored so far.
@@ -159,7 +156,7 @@ class ObstacleMap(BaseMap):
         else:
             self.frontiers = self._px_to_xy(self._frontiers_px)
 
-    def _get_frontiers(self):
+    def _get_frontiers(self) -> np.ndarray:
         """Returns the frontiers of the map."""
         # Dilate the explored area slightly to prevent small gaps between the explored
         # area and the unnavigable area from being detected as frontiers.
@@ -175,7 +172,7 @@ class ObstacleMap(BaseMap):
         )
         return frontiers
 
-    def visualize(self):
+    def visualize(self) -> np.ndarray:
         """Visualizes the map."""
         vis_img = np.ones((*self._map.shape[:2], 3), dtype=np.uint8) * 255
         # Draw explored area in light green
@@ -204,35 +201,3 @@ def filter_points_by_height(
     points: np.ndarray, min_height: float, max_height: float
 ) -> np.ndarray:
     return points[(points[:, 2] >= min_height) & (points[:, 2] <= max_height)]
-
-
-def replay_from_dir():
-    with open(KWARGS_JSON, "r") as f:
-        kwargs = json.load(f)
-    with open(JSON_PATH, "r") as f:
-        data = json.load(f)
-
-    v = ObstacleMap(
-        min_height=float(kwargs.get("min_height", 0.15)),
-        max_height=float(kwargs.get("max_height", 0.88)),
-        agent_radius=float(kwargs.get("agent_radius", 0.18)),
-        size=kwargs["size"],
-    )
-
-    sorted_keys = sorted(list(data.keys()))
-
-    for img_path in sorted_keys:
-        tf_camera_to_episodic = np.array(data[img_path]["tf_camera_to_episodic"])
-        depth = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE).astype(np.float32) / 255.0
-        v.update_map(depth, tf_camera_to_episodic)
-
-        img = v.visualize()
-        cv2.imshow("img", img)
-        key = cv2.waitKey(0)
-        if key == ord("q"):
-            break
-
-
-if __name__ == "__main__":
-    replay_from_dir()
-    quit()

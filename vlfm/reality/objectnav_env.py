@@ -42,12 +42,12 @@ class ObjectNavEnv(PointNavEnv):
     Gym environment for doing the ObjectNav task on the Spot robot in the real world.
     """
 
-    tf_episodic_to_global: np.ndarray = None  # must be set in reset()
-    tf_global_to_episodic: np.ndarray = None  # must be set in reset()
-    episodic_start_yaw: float = None  # must be set in reset()
-    target_object: str = None  # must be set in reset()
+    tf_episodic_to_global: np.ndarray = np.eye(4)  # must be set in reset()
+    tf_global_to_episodic: np.ndarray = np.eye(4)  # must be set in reset()
+    episodic_start_yaw: float = float("inf")  # must be set in reset()
+    target_object: str = ""  # must be set in reset()
 
-    def __init__(self, max_gripper_cam_depth: float, *args, **kwargs):
+    def __init__(self, max_gripper_cam_depth: float, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._max_gripper_cam_depth = max_gripper_cam_depth
         # Get the current date and time
@@ -57,7 +57,7 @@ class ObjectNavEnv(PointNavEnv):
         self._vis_dir = f"{date_string}"
         os.makedirs(f"vis/{self._vis_dir}", exist_ok=True)
 
-    def reset(self, goal: Any, *args, **kwargs) -> Dict[str, np.ndarray]:
+    def reset(self, goal: Any, *args: Any, **kwargs: Any) -> Dict[str, np.ndarray]:
         assert isinstance(goal, str)
         self.target_object = goal
         # Transformation matrix from where the robot started to the global frame
@@ -130,7 +130,7 @@ class ObjectNavEnv(PointNavEnv):
             "object_map_rgbd": object_map_rgbd,
         }
 
-    def _get_camera_obs(self):
+    def _get_camera_obs(self) -> Tuple[np.ndarray, List, List, List]:
         """
         Poll all necessary cameras on the robot and return their images, focal lengths,
         and transforms to the global frame.
@@ -230,7 +230,7 @@ class ObjectNavEnv(PointNavEnv):
             fx = cam_data[rgb_src]["fx"]
             tf = cam_data[rgb_src]["tf_camera_to_global"]
             fov = get_fov(fx, rgb.shape[1])
-            src_data = (rgb, depth, tf, min_depth, max_depth, fov)
+            src_data = (rgb, depth, tf, min_depth, max_depth, fov)  # type: ignore
             value_map_rgbd.append(src_data)
 
         return nav_depth, obstacle_map_depths, value_map_rgbd, object_map_rgbd

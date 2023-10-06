@@ -4,7 +4,11 @@ import cv2
 import numpy as np
 
 
-def rotate_image(image: np.ndarray, radians: float, border_value=0) -> np.ndarray:
+def rotate_image(
+    image: np.ndarray,
+    radians: float,
+    border_value: Union[int, Tuple[int, int, int]] = 0,
+) -> np.ndarray:
     """Rotate an image by the specified angle in radians.
 
     Args:
@@ -90,7 +94,7 @@ def monochannel_to_inferno_rgb(image: np.ndarray) -> np.ndarray:
 
 
 def resize_images(
-    images: List[np.ndarray], match_dimension="height", use_max: bool = True
+    images: List[np.ndarray], match_dimension: str = "height", use_max: bool = True
 ) -> List[np.ndarray]:
     """
     Resize images to match either their heights or their widths.
@@ -309,7 +313,7 @@ def median_blur_normalized_depth_image(
     return blurred_depth_image
 
 
-def reorient_rescale_map(vis_map_img) -> np.ndarray:
+def reorient_rescale_map(vis_map_img: np.ndarray) -> np.ndarray:
     """Reorient and rescale a visual map image for display.
 
     This function preprocesses a visual map image by:
@@ -337,7 +341,7 @@ def reorient_rescale_map(vis_map_img) -> np.ndarray:
     return vis_map_img
 
 
-def remove_small_blobs(image, min_area):
+def remove_small_blobs(image: np.ndarray, min_area: int) -> np.ndarray:
     # Find all contours in the image
     contours, _ = cv2.findContours(image, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 

@@ -20,7 +20,7 @@ class ObjectPointCloudMap:
         self._erosion_size = erosion_size
         self.last_target_coord: Union[np.ndarray, None] = None
 
-    def reset(self):
+    def reset(self) -> None:
         self.clouds = {}
         self.last_target_coord = None
 
@@ -207,7 +207,7 @@ class ObjectPointCloudMap:
 
 
 def open3d_dbscan_filtering(
-    points, eps: float = 0.2, min_points: int = 100
+    points: np.ndarray, eps: float = 0.2, min_points: int = 100
 ) -> np.ndarray:
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
@@ -238,7 +238,7 @@ def open3d_dbscan_filtering(
     return largest_cluster_points
 
 
-def visualize_and_save_point_cloud(point_cloud: np.ndarray, save_path: str):
+def visualize_and_save_point_cloud(point_cloud: np.ndarray, save_path: str) -> None:
     """Visualizes an array of 3D points and saves the visualization as a PNG image.
 
     Args:

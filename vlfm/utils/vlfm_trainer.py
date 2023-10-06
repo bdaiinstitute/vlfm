@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 import numpy as np
 import torch
 import tqdm
-from habitat import logger
+from habitat import VectorEnv, logger
 from habitat.config import read_write
 from habitat.config.default import get_agent_config
 from habitat.tasks.rearrange.rearrange_sensors import GfxReplayMeasure
@@ -42,6 +42,8 @@ def extract_scalars_from_info(info: Dict[str, Any]) -> Dict[str, float]:
 
 @baseline_registry.register_trainer(name="vlfm")
 class VLFMTrainer(PPOTrainer):
+    envs: VectorEnv
+
     def _eval_checkpoint(
         self,
         checkpoint_path: str,

@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 from spot_wrapper.spot import Spot, image_response_to_cv2
@@ -44,7 +44,7 @@ class BDSWRobot(BaseRobot):
         }
         return imgs
 
-    def command_base_velocity(self, ang_vel: float, lin_vel: float):
+    def command_base_velocity(self, ang_vel: float, lin_vel: float) -> None:
         """Commands the base to execute given angular/linear velocities, non-blocking
 
         Args:
@@ -74,7 +74,7 @@ class BDSWRobot(BaseRobot):
         """
         return self.spot.get_transform(from_frame=frame)
 
-    def set_arm_joints(self, joints: np.ndarray, travel_time: float):
+    def set_arm_joints(self, joints: np.ndarray, travel_time: float) -> None:
         """Moves each of the 6 arm joints to the specified angle
 
         Args:
@@ -83,7 +83,7 @@ class BDSWRobot(BaseRobot):
         """
         self.spot.set_arm_joint_positions(positions=joints, travel_time=travel_time)
 
-    def open_gripper(self):
+    def open_gripper(self) -> None:
         """Opens the gripper"""
         self.spot.open_gripper()
 
@@ -104,7 +104,7 @@ class BDSWRobot(BaseRobot):
         }
         return imgs
 
-    def _camera_response_to_data(self, response) -> Dict[str, np.ndarray]:
+    def _camera_response_to_data(self, response: Any) -> Dict[str, np.ndarray]:
         image: np.ndarray = image_response_to_cv2(response, reorient=False)
         fx: float = response.source.pinhole.intrinsics.focal_length.x
         fy: float = response.source.pinhole.intrinsics.focal_length.y

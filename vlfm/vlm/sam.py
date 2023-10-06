@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import Any, List, Optional
 
 import numpy as np
 import torch
@@ -24,8 +24,8 @@ class MobileSAM:
         self,
         sam_checkpoint: str,
         model_type: str = "vit_t",
-        device: str = None,
-    ):
+        device: Optional[Any] = None,
+    ) -> None:
         if device is None:
             device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
         self.device = device

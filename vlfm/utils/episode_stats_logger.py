@@ -111,7 +111,7 @@ def was_false_positive(infos: Dict[str, Any]) -> bool:
         return True
 
 
-def remove_numpy_arrays(d: Dict) -> Dict:
+def remove_numpy_arrays(d: Any) -> Dict:
     if not isinstance(d, dict):
         return d
 
