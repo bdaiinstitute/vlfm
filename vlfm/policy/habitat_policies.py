@@ -67,6 +67,7 @@ class HabitatMixin:
     _start_yaw: Union[float, None] = None  # must be set by _reset() method
     _observations_cache: Dict[str, Any] = {}
     _policy_info: Dict[str, Any] = {}
+    _compute_frontiers: bool = False
 
     def __init__(
         self,
@@ -87,8 +88,6 @@ class HabitatMixin:
         self._camera_fov = camera_fov_rad
         self._fx = self._fy = image_width / (2 * np.tan(camera_fov_rad / 2))
         self._dataset_type = dataset_type
-
-        self._compute_frontiers = super()._compute_frontiers  # type: ignore
 
     @classmethod
     def from_config(
