@@ -73,10 +73,10 @@ python -m habitat_sim.utils.datasets_download \
 
 # Download HM3D ObjectNav dataset episodes
 wget $HM3D_OBJECTNAV &&
-unzip objectnav_hm3d_v2.zip &&
+unzip objectnav_hm3d_v1.zip &&
 mkdir -p $DATA_DIR/datasets/objectnav/hm3d  &&
-mv objectnav_hm3d_v2 $DATA_DIR/datasets/objectnav/hm3d/v2 &&
-rm objectnav_hm3d_v2.zip
+mv objectnav_hm3d_v1 $DATA_DIR/datasets/objectnav/hm3d/v1 &&
+rm objectnav_hm3d_v1.zip
 ```
 
 ## 3. Downloading weights for various models
