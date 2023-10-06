@@ -182,10 +182,10 @@ class VLFMTrainer(PPOTrainer):
                     not_done_masks,
                     deterministic=False,
                 )
-                if "ZSOS_RECORD_ACTIONS_DIR" in os.environ:
+                if "VLFM_RECORD_ACTIONS_DIR" in os.environ:
                     action_id = action_data.actions.cpu()[0].item()
                     filepath = os.path.join(
-                        os.environ["ZSOS_RECORD_ACTIONS_DIR"],
+                        os.environ["VLFM_RECORD_ACTIONS_DIR"],
                         "actions.txt",
                     )
                     # If the file doesn't exist, create it
