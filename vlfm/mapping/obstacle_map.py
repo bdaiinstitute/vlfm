@@ -1,8 +1,8 @@
 import cv2
 import numpy as np
-
 from frontier_exploration.frontier_detection import detect_frontier_waypoints
 from frontier_exploration.utils.fog_of_war import reveal_fog_of_war
+
 from vlfm.mapping.base_map import BaseMap
 from vlfm.utils.geometry_utils import extract_yaw, get_point_cloud, transform_points
 from vlfm.utils.img_utils import fill_small_holes
