@@ -1,31 +1,22 @@
 # Copyright [2023] Boston Dynamics AI Institute, Inc.
 
-name: ZSOS - Main Build
-
+name: VLFM CI
 on:
-  push:
-    branches: [ main ]
   pull_request:
+  push:
+    branches:
+      - main
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ['3.9.16']
-        os: [ubuntu-latest]
+  vlfm_main_build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: ghcr.io/bdaiinstitute/bdaii_vlfm:main
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install package
-      run: |
-        sudo apt-get install -y libgl1-mesa-dev
-        pip install -e .[habitat]
-        pip install -e .[dev]
     - name: Pytest
       run: |
-        pytest test
+        pytest
