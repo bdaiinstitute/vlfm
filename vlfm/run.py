@@ -1,5 +1,12 @@
 import os
 
+# The following imports require habitat to be installed, and despite not being used by
+# this script itself, will register several classes and make them discoverable by Hydra.
+# This run.py script is expected to only be used when habitat is installed, thus they
+# are hidden here instead of in an __init__.py file. This avoids import errors when used
+# in an environment without habitat, such as when doing real-world deployment. noqa is
+# used to suppress the unused import and unsorted import warnings by ruff.
+import frontier_exploration  # noqa
 import hydra  # noqa
 from habitat import get_config  # noqa
 from habitat.config import read_write
@@ -10,13 +17,6 @@ from hydra.core.config_search_path import ConfigSearchPath
 from hydra.plugins.search_path_plugin import SearchPathPlugin
 from omegaconf import DictConfig
 
-# The following imports require habitat to be installed, and despite not being used by
-# this script itself, will register several classes and make them discoverable by Hydra.
-# This run.py script is expected to only be used when habitat is installed, thus they
-# are hidden here instead of in an __init__.py file. This avoids import errors when used
-# in an environment without habitat, such as when doing real-world deployment. noqa is
-# used to suppress the unused import and unsorted import warnings by ruff.
-import frontier_exploration  # noqa
 import vlfm.measurements.traveled_stairs  # noqa: F401
 import vlfm.obs_transformers.resize  # noqa: F401
 import vlfm.policy.action_replay_policy  # noqa: F401
