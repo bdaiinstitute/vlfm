@@ -1,3 +1,5 @@
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+
 import numpy as np
 import torch
 from spot_wrapper.spot import Spot

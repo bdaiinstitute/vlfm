@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+
 
 # Adapted from:
 # https://github.com/facebookresearch/habitat-lab/blob/main/habitat-baselines/habitat_baselines/rl/ddppo/policy/resnet.py

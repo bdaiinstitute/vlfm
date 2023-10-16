@@ -1,3 +1,5 @@
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+
 import cv2
 import numpy as np
 from frontier_exploration.frontier_detection import detect_frontier_waypoints
