@@ -1,3 +1,5 @@
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+
 import numpy as np
 import torch
 from maskrcnn_benchmark.config import cfg

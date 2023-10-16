@@ -1,3 +1,6 @@
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+
+
 class SpotCamIds:
     r"""Enumeration of types of cameras."""
 

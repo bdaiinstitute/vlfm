@@ -7,14 +7,18 @@ repos:
     -   id: ruff
         args: ['--fix', '--config', 'pyproject.toml']
 
--   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
-    hooks:
-    -   id: end-of-file-fixer
-    -   id: trailing-whitespace
-    -   id: check-yaml
-    -   id: check-added-large-files
-    -   id: check-toml
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v4.4.0
+  hooks:
+  -   id: check-yaml
+      args: ['--unsafe']
+  -   id: check-added-large-files
+      args: ['--enforce-all', '--maxkb', '200']
+  -   id: check-toml
+  -   id: end-of-file-fixer
+  -   id: check-merge-conflict
+  -   id: check-executables-have-shebangs
+  -   id: check-shebang-scripts-are-executable
 
 -   repo: https://github.com/psf/black
     rev: 23.3.0
@@ -37,3 +41,8 @@ repos:
         - types-PyYAML
         - types-toml
         - types-six
+
+- repo: https://github.com/jumanjihouse/pre-commit-hooks
+  rev: 3.0.0
+  hooks:
+  -  id: forbid-binary

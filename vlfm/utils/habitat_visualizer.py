@@ -1,13 +1,15 @@
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+
 from typing import Any, Dict, List, Tuple
 
 import cv2
 import numpy as np
+from frontier_exploration.utils.general_utils import xyz_to_habitat
 from habitat.utils.visualizations import maps
 from habitat.utils.visualizations.maps import MAP_TARGET_POINT_INDICATOR
 from habitat.utils.visualizations.utils import overlay_frame
 from habitat_baselines.common.tensor_dict import TensorDict
 
-from frontier_exploration.utils.general_utils import xyz_to_habitat
 from vlfm.utils.geometry_utils import transform_points
 from vlfm.utils.img_utils import (
     reorient_rescale_map,

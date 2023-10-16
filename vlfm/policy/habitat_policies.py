@@ -1,9 +1,12 @@
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+
 from dataclasses import dataclass
 from typing import Any, Dict, Union
 
 import numpy as np
 import torch
 from depth_camera_filtering import filter_depth
+from frontier_exploration.base_explorer import BaseExplorer
 from habitat.tasks.nav.object_nav_task import ObjectGoalSensor
 from habitat_baselines.common.baseline_registry import baseline_registry
 from habitat_baselines.common.tensor_dict import TensorDict
@@ -15,7 +18,6 @@ from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 from torch import Tensor
 
-from frontier_exploration.base_explorer import BaseExplorer
 from vlfm.utils.geometry_utils import xyz_yaw_to_tf_matrix
 from vlfm.vlm.grounding_dino import ObjectDetections
 
