@@ -24,6 +24,7 @@ dependencies = [
     "frontier_exploration @ git+https://github.com/naokiyokoyama/frontier_exploration.git",
     "mobile_sam @ git+https://github.com/ChaoningZhang/MobileSAM.git",
     "depth_camera_filtering @ git+https://github.com/naokiyokoyama/depth_camera_filtering",
+    "groundingdino @ git+https://github.com/IDEA-Research/GroundingDINO.git",
 ]
 
 [project.optional-dependencies]
