@@ -1,3 +1,5 @@
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+
 ENVIRONMENT:
   MAX_EPISODE_STEPS: 500
 SIMULATOR:
