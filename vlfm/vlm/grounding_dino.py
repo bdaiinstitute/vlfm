@@ -39,7 +39,9 @@ class GroundingDINO:
         self.box_threshold = box_threshold
         self.text_threshold = text_threshold
 
-    def predict(self, image: np.ndarray, caption: str = "") -> ObjectDetections:
+    def predict(
+        self, image: np.ndarray, caption: Optional[str] = None
+    ) -> ObjectDetections:
         """
         This function makes predictions on an input image tensor or numpy array using a
         pretrained model.
@@ -58,7 +60,7 @@ class GroundingDINO:
         image_transformed = F.normalize(
             image_tensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
         )
-        if caption == "":
+        if caption is None:
             caption_to_use = self.caption
         else:
             caption_to_use = caption

@@ -1,6 +1,7 @@
+# @package _global_
+
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
-# @package _global_
 defaults:
   - /policy: zsos_config_base
   - _self_

@@ -350,7 +350,8 @@ class BaseObjectNavPolicy(BasePolicy):
 
             # If we are using vqa, then use the BLIP2 model to visually confirm whether
             # the contours are actually correct.
-            if (self._use_vqa is not None) and self._use_vqa:
+
+            if self._use_vqa:
                 contours, _ = cv2.findContours(
                     object_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
                 )

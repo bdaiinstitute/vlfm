@@ -1,6 +1,6 @@
-# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
-
 # @package _global_
+
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
 defaults:
   - /tasks: pointnav_depth_hm3d
