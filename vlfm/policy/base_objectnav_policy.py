@@ -1,3 +1,5 @@
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+
 import os
 from dataclasses import dataclass, fields
 from typing import Any, Dict, List, Tuple, Union

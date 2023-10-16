@@ -1,3 +1,5 @@
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+
 import os
 
 # The following imports require habitat to be installed, and despite not being used by

@@ -1,3 +1,5 @@
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple, Union
 

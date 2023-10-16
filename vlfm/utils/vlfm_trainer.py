@@ -1,3 +1,5 @@
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+
 import os
 from collections import defaultdict
 from typing import Any, Dict, List

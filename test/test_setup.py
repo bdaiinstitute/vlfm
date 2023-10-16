@@ -1,3 +1,5 @@
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+
 import os
 
 from habitat_baselines.common.baseline_registry import baseline_registry  # noqa
