@@ -7,9 +7,15 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+
 jobs:
   vlfm_main_build:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: bdai-gh-large-runners
     defaults:
       run:
         shell: bash
@@ -19,4 +25,5 @@ jobs:
     - uses: actions/checkout@v3
     - name: Pytest
       run: |
+        pip install -e .[habitat]
         pytest
