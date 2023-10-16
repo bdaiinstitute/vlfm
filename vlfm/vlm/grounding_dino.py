@@ -40,6 +40,7 @@ class GroundingDINO:
         self.text_threshold = text_threshold
 
     def predict(self, image: np.ndarray, caption: Optional[str] = None) -> ObjectDetections:
+
         """
         This function makes predictions on an input image tensor or numpy array using a
         pretrained model.
