@@ -45,12 +45,16 @@ class ObstacleMap(BaseMap):
         kernel_size = int(kernel_size) + (int(kernel_size) % 2 == 0)
         self._navigable_kernel = np.ones((kernel_size, kernel_size), np.uint8)
 
+        self.viz_counter = 0
+
     def reset(self) -> None:
         super().reset()
         self._navigable_map.fill(0)
         self.explored_area.fill(0)
         self._frontiers_px = np.array([])
         self.frontiers = np.array([])
+
+        self.viz_counter = 0
 
     def update_map(
         self,
@@ -201,7 +205,9 @@ class ObstacleMap(BaseMap):
         if gt_traj is not None:
             self._traj_vis.draw_gt_trajectory(vis_img, gt_traj)
 
-        cv2.imwrite(f"map_viz/obst_{np.random.randint(1000)}.png", vis_img)
+        cv2.imwrite(f"map_viz/obst_{self.viz_counter}.png", vis_img)
+
+        self.viz_counter += 1
 
         return vis_img
 

@@ -56,10 +56,13 @@ class VLFMap(VLMap):
         """
         super().__init__(feats_sz, size, use_max_confidence, fusion_type, obstacle_map)
         self._cur_path_val = 0.0
+        self._cur_path_len = 0
         self.min_dist_goal = min_dist_goal
         # When the agent started following
         # each instruction part, used for backtracking
         self._cached_text_embeddings: Dict[str, np.ndarray] = {}
+
+        self.viz_counter = 0
 
     def reset(self) -> None:
         super().reset()
@@ -69,11 +72,85 @@ class VLFMap(VLMap):
         self._path_cols = []
 
         self._cur_path_val = 0.0
+        self._cur_path_len = 0
 
-    def get_embeddings_path(self, path: np.ndarray) -> np.ndarray:
+        self.viz_counter = 0
+
+    def embedding_value_within_radius(
+        self,
+        pixel_location: Tuple[int, int],
+        radius: int,
+        reduction: str = "median",
+    ) -> np.ndarray:
+        """Returns the maximum pixel value within a given radius of a specified pixel
+        location in the given image.
+
+        Args:
+            image (np.ndarray): The input image as a 2D numpy array.
+            pixel_location (Tuple[int, int]): The location of the pixel as a tuple (row,
+                column).
+            radius (int): The radius within which to find the maximum pixel value.
+            reduction (str, optional): The method to use to reduce the values in the radius
+                to a single value. Defaults to "median".
+
+        Returns:
+            np.ndarray: The reduced embedding within the radius
+        """
+        # Ensure that the pixel location is within the image
+        assert (
+            0 <= pixel_location[0] < self._vl_map.shape[0]
+            and 0 <= pixel_location[1] < self._vl_map.shape[1]
+        ), "Pixel location is outside the image."
+
+        top_left_x = max(0, pixel_location[0] - radius)
+        top_left_y = max(0, pixel_location[1] - radius)
+        bottom_right_x = min(self._vl_map.shape[0], pixel_location[0] + radius + 1)
+        bottom_right_y = min(self._vl_map.shape[1], pixel_location[1] + radius + 1)
+        cropped_image = self._vl_map[
+            top_left_x:bottom_right_x, top_left_y:bottom_right_y, ...
+        ]
+
+        # Draw a circular mask for the cropped image
+        circle_mask = np.zeros(cropped_image.shape[:2], dtype=np.uint8)
+        circle_mask = cv2.circle(
+            circle_mask,
+            (radius, radius),
+            radius,
+            color=255,
+            thickness=-1,
+        )
+
+        circle_mask = np.where((circle_mask > 0).flatten())[0]
+
+        overlap_values = cropped_image.reshape(-1, self._feat_channels)[circle_mask, :]
+        # Filter out any values that are 0 (i.e. pixels that weren't seen yet)
+        overlap_values = overlap_values[overlap_values != 0].reshape(
+            -1, self._feat_channels
+        )
+
+        if overlap_values.size == 0:
+            return np.zeros(cropped_image.shape[2])
+        elif reduction == "mean":
+            return np.mean(overlap_values, axis=0)  # type: ignore
+        elif reduction == "max":
+            return np.max(overlap_values, axis=0)
+        elif reduction == "median":
+            return np.median(overlap_values, axis=0)  # type: ignore
+        else:
+            raise ValueError(f"Invalid reduction method: {reduction}")
+
+    def get_embeddings_path(self, path: np.ndarray, radius: int = 5) -> np.ndarray:
         """Extracts the image embeddings from the map at the points in the given path"""
         px = self._xy_to_px(path)
-        image_embeddings = self._vl_map[px[:, 0], px[:, 1], :]
+        image_embeddings = self._vl_map[px[:, 1], px[:, 0], :]
+        # image_embeddings = np.array(
+        #     [
+        #         self.embedding_value_within_radius(px[i, [1,0]], radius=radius)
+        #         for i in range(px.shape[0])
+        #     ]
+        # )
+
+        # TODO: remove 0's? Very costly to get a 0 with the averaging...
 
         return image_embeddings.reshape([px.shape[0]] + list(self._feats_sz))
 
@@ -104,15 +181,26 @@ class VLFMap(VLMap):
             )
 
             # stop early if path peaks
-            c_similarity = np.cumsum(similarity)
+            c_similarity = np.cumsum(similarity) / np.array(
+                [i + 1 for i in range(len(similarity))]
+            )
             peak_i = np.argmax(c_similarity)
             value = c_similarity[peak_i]
+
+            print("PATH: ", path)
+            print("SIMILARITY: ", similarity)
+            print("C_SIMILARITY: ", c_similarity)
+            print("VALUE: ", value)
 
             # Update
             if value > max_value:
                 max_value = value
                 best_path = path[: peak_i + 1].copy()
                 best_path_vals = c_similarity[: peak_i + 1].copy()
+
+        print("BEST PATH: ", best_path)
+        print("BEST SIMILARITY: ", best_path_vals)
+        print("BEST VALUE: ", max_value)
 
         return best_path, best_path_vals, max_value
 
@@ -158,6 +246,7 @@ class VLFMap(VLMap):
         cur_instruct: str,
         next_instruct: str,
         last_path_val: float,
+        last_path_len: int,
     ) -> Tuple[np.ndarray, np.ndarray, bool]:
         """Selects the best waypoint from the given list of waypoints.
 
@@ -169,6 +258,8 @@ class VLFMap(VLMap):
             next_instruct (str): The part of the instruction the agent should follow
                 after the current part (empty string if there is no next instruction)
             last_path_val (float): The value for the part of the path we travelled
+                since the last time this function was called
+            last_path_len (int): The length of the part of the path we travelled
                 since the last time this function was called
 
         Returns:
@@ -256,14 +347,20 @@ class VLFMap(VLMap):
             self.get_best_path_instruction(cur_instruct, paths)
         )
 
+        len_curr = len(best_path_vals_curr)
+
         self._path_positions = [best_path_curr]
         self._path_cols = [self._col_curr]
 
-        self._cur_path_val += last_path_val
+        self._cur_path_val += last_path_val * last_path_len
+        self._cur_path_len += last_path_len
 
         if next_instruct == "":  # Current instruction is the final one
             if self._cur_path_val != 0:
-                should_stop = max_value_curr / self._cur_path_val <= self._thresh_stop
+                should_stop = (
+                    max_value_curr / (self._cur_path_val / self._cur_path_len)
+                    <= self._thresh_stop
+                )
             else:
                 should_stop = False
             return best_path_curr, best_path_vals_curr, should_stop
@@ -278,22 +375,24 @@ class VLFMap(VLMap):
 
             switch = False
 
-            if (
-                max_value_next
-                > max_value_curr + self._cur_path_val * self._prev_val_weight
-            ):
+            if max_value_next > (
+                max_value_curr * len_curr
+                + self._cur_path_val * self._cur_path_len * self._prev_val_weight
+            ) / (len_curr + self._cur_path_len):
                 switch = True
             # We also check if current instruction's best path will not improve much,
             # in case there is a difference in the scale of the value between the
             # current and next instruction that makes it hard to switch with the above check
             elif (self._cur_path_val != 0) and (
-                max_value_curr / self._cur_path_val <= self._thresh_switch
+                max_value_curr / (self._cur_path_val / self._cur_path_len)
+                <= self._thresh_switch
             ):
                 switch = True
 
             if switch:
                 self._points_started_instructions[next_instruct] = agent_pos
                 self._cur_path_val = 0.0
+                self._cur_path_len = 0
                 return best_path_next, best_path_vals_next, True
             else:
                 return best_path_curr, best_path_vals_curr, False
@@ -315,6 +414,12 @@ class VLFMap(VLMap):
                 map_img, self._path_positions[i], self._path_cols[i]
             )
 
-        cv2.imwrite(f"map_viz/conf_{np.random.randint(1000)}.png", map_img)
+        cv2.imwrite(f"map_viz/conf_{self.viz_counter}.png", map_img)
+
+        embed_nz = np.flipud(np.sum(self._vl_map != 0, axis=2))
+
+        cv2.imwrite(f"embeddings_nonzero/{self.viz_counter}.png", embed_nz)
+
+        self.viz_counter += 1
 
         return map_img

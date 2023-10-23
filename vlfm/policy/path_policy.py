@@ -117,11 +117,18 @@ class BasePathPolicy(BaseVLNPolicy):
                 cur_path_val = self._path_vals[
                     min(self._cur_path_idx, len(self._path_vals) - 1)
                 ]
+                cur_path_len = min(self._cur_path_idx, len(self._path_vals) - 1) + 1
             else:
                 cur_path_val = 0.0
+                cur_path_len = 0
 
             path, path_vals, switch_or_stop = self._vl_map.get_goal_for_instruction(
-                robot_xy, frontiers, cur_instruct, next_instruct, cur_path_val
+                robot_xy,
+                frontiers,
+                cur_instruct,
+                next_instruct,
+                cur_path_val,
+                cur_path_len,
             )
 
             if path is None:  # No valid paths found
