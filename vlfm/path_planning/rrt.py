@@ -1,6 +1,6 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 # import matplotlib.pyplot as plt
 import cv2
@@ -23,25 +23,19 @@ from vlfm.mapping.traj_visualizer import TrajectoryVisualizer
 def check_collision_occmap(
     node: RRT_PR.Node, occupancy_map: np.ndarray, robot_radius: int
 ) -> bool:
-    # print("ROBOT RADIUS: ", robot_radius, "OCCUPANCY_MAP SHAPE: ", occupancy_map.shape,
-    #     "OCCUPANCY_MAP FILL: ", occupancy_map[:].sum())
-
     if node is None:
         print("Node is None")
         return False
 
     for i in range(len(node.path_x)):
         coord = (int(np.rint(node.path_y[i])), int(np.rint(node.path_x[i])))
-        # print("NODE LOCATION: ", coord)
         if occupancy_map[coord[0], coord[1]]:
             return False
 
+        # Version using radius
         # mp = pixel_value_within_radius(occupancy_map, coord, robot_radius, "max")
         # if mp > 0.5:
-        #     # print("COLLIDED: ", coord, mp)
         #     return False # collision
-
-    # print("NO COLLISION")
 
     return True  # safe
 
@@ -103,7 +97,7 @@ class RRT(RRT_PR):
         occupancy_map: np.ndarray,
         rand_area: List[int],
         robot_radius: int,
-    ):
+    ) -> None:
         super().__init__(
             start=start,
             goal=goal,
@@ -124,7 +118,7 @@ class RRT(RRT_PR):
 
         self.traj_vis = TrajectoryVisualizer(np.array([0, 0]), 1.0)
 
-    def draw_graph(self, rnd=None):
+    def draw_graph(self, rnd: RRT_PR.Node = None) -> None:
         self.img = visualize(
             self.img,
             self.node_list,
@@ -137,7 +131,7 @@ class RRT(RRT_PR):
             self.traj_vis,
         )
 
-    def write_img(self, final_path: List[float]):
+    def write_img(self, final_path: Optional[List[List[float]]] = None) -> None:
         self.img = self.traj_vis.draw_circle(
             self.img,
             np.array([-self.start.y, -self.start.x]),
@@ -167,7 +161,7 @@ class RRTStar(RRTStar_PR):
         occupancy_map: np.ndarray,
         rand_area: List[int],
         robot_radius: int,
-    ):
+    ) -> None:
         super().__init__(
             start=start,
             goal=goal,
@@ -188,7 +182,7 @@ class RRTStar(RRTStar_PR):
 
         self.traj_vis = TrajectoryVisualizer(np.array([0, 0]), 1.0)
 
-    def draw_graph(self, rnd=None):
+    def draw_graph(self, rnd: RRTStar_PR.Node = None):
         self.img = visualize(
             self.img,
             self.node_list,
@@ -201,7 +195,7 @@ class RRTStar(RRTStar_PR):
             self.traj_vis,
         )
 
-    def write_img(self, final_path: List[float]):
+    def write_img(self, final_path: Optional[List[List[float]]] = None) -> None:
         self.img = self.traj_vis.draw_circle(
             self.img,
             np.array([-self.start.y, -self.start.x]),
