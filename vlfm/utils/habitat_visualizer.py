@@ -4,13 +4,9 @@ from typing import Any, Dict, List, Tuple
 
 import cv2
 import numpy as np
-from frontier_exploration.utils.general_utils import xyz_to_habitat
 from habitat.utils.visualizations import maps
-from habitat.utils.visualizations.maps import MAP_TARGET_POINT_INDICATOR
-from habitat.utils.visualizations.utils import overlay_frame
 from habitat_baselines.common.tensor_dict import TensorDict
 
-from vlfm.utils.geometry_utils import transform_points
 from vlfm.utils.img_utils import (
     reorient_rescale_map,
     resize_image,
@@ -54,7 +50,8 @@ class HabitatVis:
         else:
             depth = (observations["depth"][0].cpu().numpy() * 255.0).astype(np.uint8)
             depth = cv2.cvtColor(depth, cv2.COLOR_GRAY2RGB)
-        depth = overlay_frame(depth, infos[0])
+
+        # depth = cv2.resize(depth, (128,128))
         self.depth.append(depth)
 
         if "annotated_rgb" in policy_info[0]:
@@ -62,10 +59,9 @@ class HabitatVis:
             self.using_annotated_rgb = True
         else:
             rgb = observations["rgb"][0].cpu().numpy()
+        rgb = cv2.resize(rgb, (depth.shape[0], depth.shape[1]))
+        # rgb = cv2.resize(rgb, (128,128))
         self.rgb.append(rgb)
-
-        # Visualize target point cloud on the map
-        color_point_cloud_on_map(infos, policy_info)
 
         map = maps.colorize_draw_agent_and_fit_to_height(
             infos[0]["top_down_map"], self.depth[0].shape[0]
@@ -73,7 +69,7 @@ class HabitatVis:
         self.maps.append(map)
         vis_map_imgs = [
             self._reorient_rescale_habitat_map(infos, policy_info[0][vkey])
-            for vkey in ["obstacle_map", "value_map"]
+            for vkey in ["obstacle_map", "vl_map"]
             if vkey in policy_info[0]
         ]
         if vis_map_imgs:
@@ -226,35 +222,3 @@ def sim_xy_to_grid_xy(
         grid_xy = np.unique(grid_xy, axis=0)
 
     return grid_xy
-
-
-def color_point_cloud_on_map(
-    infos: List[Dict[str, Any]], policy_info: List[Dict[str, Any]]
-) -> None:
-    if len(policy_info[0]["target_point_cloud"]) == 0:
-        return
-
-    upper_bound = infos[0]["top_down_map"]["upper_bound"]
-    lower_bound = infos[0]["top_down_map"]["lower_bound"]
-    grid_resolution = infos[0]["top_down_map"]["grid_resolution"]
-    tf_episodic_to_global = infos[0]["top_down_map"]["tf_episodic_to_global"]
-
-    cloud_episodic_frame = policy_info[0]["target_point_cloud"][:, :3]
-    cloud_global_frame_xyz = transform_points(
-        tf_episodic_to_global, cloud_episodic_frame
-    )
-    cloud_global_frame_habitat = xyz_to_habitat(cloud_global_frame_xyz)
-    cloud_global_frame_habitat_xy = cloud_global_frame_habitat[:, [2, 0]]
-
-    grid_xy = sim_xy_to_grid_xy(
-        upper_bound,
-        lower_bound,
-        grid_resolution,
-        cloud_global_frame_habitat_xy,
-        remove_duplicates=True,
-    )
-
-    new_map = infos[0]["top_down_map"]["map"].copy()
-    new_map[grid_xy[:, 0], grid_xy[:, 1]] = MAP_TARGET_POINT_INDICATOR
-
-    infos[0]["top_down_map"]["map"] = new_map

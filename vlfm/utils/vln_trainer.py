@@ -42,8 +42,12 @@ def extract_scalars_from_info(info: Dict[str, Any]) -> Dict[str, float]:
     return extract_scalars_from_info_habitat(info_filtered)
 
 
-@baseline_registry.register_trainer(name="vlfm")
-class VLFMTrainer(PPOTrainer):
+ANALYSIS_SAVE_LOCATION = "failure_analysis/"
+ORACLE_STOP = True
+
+
+@baseline_registry.register_trainer(name="vln")
+class VLNTrainer(PPOTrainer):
     envs: VectorEnv
 
     def _eval_checkpoint(
@@ -62,6 +66,16 @@ class VLFMTrainer(PPOTrainer):
         Returns:
             None
         """
+        # set-up failure analysis
+        os.makedirs(ANALYSIS_SAVE_LOCATION, exist_ok=True)
+        file_success = open(ANALYSIS_SAVE_LOCATION + "sucesses.txt", "w")
+        file_fail = open(ANALYSIS_SAVE_LOCATION + "failures.txt", "w")
+
+        if ORACLE_STOP:
+            self.should_stop = False
+
+        gt_path_for_viz = None
+
         if self._is_distributed:
             raise RuntimeError("Evaluation does not support distributed mode")
 
@@ -107,6 +121,13 @@ class VLFMTrainer(PPOTrainer):
             self._agent.load_state_dict(ckpt_dict)
 
         observations = self.envs.reset()
+
+        # Split off instructions so it doesn't get messed up in the batching
+        instructions = []
+        for j in range(len(observations)):
+            instructions += [observations[j]["instruction"]["text"]]
+            del observations[j]["instruction"]
+
         batch = batch_obs(observations, device=self.device)
         batch = apply_obs_transforms_batch(batch, self.obs_transforms)  # type: ignore
 
@@ -177,6 +198,8 @@ class VLFMTrainer(PPOTrainer):
             current_episodes_info = self.envs.current_episodes()
 
             with inference_mode():
+                self._agent.actor_critic.set_instruction(instructions[0])
+                self._agent.actor_critic.set_gt_path_for_viz(gt_path_for_viz)
                 action_data = self._agent.actor_critic.act(
                     batch,
                     test_recurrent_hidden_states,
@@ -222,12 +245,33 @@ class VLFMTrainer(PPOTrainer):
             else:
                 step_data = [a.item() for a in action_data.env_actions.cpu()]
 
+            if ORACLE_STOP:
+                if self.should_stop:
+                    step_data = [0]
+                elif step_data[0] == 0:
+                    step_data = [np.random.randint(1, 4)]
+
             outputs = self.envs.step(step_data)
 
             observations, rewards_l, dones, infos = [list(x) for x in zip(*outputs)]
             policy_infos = self._agent.actor_critic.get_extra(action_data, infos, dones)
             for i in range(len(policy_infos)):
                 infos[i].update(policy_infos[i])
+
+            if ORACLE_STOP:
+                self.should_stop = (
+                    infos[0]["distance_to_goal"]
+                ) <= self.config.habitat.task.measurements.success.success_distance
+
+            gt_path_for_viz = np.array(infos[0]["gt_path_vln"])
+            gt_path_for_viz = gt_path_for_viz[:, :2]
+
+            # Split off instructions
+            instructions = []
+            for j in range(len(observations)):
+                instructions += [observations[j]["instruction"]["text"]]
+                del observations[j]["instruction"]
+
             batch = batch_obs(  # type: ignore
                 observations,
                 device=self.device,
@@ -280,7 +324,10 @@ class VLFMTrainer(PPOTrainer):
 
                     if episode_stats["success"] == 1:
                         num_successes += 1
+                        file_success.write(instructions[0])
+                    file_fail.write(instructions[0])
                     num_total += 1
+                    print("\n", instructions[0])
                     print(
                         f"Success rate: {num_successes / num_total * 100:.2f}% "
                         f"({num_successes} out of {num_total})"
@@ -323,6 +370,11 @@ class VLFMTrainer(PPOTrainer):
                             current_episodes_info[i].episode_id,
                         )
 
+                    if ORACLE_STOP:
+                        self.should_stop = False
+
+                    gt_path_for_viz = None
+
             not_done_masks = not_done_masks.to(device=self.device)
             (
                 self.envs,
@@ -344,6 +396,9 @@ class VLFMTrainer(PPOTrainer):
             )
 
         pbar.close()
+
+        file_success.close()
+        file_fail.close()
 
         if "ZSOS_DONE_PATH" in os.environ:
             # Create an empty file at ZSOS_DONE_PATH to signal that the

@@ -1,5 +1,7 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
+from typing import Optional
+
 import cv2
 import numpy as np
 from frontier_exploration.frontier_detection import detect_frontier_waypoints
@@ -174,7 +176,7 @@ class ObstacleMap(BaseMap):
         )
         return frontiers
 
-    def visualize(self) -> np.ndarray:
+    def visualize(self, gt_traj: Optional[np.ndarray] = None) -> np.ndarray:
         """Visualizes the map."""
         vis_img = np.ones((*self._map.shape[:2], 3), dtype=np.uint8) * 255
         # Draw explored area in light green
@@ -195,6 +197,11 @@ class ObstacleMap(BaseMap):
                 self._camera_positions,
                 self._last_camera_yaw,
             )
+
+        if gt_traj is not None:
+            self._traj_vis.draw_gt_trajectory(vis_img, gt_traj)
+
+        cv2.imwrite(f"map_viz/obst_{np.random.randint(1000)}.png", vis_img)
 
         return vis_img
 

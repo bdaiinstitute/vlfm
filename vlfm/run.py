@@ -19,11 +19,11 @@ from hydra.core.config_search_path import ConfigSearchPath
 from hydra.plugins.search_path_plugin import SearchPathPlugin
 from omegaconf import DictConfig
 
+import vlfm.measurements.gt_path_vln  # noqa: F401
 import vlfm.measurements.traveled_stairs  # noqa: F401
 import vlfm.obs_transformers.resize  # noqa: F401
-import vlfm.policy.action_replay_policy  # noqa: F401
 import vlfm.policy.habitat_policies  # noqa: F401
-import vlfm.utils.vlfm_trainer  # noqa: F401
+import vlfm.utils.vln_trainer  # noqa: F401
 
 
 class HabitatConfigPlugin(SearchPathPlugin):
@@ -37,7 +37,7 @@ register_hydra_plugin(HabitatConfigPlugin)
 @hydra.main(
     version_base=None,
     config_path="../config",
-    config_name="experiments/vlfm_objectnav_hm3d",
+    config_name="experiments/vln_r2r_ce",
 )
 def main(cfg: DictConfig) -> None:
     assert os.path.isdir("data"), "Missing 'data/' directory!"
