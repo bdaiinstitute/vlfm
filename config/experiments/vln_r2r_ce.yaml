@@ -1,5 +1,7 @@
 # @package _global_
 
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+
 defaults:
   - /habitat_baselines: habitat_baselines_rl_config_base
   - /benchmark/nav: vln_r2r
