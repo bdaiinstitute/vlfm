@@ -446,12 +446,12 @@ class VLFMap(VLMap):
                 map_img, self._path_positions[i], self._path_cols[i]
             )
 
-        cv2.imwrite(f"map_viz/conf_{self.viz_counter}.png", map_img)
+        # cv2.imwrite(f"map_viz/conf_{self.viz_counter}.png", map_img)
 
-        embed_nz = np.flipud(np.sum(self._vl_map != 0, axis=2))
+        # embed_nz = np.flipud(np.sum(self._vl_map != 0, axis=2))
 
-        cv2.imwrite(f"embeddings_nonzero/{self.viz_counter}.png", embed_nz)
+        # cv2.imwrite(f"embeddings_nonzero/{self.viz_counter}.png", embed_nz)
 
-        self.viz_counter += 1
+        # self.viz_counter += 1
 
         return map_img

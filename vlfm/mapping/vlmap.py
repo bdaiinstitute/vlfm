@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
+import torch
 
 from vlfm.mapping.base_map import BaseMap
 from vlfm.mapping.obstacle_map import ObstacleMap
@@ -37,6 +38,7 @@ class VLMap(BaseMap):
         use_max_confidence: bool = True,
         fusion_type: str = "default",
         obstacle_map: Optional["ObstacleMap"] = None,
+        device: Optional[Any] = None,
     ) -> None:
         """
         Args:
@@ -51,8 +53,15 @@ class VLMap(BaseMap):
         """
         super().__init__(size)
 
+        if device is None:
+            device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
+
+        self.device = device
+
         self._feat_channels = np.prod(feats_sz)
-        self._vl_map = np.zeros((size, size, self._feat_channels), np.float32)
+        self._vl_map = torch.zeros(
+            (size, size, self._feat_channels), dtype=torch.float32, device=self.device
+        )
 
         self._feats_sz = tuple(feats_sz)
         self._use_max_confidence = use_max_confidence
@@ -284,7 +293,7 @@ class VLMap(BaseMap):
             explored_area = self._obstacle_map.explored_area
             new_map[explored_area == 0] = 0
             self._map[explored_area == 0] = 0
-            self._vl_map[explored_area == 0] *= 0
+            self._vl_map[explored_area == 0] = 0
 
         if self._fusion_type == "replace":
             # Ablation. The values from the current observation will overwrite any

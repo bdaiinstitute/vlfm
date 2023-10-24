@@ -47,7 +47,7 @@ class BLIP2unimodal(BaseVL):
         )
         self.device = device
 
-    def get_image_embedding(self, image: np.ndarray) -> np.ndarray:
+    def get_image_embedding(self, image: np.ndarray) -> torch.tensor:  # np.ndarray:
         pil_img = Image.fromarray(image)
         img = self.vis_processors["eval"](pil_img).unsqueeze(0).to(self.device)
 
@@ -55,17 +55,17 @@ class BLIP2unimodal(BaseVL):
 
         image_features = self.model.extract_features(sample, mode="image")
 
-        return image_features.image_embeds_proj.squeeze().cpu().numpy()
+        return image_features.image_embeds_proj.squeeze()  # .cpu().numpy()
 
-    def get_text_embedding(self, txt: str) -> np.ndarray:
+    def get_text_embedding(self, txt: str) -> torch.tensor:  # np.ndarray:
         sample = {"image": np.array([0]), "text_input": txt}
 
         text_features = self.model.extract_features(sample, mode="text")
 
-        return text_features.text_embeds_proj.squeeze().cpu().numpy()
+        return text_features.text_embeds_proj.squeeze()  # .cpu().numpy()
 
     def get_similarity(
-        self, image_embedding: np.ndarray, txt_embedding: np.ndarray
+        self, image_embedding: torch.tensor, txt_embedding: torch.tensor
     ) -> float:
         """
         Compute the cosine similarity between the image and the prompt (both already embedded).
@@ -78,16 +78,19 @@ class BLIP2unimodal(BaseVL):
             float: The cosine similarity between the image and the prompt.
         """
 
-        cosine = (image_embedding @ txt_embedding[0, :].T).max()
+        # cosine = (image_embedding @ txt_embedding[0, :].T).max()
+        cosine = (image_embedding @ txt_embedding[0, :].t()).max().item()
 
         return cosine
 
     def get_similarity_batch(
-        self, image_embeddings: np.ndarray, txt_embedding: np.ndarray
+        self, image_embeddings: torch.tensor, txt_embedding: torch.tensor
     ) -> np.ndarray:
-        cosine = (image_embeddings @ txt_embedding[0, :].T).max(axis=1)
+        # cosine = (image_embeddings @ txt_embedding[0, :].T).max(axis=1)
 
-        return cosine
+        cosine = (image_embeddings @ txt_embedding[0, :].t()).max(dim=1)
+
+        return cosine[0].cpu().numpy()
 
 
 class BLIP2unimodalClient(BaseVL):
