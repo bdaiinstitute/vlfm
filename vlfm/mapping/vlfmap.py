@@ -189,7 +189,10 @@ class VLFMap(VLMap):
                 for j in range(len(path)):
                     if np.any(
                         np.sqrt(
-                            np.sum(np.square(path[j, :] - self.ignore_locs), axis=1)
+                            np.sum(
+                                np.square(path[j, :].reshape(-1, 2) - self.ignore_locs),
+                                axis=1,
+                            )
                         )
                         < self.ignore_radius
                     ):
