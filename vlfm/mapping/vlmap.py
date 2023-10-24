@@ -87,9 +87,14 @@ class VLMap(BaseMap):
 
     def reset(self) -> None:
         super().reset()
-        self._vl_map.fill(0)
+        self._vl_map.fill_(0)
         if self._obstacle_map is not None:
             self._obstacle_map.reset()
+        _last_camera_yaw = 0.0
+
+        self._confidence_masks = {}
+        self._min_confidence = 0.25
+        self._points_started_instructions = {}
 
     def update_map(
         self,

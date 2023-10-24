@@ -375,6 +375,16 @@ class VLFMap(VLMap):
             self.get_best_path_instruction(cur_instruct, paths)
         )
 
+        if best_path_curr is None:
+            if next_instruct == "":
+                return None, None, False
+            best_path_next, best_path_vals_next, max_value_next = (
+                self.get_best_path_instruction(next_instruct, paths)
+            )
+            if best_path_next is None:
+                return None, None, False
+            return best_path_next, best_path_vals_next, True
+
         len_curr = len(best_path_vals_curr)
 
         self._path_positions = [best_path_curr]

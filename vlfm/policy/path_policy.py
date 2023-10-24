@@ -46,6 +46,8 @@ class BasePathPolicy(BaseVLNPolicy):
         self._cur_path_idx = 0
         self._last_plan_step = 0
 
+        self._vl_map.reset()
+
     def act(
         self,
         observations: Dict,
