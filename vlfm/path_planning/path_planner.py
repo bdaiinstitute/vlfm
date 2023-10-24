@@ -33,9 +33,9 @@ def get_paths(
                 robot_radius=robot_radius,
             )
 
-            path = rrt.planning(animation=True)
+            path = rrt.planning(animation=False)
 
-            rrt.write_img(path)
+            # rrt.write_img(path)
 
         if method == "rrt_star":
             rrt_star = RRTStar(
@@ -46,9 +46,9 @@ def get_paths(
                 robot_radius=robot_radius,
             )
 
-            path = rrt_star.planning(animation=True)
+            path = rrt_star.planning(animation=False)
 
-            rrt_star.write_img(path)
+            # rrt_star.write_img(path)
 
         sys.stdout = sys.__stdout__
 

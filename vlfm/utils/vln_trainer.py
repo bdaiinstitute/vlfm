@@ -267,6 +267,8 @@ class VLNTrainer(PPOTrainer):
             gt_path_for_viz = gt_path_for_viz[:, :2]
 
             # Split off instructions
+            instructions_curr = instructions.copy()
+
             instructions = []
             for j in range(len(observations)):
                 instructions += [observations[j]["instruction"]["text"]]
@@ -324,13 +326,15 @@ class VLNTrainer(PPOTrainer):
 
                     if episode_stats["success"] == 1:
                         num_successes += 1
-                        file_success.write(instructions[0])
+                        file_success.write(instructions_curr[0])
+                        file_success.write("\n")
                         file_success.flush()
                     else:
-                        file_fail.write(instructions[0])
+                        file_fail.write(instructions_curr[0])
+                        file_fail.write("\n")
                         file_fail.flush()
                     num_total += 1
-                    print("\n", instructions[0])
+                    print("\n", instructions_curr[0])
                     print(
                         f"Success rate: {num_successes / num_total * 100:.2f}% "
                         f"({num_successes} out of {num_total})"
