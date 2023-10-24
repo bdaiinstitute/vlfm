@@ -17,7 +17,7 @@ class VLFMap(VLMap):
     """Generates a map with image features, which can be queried with text to find the value map
     with respect to finding and navigating to the target object."""
 
-    _thresh_switch = 0.01  # Not for last instruction part.
+    _thresh_switch = 0.05  # Not for last instruction part.
     # If change in value under threshold (as percentage of value up until now) then switch
     # Note we also switch when the next instruction is higher than the current
     _thresh_stop = 0.01  # Last instruction part only.
@@ -31,8 +31,8 @@ class VLFMap(VLMap):
     _path_cols: List[Tuple[int, int, int]] = []
     # list of colors for the paths to be used in the visualization
 
-    _col_curr: Tuple[int, int, int] = (0, 255, 0)
-    _col_next: Tuple[int, int, int] = (0, 255, 255)
+    _col_curr: Tuple[int, int, int] = (255, 0, 0)
+    _col_next: Tuple[int, int, int] = (0, 0, 255)
 
     def __init__(
         self,
@@ -62,7 +62,10 @@ class VLFMap(VLMap):
         # each instruction part, used for backtracking
         self._cached_text_embeddings: Dict[str, np.ndarray] = {}
 
-        self.viz_counter = 0
+        self.viz_counter: int = 0
+
+        self.ignore_locs: np.ndarray = np.array([])
+        self.ignore_radius = 0.5
 
     def reset(self) -> None:
         super().reset()
@@ -75,6 +78,8 @@ class VLFMap(VLMap):
         self._cur_path_len = 0
 
         self.viz_counter = 0
+
+        self.ignore_locs = np.array([])
 
     def embedding_value_within_radius(
         self,
@@ -180,6 +185,17 @@ class VLFMap(VLMap):
                 image_embeddings=image_embeddings, txt_embedding=text_embed
             )
 
+            if self.ignore_locs.shape[0] > 0:
+                for j in range(len(path)):
+                    if np.any(
+                        np.sqrt(
+                            np.sum(np.square(path[j, :] - self.ignore_locs), axis=1)
+                        )
+                        < self.ignore_radius
+                    ):
+                        print("IGNORING SCORE OF BACKTRACKING: ", path[j, :])
+                        similarity[j] = 0
+
             # stop early if path peaks
             c_similarity = np.cumsum(similarity) / np.array(
                 [i + 1 for i in range(len(similarity))]
@@ -247,6 +263,7 @@ class VLFMap(VLMap):
         next_instruct: str,
         last_path_val: float,
         last_path_len: int,
+        last_path: List[List[float]],
     ) -> Tuple[np.ndarray, np.ndarray, bool]:
         """Selects the best waypoint from the given list of waypoints.
 
@@ -355,12 +372,21 @@ class VLFMap(VLMap):
         self._cur_path_val += last_path_val * last_path_len
         self._cur_path_len += last_path_len
 
+        if last_path_len > 0:
+            self.ignore_locs = np.append(
+                self.ignore_locs, np.array(last_path)[:last_path_len, :]
+            )
+
         if next_instruct == "":  # Current instruction is the final one
             if self._cur_path_val != 0:
-                should_stop = (
-                    max_value_curr / (self._cur_path_val / self._cur_path_len)
-                    <= self._thresh_stop
+                val_with_part = (max_value_curr * len_curr + self._cur_path_val) / (
+                    len_curr + self._cur_path_len
                 )
+                val_without_part = self._cur_path_val / self._cur_path_len
+
+                should_stop = (
+                    (val_with_part - val_without_part) / val_without_part
+                ) <= self._thresh_stop
             else:
                 should_stop = False
             return best_path_curr, best_path_vals_curr, should_stop
@@ -376,23 +402,28 @@ class VLFMap(VLMap):
             switch = False
 
             if max_value_next > (
-                max_value_curr * len_curr
-                + self._cur_path_val * self._cur_path_len * self._prev_val_weight
+                max_value_curr * len_curr + self._cur_path_val * self._prev_val_weight
             ) / (len_curr + self._cur_path_len):
                 switch = True
             # We also check if current instruction's best path will not improve much,
             # in case there is a difference in the scale of the value between the
             # current and next instruction that makes it hard to switch with the above check
-            elif (self._cur_path_val != 0) and (
-                max_value_curr / (self._cur_path_val / self._cur_path_len)
-                <= self._thresh_switch
-            ):
-                switch = True
+            elif self._cur_path_val != 0:
+                val_with_part = (max_value_curr * len_curr + self._cur_path_val) / (
+                    len_curr + self._cur_path_len
+                )
+                val_without_part = self._cur_path_val / self._cur_path_len
+
+                if (
+                    (val_with_part - val_without_part) / val_without_part
+                ) <= self._thresh_switch:
+                    switch = True
 
             if switch:
                 self._points_started_instructions[next_instruct] = agent_pos
                 self._cur_path_val = 0.0
                 self._cur_path_len = 0
+                self.ignore_locs = np.array([])
                 return best_path_next, best_path_vals_next, True
             else:
                 return best_path_curr, best_path_vals_curr, False

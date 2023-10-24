@@ -68,7 +68,7 @@ class VLNTrainer(PPOTrainer):
         """
         # set-up failure analysis
         os.makedirs(ANALYSIS_SAVE_LOCATION, exist_ok=True)
-        file_success = open(ANALYSIS_SAVE_LOCATION + "sucesses.txt", "w")
+        file_success = open(ANALYSIS_SAVE_LOCATION + "successes.txt", "w")
         file_fail = open(ANALYSIS_SAVE_LOCATION + "failures.txt", "w")
 
         if ORACLE_STOP:
@@ -325,7 +325,10 @@ class VLNTrainer(PPOTrainer):
                     if episode_stats["success"] == 1:
                         num_successes += 1
                         file_success.write(instructions[0])
-                    file_fail.write(instructions[0])
+                        file_success.flush()
+                    else:
+                        file_fail.write(instructions[0])
+                        file_fail.flush()
                     num_total += 1
                     print("\n", instructions[0])
                     print(
