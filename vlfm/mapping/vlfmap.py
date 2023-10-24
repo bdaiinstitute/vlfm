@@ -374,7 +374,8 @@ class VLFMap(VLMap):
 
         if last_path_len > 0:
             self.ignore_locs = np.append(
-                self.ignore_locs, np.array(last_path)[:last_path_len, :]
+                self.ignore_locs,
+                (np.array(last_path)[:last_path_len, :]).reshape(-1, 2),
             )
 
         if next_instruct == "":  # Current instruction is the final one
