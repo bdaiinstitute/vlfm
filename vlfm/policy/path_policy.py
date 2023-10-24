@@ -94,7 +94,7 @@ class BasePathPolicy(BaseVLNPolicy):
         replan = False
         if self._num_steps > (self._last_plan_step + self._replan_interval):
             replan = True
-        if len(self._path_to_follow) < self._cur_path_idx + 2:
+        if len(self._path_to_follow) < self._cur_path_idx + 1:
             replan = True
 
         if replan:
@@ -197,6 +197,7 @@ class BasePathPolicy(BaseVLNPolicy):
                 "color": color,
             }
             markers.append((self._last_goal, marker_kwargs))
+
         policy_info["vl_map"] = cv2.cvtColor(
             self._vl_map.visualize(markers, gt_traj=self.gt_path_for_viz),
             cv2.COLOR_BGR2RGB,

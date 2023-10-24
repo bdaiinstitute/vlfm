@@ -52,10 +52,10 @@ def get_paths(
 
         sys.stdout = sys.__stdout__
 
-        # print("START: ", agent_pos, "GOAL: ", waypoints[i, :], "RAND_AREA: ", rand_area)
+        print("START: ", agent_pos, "GOAL: ", waypoints[i, :], "RAND_AREA: ", rand_area)
 
         if path is not None:
-            # print("SUCCESS!")
+            print("SUCCESS!")
             paths += [np.flip(np.array(path)[:-1], 0)]
 
     return paths

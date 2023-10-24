@@ -104,10 +104,10 @@ class RRT(RRT_PR):
             obstacle_list=occupancy_map,
             rand_area=rand_area,
             robot_radius=robot_radius,
-            max_iter=1000,
+            max_iter=400,
             path_resolution=4.0,
             expand_dis=15.0,
-            goal_sample_rate=5,
+            goal_sample_rate=10,
             play_area=None,
         )
         self.occupancy_map = occupancy_map
@@ -168,10 +168,10 @@ class RRTStar(RRTStar_PR):
             obstacle_list=occupancy_map,
             rand_area=rand_area,
             robot_radius=robot_radius,
-            max_iter=1000,
+            max_iter=400,
             path_resolution=4.0,
             expand_dis=15.0,
-            goal_sample_rate=5,
+            goal_sample_rate=10,
             connect_circle_dist=20,
         )
         self.occupancy_map = occupancy_map

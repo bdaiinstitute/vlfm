@@ -185,6 +185,8 @@ class VLFMap(VLMap):
                 image_embeddings=image_embeddings, txt_embedding=text_embed
             )
 
+            orig_sim_nonzero = similarity != 0
+
             if self.ignore_locs.shape[0] > 0:
                 for j in range(len(path)):
                     if np.any(
@@ -200,8 +202,14 @@ class VLFMap(VLMap):
                         similarity[j] = 0
 
             # stop early if path peaks
+            denom = []
+            denom_i = 1
+            for j in range(len(similarity)):
+                if orig_sim_nonzero[j]:
+                    denom_i += 1
+                denom += [denom_i]
             c_similarity = np.cumsum(similarity) / np.array(
-                [i + 1 for i in range(len(similarity))]
+                denom  # [i + 1 for i in range(len(similarity))]
             )
             peak_i = np.argmax(c_similarity)
             value = c_similarity[peak_i]
@@ -377,8 +385,9 @@ class VLFMap(VLMap):
 
         if last_path_len > 0:
             self.ignore_locs = np.append(
-                self.ignore_locs,
+                self.ignore_locs.reshape(-1, 2),
                 (np.array(last_path)[:last_path_len, :]).reshape(-1, 2),
+                axis=0,
             )
 
         if next_instruct == "":  # Current instruction is the final one

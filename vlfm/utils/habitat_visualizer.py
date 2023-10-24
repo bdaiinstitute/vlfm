@@ -44,6 +44,20 @@ class HabitatVis:
     ) -> None:
         assert len(infos) == 1, "Only support one environment for now"
 
+        vis_map_imgs = [
+            self._reorient_rescale_habitat_map(infos, policy_info[0][vkey])
+            for vkey in ["obstacle_map", "vl_map"]
+            if vkey in policy_info[0]
+        ]
+
+        if vis_map_imgs:
+            self.using_vis_maps = True
+            self.vis_maps.append(vis_map_imgs)
+
+        # for some reason sometimes calls twice in one step so avoid this case
+        elif self.using_vis_maps:
+            return None
+
         if "annotated_depth" in policy_info[0]:
             depth = policy_info[0]["annotated_depth"]
             self.using_annotated_depth = True
@@ -67,14 +81,7 @@ class HabitatVis:
             infos[0]["top_down_map"], self.depth[0].shape[0]
         )
         self.maps.append(map)
-        vis_map_imgs = [
-            self._reorient_rescale_habitat_map(infos, policy_info[0][vkey])
-            for vkey in ["obstacle_map", "vl_map"]
-            if vkey in policy_info[0]
-        ]
-        if vis_map_imgs:
-            self.using_vis_maps = True
-            self.vis_maps.append(vis_map_imgs)
+
         text = [
             policy_info[0][text_key]
             for text_key in policy_info[0].get("render_below_images", [])
