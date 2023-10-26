@@ -1,18 +1,25 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
 from torch import Tensor
 
 from vlfm.mapping.vlfmap import VLFMap
+from vlfm.mapping.vlmap import ENABLE_STAIRS, Stair
 
 from .base_vln_policy import BaseVLNPolicy
 
+ENABLE_REPLAN_AT_STEPS = False
+
+ENABLE_REPLAN_WHEN_STUCK = True
+
+FORCE_DONT_STOP_UNTIL = 33  # 10 steps after initialization
+
 
 class BasePathPolicy(BaseVLNPolicy):
-    _replan_interval = 20
+    _replan_interval = 30
 
     _target_object_color: Tuple[int, int, int] = (0, 255, 0)
     _selected_frontier_color: Tuple[int, int, int] = (0, 255, 255)
@@ -33,11 +40,21 @@ class BasePathPolicy(BaseVLNPolicy):
         self._cur_path_idx = 0
         self._last_plan_step = 0
 
-        if self._compute_frontiers:
-            self._vl_map = VLFMap(
-                obstacle_map=self._obstacle_map,
-                min_dist_goal=self._pointnav_stop_radius,
-            )
+        self._vl_map: VLFMap = VLFMap(
+            obstacle_map=self._obstacle_map,
+            min_dist_goal=self._pointnav_stop_radius,
+        )
+
+        if ENABLE_STAIRS:
+            self.on_stairs = False
+            self.point_entered_stairs = (0, 0)
+            self.stair: Optional[Stair] = None
+
+        if ENABLE_REPLAN_WHEN_STUCK:
+            self.last_xy = np.array([0, 0])
+            self.n_at_xy = 0
+
+        self.n_steps_goal = 0
 
     def _reset(self) -> None:
         super()._reset()
@@ -47,6 +64,17 @@ class BasePathPolicy(BaseVLNPolicy):
         self._last_plan_step = 0
 
         self._vl_map.reset()
+
+        if ENABLE_STAIRS:
+            self.on_stairs = False
+            self.point_entered_stairs = (0, 0)
+            self.stair = None
+
+        if ENABLE_REPLAN_WHEN_STUCK:
+            self.last_xy = np.array([0, 0])
+            self.n_at_xy = 0
+
+        self.n_steps_goal = 0
 
     def act(
         self,
@@ -89,15 +117,88 @@ class BasePathPolicy(BaseVLNPolicy):
         return parsed_instruct
 
     def _plan(self) -> Tuple[np.ndarray, bool]:
+        ###Stair logic, just for working out if we need to switch the level on the map
+        if ENABLE_STAIRS:
+            xy = self._observations_cache["robot_xy"]
+            px = self._vl_map._xy_to_px(xy.reshape(1, 2)).reshape(2)
+            stair = self._vl_map.loc_get_stairs((px[0], px[1]))
+
+            if stair is None:
+                if self.on_stairs:
+                    # check if we've gone far enough that we think we're gone up/down the stairs
+                    # TODO: change this check to have a visual component?
+                    # Then could also fix the floor logic
+                    if (
+                        np.sqrt(
+                            float((px[0] - self.point_entered_stairs[0]) ** 2)
+                            + float((px[1] - self.point_entered_stairs[1]) ** 2)
+                        )
+                        / self.pixels_per_meter
+                        > 2.0
+                    ):
+                        assert isinstance(self.stair, Stair)
+                        if self._vl_map._current_floor == self.stair.lower_floor:
+                            self._vl_map.change_floors(self.stair.higher_floor)
+                        elif self._vl_map._current_floor == self.stair.higher_floor:
+                            self._vl_map.change_floors(self.stair.lower_floor)
+                        else:
+                            raise Exception(
+                                "Something is wrong with the floor logic. Tried to go"
+                                + f" from {self._vl_map._current_floor} on stair from"
+                                + f" {self.stair.lower_floor} to"
+                                f" {self.stair.higher_floor}"
+                            )
+                    self.on_stairs = False
+                    self.point_entered_stairs = (0, 0)
+                    self.stair = None
+
+            else:
+                if not self.on_stairs:
+                    self.on_stairs = True
+                    self.point_entered_stairs = px
+                    self.stair = stair
+
+        ###Path planning
+
         if self._reached_goal:
             self._cur_path_idx += 1
             self._reached_goal = False
+            self.n_steps_goal = 0
+        else:
+            self.n_steps_goal += 1
+
+        force_dont_stop = False
+
+        if self.n_steps_goal > 20:
+            print("CAN'T GET TO CURRENT SUBGOAL, ADVANCING")
+            force_dont_stop = True  # Not at subgoal so don't want to stop
+            self._cur_path_idx += 1
+            self.n_steps_goal = 0
+        # Check if actually close to position we will give as input
+        xy = self._observations_cache["robot_xy"]
+        if len(self._path_to_follow) > self._cur_path_idx:
+            path_pos = self._path_to_follow[self._cur_path_idx]
+            if np.sqrt(np.sum(np.square(path_pos - xy))) > 1.0:
+                force_dont_stop = True
 
         replan = False
-        if self._num_steps > (self._last_plan_step + self._replan_interval):
-            replan = True
+        if ENABLE_REPLAN_AT_STEPS:
+            if self._num_steps > (self._last_plan_step + self._replan_interval):
+                replan = True
         if len(self._path_to_follow) < self._cur_path_idx + 1:
             replan = True
+
+        if ENABLE_REPLAN_WHEN_STUCK:
+            if np.sqrt(np.sum(np.square(self.last_xy - xy))) < 0.05:
+                self.n_at_xy += 1
+            else:
+                self.n_at_xy = 0
+            if self.n_at_xy > 10:  # might stay here to turn
+                print("IS STUCK! Replanning")
+                replan = True
+                self.n_at_xy = 0
+
+            self.last_xy = xy
 
         if replan:
             robot_xy = self._observations_cache["robot_xy"]
@@ -152,7 +253,13 @@ class BasePathPolicy(BaseVLNPolicy):
 
             if switch_or_stop:
                 if last_instruction:
-                    return robot_xy, True  # stop
+                    if (not force_dont_stop) and (
+                        self._num_steps > FORCE_DONT_STOP_UNTIL
+                    ):
+                        print("STOPPING (in planner)")
+                        return robot_xy, True  # stop
+                    else:
+                        print("Forced not to stop!")
                 else:
                     self._curr_instruction_idx += 1
 
@@ -209,5 +316,17 @@ class BasePathPolicy(BaseVLNPolicy):
         policy_info["current instruction part"] = self._instruction_parts[
             self._curr_instruction_idx
         ]
+
+        if ENABLE_STAIRS:
+            policy_info["render_below_images"] += ["on stairs"]
+            if self.on_stairs:
+                assert isinstance(self.stair, Stair)
+                policy_info["on stairs"] = (
+                    f"On stairs from {self.stair.lower_floor} to"
+                    f" {self.stair.higher_floor}, current floor"
+                    f" {self._vl_map._current_floor}"
+                )
+            else:
+                policy_info["on stairs"] = "Not on stairs"
 
         return policy_info

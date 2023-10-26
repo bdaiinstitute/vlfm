@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
+import torch
 from scipy.ndimage import binary_dilation
 
 from vlfm.path_planning.path_planner import get_paths
@@ -20,7 +21,7 @@ class VLFMap(VLMap):
     _thresh_switch = 0.05  # Not for last instruction part.
     # If change in value under threshold (as percentage of value up until now) then switch
     # Note we also switch when the next instruction is higher than the current
-    _thresh_stop = 0.01  # Last instruction part only.
+    _thresh_stop = 0.1  # Last instruction part only.
     # If change in value under threshold (as percentage of value up until now) then stop
     _prev_val_weight = (
         1.0  # Weighting for value of previous part of the path when comparing
@@ -155,9 +156,62 @@ class VLFMap(VLMap):
         #     ]
         # )
 
-        # TODO: remove 0's? Very costly to get a 0 with the averaging...
-
         return image_embeddings.reshape([px.shape[0]] + list(self._feats_sz))
+
+    def get_similarity(
+        self,
+        path: np.ndarray,
+        text_embed: torch.tensor,
+        method: str = "average_sim",
+    ) -> Tuple[float, np.ndarray, int]:
+        # Get image embeddings along path
+        image_embeddings = self.get_embeddings_path(path)
+
+        if method == "average_sim":
+            # Score path
+            similarity = self._vl_model.get_similarity_batch(
+                image_embeddings=image_embeddings, txt_embedding=text_embed
+            )
+
+            orig_sim_nonzero = similarity != 0
+
+            if self.ignore_locs.shape[0] > 0:
+                for j in range(len(path)):
+                    if np.any(
+                        np.sqrt(
+                            np.sum(
+                                np.square(path[j, :].reshape(-1, 2) - self.ignore_locs),
+                                axis=1,
+                            )
+                        )
+                        < self.ignore_radius
+                    ):
+                        # print("IGNORING SCORE OF BACKTRACKING: ", path[j, :])
+                        similarity[j] = 0
+
+            # stop early if path peaks
+            denom = []
+            denom_i = 1
+            for j in range(len(similarity)):
+                if orig_sim_nonzero[j]:
+                    denom_i += 1
+                denom += [denom_i]
+            c_similarity = np.cumsum(similarity) / np.array(
+                denom  # [i + 1 for i in range(len(similarity))]
+            )
+            peak_i = np.argmax(c_similarity)
+            value = c_similarity[peak_i]
+
+            # print("PATH: ", path)
+            # print("SIMILARITY: ", similarity)
+            # print("C_SIMILARITY: ", c_similarity)
+            # print("VALUE: ", value)
+
+            return value, c_similarity, peak_i
+        # elif method == "weighted average embeddings":
+
+        else:
+            raise Exception(f"Invalid method {method} for get_similarity")
 
     def get_best_path_instruction(
         self, instruction: str, paths: List[np.ndarray]
@@ -177,57 +231,20 @@ class VLFMap(VLMap):
 
         for i in range(len(paths)):
             path = paths[i]
-            # Get image embeddings along path
-            image_embeddings = self.get_embeddings_path(path)
 
-            # Score path
-            similarity = self._vl_model.get_similarity_batch(
-                image_embeddings=image_embeddings, txt_embedding=text_embed
+            value, c_similarity, peak_i = self.get_similarity(
+                path, text_embed, method="average_sim"
             )
-
-            orig_sim_nonzero = similarity != 0
-
-            if self.ignore_locs.shape[0] > 0:
-                for j in range(len(path)):
-                    if np.any(
-                        np.sqrt(
-                            np.sum(
-                                np.square(path[j, :].reshape(-1, 2) - self.ignore_locs),
-                                axis=1,
-                            )
-                        )
-                        < self.ignore_radius
-                    ):
-                        print("IGNORING SCORE OF BACKTRACKING: ", path[j, :])
-                        similarity[j] = 0
-
-            # stop early if path peaks
-            denom = []
-            denom_i = 1
-            for j in range(len(similarity)):
-                if orig_sim_nonzero[j]:
-                    denom_i += 1
-                denom += [denom_i]
-            c_similarity = np.cumsum(similarity) / np.array(
-                denom  # [i + 1 for i in range(len(similarity))]
-            )
-            peak_i = np.argmax(c_similarity)
-            value = c_similarity[peak_i]
-
-            print("PATH: ", path)
-            print("SIMILARITY: ", similarity)
-            print("C_SIMILARITY: ", c_similarity)
-            print("VALUE: ", value)
 
             # Update
             if value > max_value:
                 max_value = value
                 best_path = path[: peak_i + 1].copy()
-                best_path_vals = c_similarity[: peak_i + 1].copy()
+                best_path_vals = c_similarity[: peak_i + 1]
 
-        print("BEST PATH: ", best_path)
-        print("BEST SIMILARITY: ", best_path_vals)
-        print("BEST VALUE: ", max_value)
+        # print("BEST PATH: ", best_path)
+        # print("BEST SIMILARITY: ", best_path_vals)
+        # print("BEST VALUE: ", max_value)
 
         return best_path, best_path_vals, max_value
 
@@ -336,7 +353,7 @@ class VLFMap(VLMap):
             occ_map,
             rand_area,
             robot_radius_px,
-            method="rrt",
+            method="both",
         )
 
         if len(paths_px) == 0:

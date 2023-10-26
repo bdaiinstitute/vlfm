@@ -2,7 +2,7 @@
 
 import os
 import warnings
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
@@ -18,6 +18,26 @@ from vlfm.utils.img_utils import (
 )
 from vlfm.vlm.blip2_unimodal import BLIP2unimodal
 from vlfm.vlm.vl_model import BaseVL
+
+ENABLE_STAIRS = True
+
+
+class Stair:
+    def __init__(
+        self, lower_floor: int, higher_floor: int, image_embedding: torch.tensor
+    ) -> None:
+        # TODO: recovery if initial observation was wrong on up/down?
+        self.lower_floor = lower_floor
+        self.higher_floor = higher_floor
+
+        self.image_embedding = image_embedding
+        self.n = 0
+
+    def add_observation(self, image_embedding: torch.tensor) -> None:
+        self.image_embedding = (self.image_embedding * self.n + image_embedding) / (
+            self.n + 1
+        )
+        self.n += 1
 
 
 class VLMap(BaseMap):
@@ -78,6 +98,16 @@ class VLMap(BaseMap):
         self.vl_model = BaseVL()
         self.set_vl_model()  # seperate function to make easier to try different versions
 
+        self.stair_text_cache: List[torch.tensor] = []
+        self.upstair_text_cache: List[torch.tensor] = []
+
+        if ENABLE_STAIRS:
+            self._stair_dict: Dict[Tuple[int, int], Stair] = {}
+
+            # Current VL map in GPU but other floors will not fit so store in cpu
+            self._map_per_level: Dict[int, torch.tensor] = {}
+            self._current_floor: int = 0
+
     def set_vl_model(self) -> None:
         # self._vl_model = BLIP2unimodalClient(
         #     port=int(os.environ.get("VLMODEL_PORT", "12182"))
@@ -95,6 +125,86 @@ class VLMap(BaseMap):
         self._confidence_masks = {}
         self._min_confidence = 0.25
         self._points_started_instructions = {}
+
+        if ENABLE_STAIRS:
+            self._stair_dict = {}
+            self._map_per_level = {}
+            self._current_floor = 0
+
+    def has_stairs(
+        self,
+        img_embedding: torch.tensor,
+        threshold: float = 0.5,  # TODO: need to check what would be good
+    ) -> bool:
+        labels = ["staircase", "stairs"]
+
+        if len(self.stair_text_cache) == 0:
+            self.stair_text_cache = []
+            for lb in labels:
+                text_embed = self._vl_model.get_text_embedding(lb)
+                self.stair_text_cache += [text_embed]
+
+        similarities = np.array(
+            [
+                self._vl_model.get_similarity(
+                    image_embedding=img_embedding, txt_embedding=text_embed
+                )
+                for text_embed in self.stair_text_cache
+            ]
+        )
+
+        return np.any(similarities > threshold)
+
+    def stairs_going_up(
+        self,
+        img_embedding: torch.tensor,
+        threshold: float = 0.5,  # TODO: need to check what would be good
+    ) -> bool:
+        """
+        Determine is stairs are going up (return True) or not (return False)
+        """
+        labels = ["upstairs", "going up"]
+
+        if len(self.upstair_text_cache) == 0:
+            self.upstair_text_cache = []
+            for lb in labels:
+                text_embed = self._vl_model.get_text_embedding(lb)
+                self.upstair_text_cache += [text_embed]
+
+        similarities = np.array(
+            [
+                self._vl_model.get_similarity(
+                    image_embedding=img_embedding, txt_embedding=text_embed
+                )
+                for text_embed in self.upstair_text_cache
+            ]
+        )
+
+        return np.any(similarities > threshold)
+
+    def change_floors(self, floor: int) -> None:
+        self._map_per_level[self._current_floor] = self._vl_map.cpu().clone()
+        if floor in self._map_per_level.keys():
+            self._vl_map = self._map_per_level[floor].clone().to(self.device)
+        else:
+            self._vl_map = torch.zeros(
+                (self.size, self.size, self._feat_channels),
+                dtype=torch.float32,
+                device=self.device,
+            )
+        self._current_floor = floor
+
+    def loc_get_stairs(self, loc: Tuple[int, int]) -> Union[Stair, None]:
+        # TODO: balance similarity and number of observations?
+        if loc in self._stair_dict.keys():
+            stair = self._stair_dict[loc]
+            if stair.n < 5:  # min number of observations
+                return None
+
+            if self.has_stairs(stair.image_embedding):
+                return stair
+
+        return None
 
     def update_map(
         self,
@@ -127,6 +237,29 @@ class VLMap(BaseMap):
         curr_map = self._localize_new_data(
             depth, tf_camera_to_episodic, min_depth, max_depth, fov
         )
+
+        if ENABLE_STAIRS:
+            # Stairs check
+            if self.has_stairs(image_embedding):
+                locs = np.nonzero(curr_map != 0)
+                for i in range(len(locs[0])):
+                    px = (locs[0][i], locs[1][i])
+                    if px in self._stair_dict.keys():
+                        self._stair_dict[px].add_observation(image_embedding)
+                    else:
+                        if self.stairs_going_up(image_embedding):
+                            stair = Stair(
+                                lower_floor=self._current_floor,
+                                higher_floor=self._current_floor + 1,
+                                image_embedding=image_embedding,
+                            )
+                        else:
+                            stair = Stair(
+                                lower_floor=self._current_floor - 1,
+                                higher_floor=self._current_floor,
+                                image_embedding=image_embedding,
+                            )
+                        self._stair_dict[px] = stair
 
         # Fuse the new data with the existing data
         self._fuse_new_data(curr_map, image_embedding.flatten())

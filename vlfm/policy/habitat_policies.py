@@ -151,6 +151,9 @@ class HabitatMixin:
         info["start_yaw"] = self._start_yaw
         return info
 
+    def _choose_random_nonstop_action(self) -> torch.tensor:
+        return torch.tensor([[np.random.randint(1, 4)]])
+
     def _cache_observations(
         self: Union["HabitatMixin", BaseVLNPolicy], observations: TensorDict
     ) -> None:

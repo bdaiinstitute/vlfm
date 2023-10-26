@@ -8,6 +8,8 @@ import numpy as np
 
 from .rrt import RRT, RRTStar
 
+N_PATHS = 4
+
 
 def get_paths(
     agent_pos: Tuple[float, float],
@@ -15,7 +17,7 @@ def get_paths(
     occupancy_map: np.ndarray,
     rand_area: List[int],
     robot_radius: int,
-    method: str = "rrt_star",
+    method: str = "both",
 ) -> List[np.ndarray]:
     paths = []
 
@@ -25,37 +27,78 @@ def get_paths(
         sys.stdout = text_trap
 
         if method == "rrt":
-            rrt = RRT(
-                start=agent_pos,
-                goal=waypoints[i, :],
-                occupancy_map=occupancy_map,
-                rand_area=rand_area,
-                robot_radius=robot_radius,
-            )
+            for j in range(N_PATHS):
+                rrt = RRT(
+                    start=agent_pos,
+                    goal=waypoints[i, :],
+                    occupancy_map=occupancy_map,
+                    rand_area=rand_area,
+                    robot_radius=robot_radius,
+                )
 
-            path = rrt.planning(animation=False)
+                path = rrt.planning(animation=False)
 
-            # rrt.write_img(path)
+                # rrt.write_img(path)
+
+                if path is not None:
+                    # print("SUCCESS!")
+                    paths += [np.flip(np.array(path)[:-1], 0)]
 
         if method == "rrt_star":
-            rrt_star = RRTStar(
-                start=agent_pos,
-                goal=waypoints[i, :],
-                occupancy_map=occupancy_map,
-                rand_area=rand_area,
-                robot_radius=robot_radius,
-            )
+            for j in range(N_PATHS):
+                rrt_star = RRTStar(
+                    start=agent_pos,
+                    goal=waypoints[i, :],
+                    occupancy_map=occupancy_map,
+                    rand_area=rand_area,
+                    robot_radius=robot_radius,
+                )
 
-            path = rrt_star.planning(animation=False)
+                path = rrt_star.planning(animation=False)
 
-            # rrt_star.write_img(path)
+                # rrt_star.write_img(path)
+
+                if path is not None:
+                    # print("SUCCESS!")
+                    paths += [np.flip(np.array(path)[:-1], 0)]
+
+        if method == "both":
+            for j in range(N_PATHS // 2):
+                rrt = RRT(
+                    start=agent_pos,
+                    goal=waypoints[i, :],
+                    occupancy_map=occupancy_map,
+                    rand_area=rand_area,
+                    robot_radius=robot_radius,
+                )
+
+                path = rrt.planning(animation=False)
+
+                # rrt.write_img(path)
+
+                if path is not None:
+                    # print("SUCCESS!")
+                    paths += [np.flip(np.array(path)[:-1], 0)]
+
+            for j in range(N_PATHS - N_PATHS // 2):
+                rrt_star = RRTStar(
+                    start=agent_pos,
+                    goal=waypoints[i, :],
+                    occupancy_map=occupancy_map,
+                    rand_area=rand_area,
+                    robot_radius=robot_radius,
+                )
+
+                path = rrt_star.planning(animation=False)
+
+                # rrt_star.write_img(path)
+
+                if path is not None:
+                    # print("SUCCESS!")
+                    paths += [np.flip(np.array(path)[:-1], 0)]
 
         sys.stdout = sys.__stdout__
 
-        print("START: ", agent_pos, "GOAL: ", waypoints[i, :], "RAND_AREA: ", rand_area)
-
-        if path is not None:
-            print("SUCCESS!")
-            paths += [np.flip(np.array(path)[:-1], 0)]
+        # print("START: ", agent_pos, "GOAL: ", waypoints[i, :], "RAND_AREA: ", rand_area)
 
     return paths

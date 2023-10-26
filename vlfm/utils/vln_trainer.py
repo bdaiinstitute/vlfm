@@ -43,7 +43,8 @@ def extract_scalars_from_info(info: Dict[str, Any]) -> Dict[str, float]:
 
 
 ANALYSIS_SAVE_LOCATION = "failure_analysis/"
-ORACLE_STOP = True
+ORACLE_STOP = False
+LOG_SUCCES_IF_ORACLE_STOP = True
 
 
 @baseline_registry.register_trainer(name="vln")
@@ -71,7 +72,7 @@ class VLNTrainer(PPOTrainer):
         file_success = open(ANALYSIS_SAVE_LOCATION + "successes.txt", "w")
         file_fail = open(ANALYSIS_SAVE_LOCATION + "failures.txt", "w")
 
-        if ORACLE_STOP:
+        if ORACLE_STOP or LOG_SUCCES_IF_ORACLE_STOP:
             self.should_stop = False
 
         gt_path_for_viz = None
@@ -190,6 +191,9 @@ class VLNTrainer(PPOTrainer):
 
         num_successes = 0
         num_total = 0
+        if LOG_SUCCES_IF_ORACLE_STOP:
+            num_os_successes = 0
+
         hab_vis = HabitatVis()
         while (
             len(stats_episodes) < (number_of_eval_episodes * evals_per_ep)
@@ -262,6 +266,12 @@ class VLNTrainer(PPOTrainer):
                 self.should_stop = (
                     infos[0]["distance_to_goal"]
                 ) <= self.config.habitat.task.measurements.success.success_distance
+
+            if LOG_SUCCES_IF_ORACLE_STOP:
+                if (
+                    infos[0]["distance_to_goal"]
+                ) <= self.config.habitat.task.measurements.success.success_distance:
+                    self.should_stop = True
 
             gt_path_for_viz = np.array(infos[0]["gt_path_vln"])
             gt_path_for_viz = gt_path_for_viz[:, :2]
@@ -339,6 +349,14 @@ class VLNTrainer(PPOTrainer):
                         f"Success rate: {num_successes / num_total * 100:.2f}% "
                         f"({num_successes} out of {num_total})"
                     )
+                    if LOG_SUCCES_IF_ORACLE_STOP:
+                        if self.should_stop:
+                            num_os_successes += 1
+                        print(
+                            "Success rate with OS:"
+                            f" {num_os_successes / num_total * 100:.2f}%"
+                            f" ({num_os_successes} out of {num_total})"
+                        )
 
                     from vlfm.utils.episode_stats_logger import (
                         log_episode_stats,
@@ -377,7 +395,7 @@ class VLNTrainer(PPOTrainer):
                             current_episodes_info[i].episode_id,
                         )
 
-                    if ORACLE_STOP:
+                    if ORACLE_STOP or LOG_SUCCES_IF_ORACLE_STOP:
                         self.should_stop = False
 
                     gt_path_for_viz = None

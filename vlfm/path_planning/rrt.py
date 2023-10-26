@@ -9,14 +9,12 @@ import numpy as np
 from external.python_robotics.PathPlanning.RRT.rrt import (
     RRT as RRT_PR,
 )
-
-# mypy: ignore-errors
 from external.python_robotics.PathPlanning.RRTStar.rrt_star import (
     RRTStar as RRTStar_PR,
 )
-
-# mypy: ignore-errors
 from vlfm.mapping.traj_visualizer import TrajectoryVisualizer
+
+# from vlfm.utils.img_utils import pixel_value_within_radius
 
 
 # Re-write collision check to use occupancy map instead of obstacle list
@@ -33,9 +31,9 @@ def check_collision_occmap(
             return False
 
         # Version using radius
-        # mp = pixel_value_within_radius(occupancy_map, coord, robot_radius, "max")
+        # mp = pixel_value_within_radius(occupancy_map, coord, robot_radius-1, "max")
         # if mp > 0.5:
-        #     return False # collision
+        #     return False  # collision
 
     return True  # safe
 

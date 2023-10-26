@@ -124,6 +124,7 @@ class BaseVLNPolicy(BasePolicy):
             goal, should_stop = self._plan()
 
             if should_stop:
+                print("STOPPING (should_stop)")
                 self._called_stop = True
                 return self._stop_action, rnn_hidden_states
             if goal is None:
@@ -166,6 +167,9 @@ class BaseVLNPolicy(BasePolicy):
         raise NotImplementedError
 
     def _parse_instruction(self, instruction: str) -> List[str]:
+        raise NotImplementedError
+
+    def _choose_random_nonstop_action(self) -> torch.tensor:
         raise NotImplementedError
 
     def _get_policy_info(self) -> Dict[str, Any]:
@@ -245,8 +249,13 @@ class BaseVLNPolicy(BasePolicy):
 
             if stop:
                 self._called_stop = True
+                print("STOPPING (pointnav in stop logic)")
                 return self._stop_action
+
         action = self._pointnav_policy.act(obs_pointnav, masks, deterministic=True)
+        if action.item() == self._stop_action.item():  # TODO:
+            print("Pointnav tried to stop, choosing random action!")
+            return self._choose_random_nonstop_action().to(action.device)
         return action
 
     def _cache_observations(self, observations: "TensorDict") -> None:
