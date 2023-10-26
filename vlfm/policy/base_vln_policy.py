@@ -30,6 +30,8 @@ class BaseVLNPolicy(BasePolicy):
     _stop_action: Tensor = None  # MUST BE SET BY SUBCLASS
     _observations_cache: Dict[str, Any] = {}
 
+    _max_iters: int = 500
+
     def __init__(
         self,
         pointnav_policy_path: str,
@@ -115,6 +117,10 @@ class BaseVLNPolicy(BasePolicy):
         self._observations_cache["object_map_rgbd"]
 
         self._observations_cache["robot_xy"]
+
+        if self._num_steps > self._max_iters - 2:
+            print("STOPPING (end iter)")
+            return self._stop_action, rnn_hidden_states
 
         if not self._done_initializing:  # Initialize
             mode = "initialize"

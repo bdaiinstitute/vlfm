@@ -87,12 +87,11 @@ class VLFMap(VLMap):
         pixel_location: Tuple[int, int],
         radius: int,
         reduction: str = "median",
-    ) -> np.ndarray:
+    ) -> torch.tensor:
         """Returns the maximum pixel value within a given radius of a specified pixel
         location in the given image.
 
         Args:
-            image (np.ndarray): The input image as a 2D numpy array.
             pixel_location (Tuple[int, int]): The location of the pixel as a tuple (row,
                 column).
             radius (int): The radius within which to find the maximum pixel value.
@@ -100,7 +99,7 @@ class VLFMap(VLMap):
                 to a single value. Defaults to "median".
 
         Returns:
-            np.ndarray: The reduced embedding within the radius
+            torch.tensor: The reduced embedding within the radius
         """
         # Ensure that the pixel location is within the image
         assert (
@@ -134,81 +133,123 @@ class VLFMap(VLMap):
             -1, self._feat_channels
         )
 
-        if overlap_values.size == 0:
-            return np.zeros(cropped_image.shape[2])
+        if overlap_values.shape[0] == 0:
+            return torch.zeros(1, self._feat_channels, device=cropped_image.device)
         elif reduction == "mean":
-            return np.mean(overlap_values, axis=0)  # type: ignore
+            return torch.mean(overlap_values, dim=0)  # type: ignore
         elif reduction == "max":
-            return np.max(overlap_values, axis=0)
+            return torch.max(overlap_values, dim=0)[0]
         elif reduction == "median":
-            return np.median(overlap_values, axis=0)  # type: ignore
+            return torch.median(overlap_values, dim=0)[0]  # type: ignore
         else:
             raise ValueError(f"Invalid reduction method: {reduction}")
 
-    def get_embeddings_path(self, path: np.ndarray, radius: int = 5) -> np.ndarray:
+    def get_embeddings_path(
+        self, path: np.ndarray, use_radius: bool = True
+    ) -> np.ndarray:
         """Extracts the image embeddings from the map at the points in the given path"""
         px = self._xy_to_px(path)
-        image_embeddings = self._vl_map[px[:, 1], px[:, 0], :]
-        # image_embeddings = np.array(
-        #     [
-        #         self.embedding_value_within_radius(px[i, [1,0]], radius=radius)
-        #         for i in range(px.shape[0])
-        #     ]
-        # )
+        if use_radius:
+            radius = get_agent_radius_in_px(self.pixels_per_meter)
+
+            image_embeddings = torch.zeros(
+                px.shape[0], self._feat_channels, device=self.device
+            )
+            for i in range(px.shape[0]):
+                image_embeddings[i, :] = self.embedding_value_within_radius(
+                    px[i, [1, 0]], radius=radius
+                )
+
+        else:
+            image_embeddings = self._vl_map[px[:, 1], px[:, 0], :]
 
         return image_embeddings.reshape([px.shape[0]] + list(self._feats_sz))
+
+    def similarity_main_loop(
+        self,
+        image_embeddings: torch.tensor,
+        text_embed: torch.tensor,
+        denom: np.ndarray,
+    ) -> Tuple[float, np.ndarray, int]:
+        similarity = self._vl_model.get_similarity_batch(
+            image_embeddings=image_embeddings, txt_embedding=text_embed
+        )
+
+        c_similarity = np.cumsum(similarity) / denom
+        peak_i = np.argmax(c_similarity)
+        value = c_similarity[peak_i]
+
+        return value, c_similarity, peak_i
 
     def get_similarity(
         self,
         path: np.ndarray,
         text_embed: torch.tensor,
-        method: str = "average_sim",
+        method: str = "weighted average embeddings",
     ) -> Tuple[float, np.ndarray, int]:
         # Get image embeddings along path
         image_embeddings = self.get_embeddings_path(path)
 
+        # Get original indices of zeros
+        orig_nz = [
+            torch.any(image_embeddings[i, ...] != 0)
+            for i in range(image_embeddings.shape[0])
+        ]
+
+        # Set backtracking to zero
+        if self.ignore_locs.shape[0] > 0:
+            for j in range(len(path)):
+                if np.any(
+                    np.sqrt(
+                        np.sum(
+                            np.square(path[j, :].reshape(-1, 2) - self.ignore_locs),
+                            axis=1,
+                        )
+                    )
+                    < self.ignore_radius
+                ):
+                    image_embeddings[j, ...] = 0
+
+        # Denom that ignores the original zeros
+        denom_l = []
+        denom_i = 1
+        for j in range(image_embeddings.shape[0]):
+            if orig_nz[j]:
+                denom_i += 1
+            denom_l += [denom_i]
+        denom = np.array(denom_l)
+
         if method == "average_sim":
-            # Score path
+            return self.similarity_main_loop(image_embeddings, text_embed, denom)
+        elif method == "average embeddings":
+            image_embeddings = torch.cumsum(image_embeddings, dim=0) / denom
+            return self.similarity_main_loop(
+                image_embeddings, text_embed, np.ones(denom.shape)
+            )
+        elif method == "weighted average embeddings":
+            tau = 0.1  # CLIP-Hitchhiker found optimal between 0.05-0.15
+
             similarity = self._vl_model.get_similarity_batch(
                 image_embeddings=image_embeddings, txt_embedding=text_embed
             )
 
-            orig_sim_nonzero = similarity != 0
-
-            if self.ignore_locs.shape[0] > 0:
-                for j in range(len(path)):
-                    if np.any(
-                        np.sqrt(
-                            np.sum(
-                                np.square(path[j, :].reshape(-1, 2) - self.ignore_locs),
-                                axis=1,
-                            )
-                        )
-                        < self.ignore_radius
-                    ):
-                        # print("IGNORING SCORE OF BACKTRACKING: ", path[j, :])
-                        similarity[j] = 0
-
-            # stop early if path peaks
-            denom = []
-            denom_i = 1
-            for j in range(len(similarity)):
-                if orig_sim_nonzero[j]:
-                    denom_i += 1
-                denom += [denom_i]
-            c_similarity = np.cumsum(similarity) / np.array(
-                denom  # [i + 1 for i in range(len(similarity))]
+            exp_sim = np.exp(similarity / tau)
+            exp_sim[not orig_nz] = (
+                0  # Set similarity to 0 for ones with no embedding to not mess up denom2
             )
-            peak_i = np.argmax(c_similarity)
-            value = c_similarity[peak_i]
+            denom2 = np.cumsum(exp_sim)
+            denom2[denom2 == 0] = 1  # Prevent divide by 0
+            w = torch.tensor(exp_sim / denom2, device=image_embeddings.device)
 
-            # print("PATH: ", path)
-            # print("SIMILARITY: ", similarity)
-            # print("C_SIMILARITY: ", c_similarity)
-            # print("VALUE: ", value)
+            rep = list(image_embeddings.shape)[1:] + [1]
 
-            return value, c_similarity, peak_i
-        # elif method == "weighted average embeddings":
+            image_embeddings = image_embeddings * torch.movedim(w.repeat(rep), -1, 0)
+
+            image_embeddings = torch.cumsum(image_embeddings, dim=0)
+
+            return self.similarity_main_loop(
+                image_embeddings, text_embed, np.ones(denom.shape)
+            )
 
         else:
             raise Exception(f"Invalid method {method} for get_similarity")
@@ -232,9 +273,7 @@ class VLFMap(VLMap):
         for i in range(len(paths)):
             path = paths[i]
 
-            value, c_similarity, peak_i = self.get_similarity(
-                path, text_embed, method="average_sim"
-            )
+            value, c_similarity, peak_i = self.get_similarity(path, text_embed)
 
             # Update
             if value > max_value:

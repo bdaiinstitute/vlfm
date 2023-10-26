@@ -55,6 +55,8 @@ class BasePathPolicy(BaseVLNPolicy):
             self.n_at_xy = 0
 
         self.n_steps_goal = 0
+        self.times_no_paths = 0
+        self.why_stop = "no stop"
 
     def _reset(self) -> None:
         super()._reset()
@@ -75,6 +77,8 @@ class BasePathPolicy(BaseVLNPolicy):
             self.n_at_xy = 0
 
         self.n_steps_goal = 0
+        self.times_no_paths = 0
+        self.why_stop = "no stop"
 
     def act(
         self,
@@ -206,6 +210,7 @@ class BasePathPolicy(BaseVLNPolicy):
 
             if np.array_equal(frontiers, np.zeros((1, 2))) or len(frontiers) == 0:
                 print("No frontiers found during exploration, stopping.")
+                self.why_stop = "No frontiers found"
                 return robot_xy, True
 
             cur_instruct = self._instruction_parts[self._curr_instruction_idx]
@@ -242,7 +247,19 @@ class BasePathPolicy(BaseVLNPolicy):
                     # continue on previously chosen path
                     self._cur_path_idx += 1
                     return self._path_to_follow[self._cur_path_idx], False
-                return None, False
+                else:
+                    self.times_no_paths += 1
+                if self.times_no_paths > 10:
+                    print(
+                        "STOPPING because cannot find paths"
+                        f" {self.times_no_paths} times"
+                    )
+                    self.why_stop = f"No paths found {self.times_no_paths} times"
+                    return None, True
+                else:
+                    return None, False
+            else:
+                self.times_no_paths = 0
 
             self._path_to_follow = path
             self._path_vals = path_vals
@@ -257,6 +274,7 @@ class BasePathPolicy(BaseVLNPolicy):
                         self._num_steps > FORCE_DONT_STOP_UNTIL
                     ):
                         print("STOPPING (in planner)")
+                        self.why_stop = "Path value didn't increase enough"
                         return robot_xy, True  # stop
                     else:
                         print("Forced not to stop!")
