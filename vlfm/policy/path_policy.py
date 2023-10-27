@@ -149,7 +149,7 @@ class BasePathPolicy(BaseVLNPolicy):
 
         if self.n_steps_goal > 20:
             print("CAN'T GET TO CURRENT SUBGOAL, ADVANCING")
-            force_dont_stop = True  # Not at subgoal so don't want to stop
+            # force_dont_stop = True  # Not at subgoal so don't want to stop
             self._cur_path_idx += 1
             self.n_steps_goal = 0
         # Check if actually close to position we will give as input
@@ -183,6 +183,7 @@ class BasePathPolicy(BaseVLNPolicy):
                 print("IS STUCK! Replanning")
                 replan = True
                 self.n_at_xy = 0
+                # force_dont_stop = True
 
             self.last_xy = xy
 

@@ -10,16 +10,20 @@ from vlfm.mapping.vlfmap import VLFMap
 from vlfm.path_planning.path_planner import get_paths
 from vlfm.path_planning.utils import get_agent_radius_in_px
 
+USE_PEAK_THRESHOLD = True
+
 
 class VLPathSelector:
-    _thresh_switch = 0.05  # Not for last instruction part.
+    _thresh_switch = 0.1  # Not for last instruction part.
     # If change in value under threshold (as percentage of value up until now) then switch
     # Note we also switch when the next instruction is higher than the current
-    _thresh_stop = 1.1  # Last instruction part only.
+    _thresh_stop = 0.4  # Last instruction part only.
     # If change in value under threshold (as percentage of value up until now) then stop
     _prev_val_weight = (
         1.0  # Weighting for value of previous part of the path when comparing
     )
+
+    _thresh_peak = 0.9  # Stop path when at 80% of peak value
 
     def __init__(self, vl_map: VLFMap, min_dist_goal: float = 0.4):
         self._vl_map = vl_map
@@ -49,6 +53,7 @@ class VLPathSelector:
         image_embeddings: torch.tensor,
         text_embed: torch.tensor,
         denom: np.ndarray,
+        thresh: float = -1.0,
     ) -> Tuple[float, np.ndarray, int]:
         similarity = self._vl_map._vl_model.get_similarity_batch(
             image_embeddings=image_embeddings, txt_embedding=text_embed
@@ -58,6 +63,16 @@ class VLPathSelector:
         peak_i = np.argmax(c_similarity)
         value = c_similarity[peak_i]
 
+        if USE_PEAK_THRESHOLD:
+            if thresh == -1.0:
+                thresh = self._thresh_peak
+            if c_similarity.size > 0:
+                # Get first idx where it is over the threshold
+                where_over = c_similarity > value * thresh
+                if np.any(where_over):
+                    peak_i = np.where(where_over)[0][0]
+                    value = c_similarity[peak_i]
+
         return value, c_similarity, peak_i
 
     def get_similarity(
@@ -66,6 +81,7 @@ class VLPathSelector:
         image_embeddings: torch.tensor,
         text_embed: torch.tensor,
         method: str = "weighted average embeddings",
+        thresh: float = -1.0,
     ) -> Tuple[float, np.ndarray, int]:
         # Get original indices of zeros
         orig_nz = [
@@ -96,12 +112,17 @@ class VLPathSelector:
             denom_l += [denom_i]
         denom = np.array(denom_l)
 
+        if thresh == -1.0:
+            thresh = self._thresh_peak
+
         if method == "average_sim":
-            return self.similarity_main_loop(image_embeddings, text_embed, denom)
+            return self.similarity_main_loop(
+                image_embeddings, text_embed, denom, thresh=thresh
+            )
         elif method == "average embeddings":
             image_embeddings = torch.cumsum(image_embeddings, dim=0) / denom
             return self.similarity_main_loop(
-                image_embeddings, text_embed, np.ones(denom.shape)
+                image_embeddings, text_embed, np.ones(denom.shape), thresh=thresh
             )
         elif method == "weighted average embeddings":
             tau = 0.1  # CLIP-Hitchhiker found optimal between 0.05-0.15
@@ -125,7 +146,7 @@ class VLPathSelector:
             image_embeddings = torch.cumsum(image_embeddings, dim=0)
 
             return self.similarity_main_loop(
-                image_embeddings, text_embed, np.ones(denom.shape)
+                image_embeddings, text_embed, np.ones(denom.shape), thresh=thresh
             )
 
         else:

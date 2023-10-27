@@ -9,7 +9,7 @@ import torch
 
 from vlfm.mapping.vlfmap import VLFMap
 
-from .base import VLPathSelector
+from .base import USE_PEAK_THRESHOLD, VLPathSelector
 from .utils import parse_instruction
 
 
@@ -34,7 +34,9 @@ class VLPathSelectorMR(VLPathSelector):
     _weight_path = 1.0
     _weight_sentence = 0.6
     _weight_parts = 0.3
-    _weight_words = 0.4
+    _weight_words = 0.6
+
+    _thresh_peak_parts = 0.7
 
     def __init__(self, vl_map: VLFMap, min_dist_goal: float = 0.4):
         super().__init__(vl_map, min_dist_goal)
@@ -76,8 +78,8 @@ class VLPathSelectorMR(VLPathSelector):
             text_embed = self._vl_map._vl_model.get_text_embedding(instruction)
             self._cached_text_embeddings[instruction] = text_embed
 
-        value, c_similarity, peak_i = self.get_similarity(
-            path, image_embeddings, text_embed
+        _, c_similarity, peak_i = self.get_similarity(
+            path, image_embeddings, text_embed, thresh=self._thresh_peak_parts
         )
 
         return c_similarity, peak_i
@@ -86,15 +88,20 @@ class VLPathSelectorMR(VLPathSelector):
         self, instruction: str, paths: List[np.ndarray]
     ) -> Tuple[np.ndarray, np.ndarray, float]:
         """Returns best path, goal, waypoint for local planner, value for path"""
+
         if self.instruction_tree is None:
+            # print("INSTRUCTION: ", instruction)
             self.instruction_tree = InstructionTree(instruction, TextType.INSTRUCTION)
             sentences = parse_instruction(instruction, split_strs=["\r\n", "\n", "."])
+            # print("SENTENCES: ", sentences)
             for sentence_s in sentences:
                 sentence_it = InstructionTree(sentence_s, TextType.SENTENCE)
                 parts = parse_instruction(sentence_s, split_strs=[",", ";"])
+                # print("PARTS: ", parts)
                 for part_s in parts:
                     part_it = InstructionTree(part_s, TextType.PART)
                     words = parse_instruction(part_s, split_strs=[" "])
+                    # print("WORDS: ", words)
                     for word in words:
                         word_it = InstructionTree(word, TextType.WORD)
                         part_it.add_child(word_it)
@@ -125,9 +132,11 @@ class VLPathSelectorMR(VLPathSelector):
 
             total_value = best_path_vals_top * self._weight_path
 
+            # print("PATH")
+
             for sentence in self.instruction_tree.children:
                 bvs, peak_i = self.get_values_instruction_part(
-                    sentence.text[start_i_s:], path, image_embeddings[start_i_s:, ...]
+                    sentence.text, path[start_i_s:], image_embeddings[start_i_s:, ...]
                 )
                 np.array([])
                 np.array([])
@@ -138,6 +147,8 @@ class VLPathSelectorMR(VLPathSelector):
                 total_value[start_i_s:stop_i_p] += (
                     bvs[: peak_i + 1] * self._weight_sentence
                 )
+
+                # print("SENT: ", peak_i, path.shape[0])
 
                 for part in sentence.children:
                     bvp, peak_i = self.get_values_instruction_part(
@@ -151,6 +162,8 @@ class VLPathSelectorMR(VLPathSelector):
                         bvp[: peak_i + 1] * self._weight_parts
                     )
 
+                    # print("VALS: ", peak_i, path.shape[0])
+
                     words = [child.text for child in part.children]
                     bvw = self.get_best_values_for_words(
                         words, image_embeddings[start_i_p:stop_i_w, ...]
@@ -160,16 +173,27 @@ class VLPathSelectorMR(VLPathSelector):
 
                     total_value[start_i_p:stop_i_w] += np.mean(bvw) * self._weight_words
 
+                    # print("VALS WORD: ", bvw)
+
                     if start_i_p >= path.shape[0] or start_i_p >= stop_i_p:
+                        # print("breaking! Parts: ", start_i_p, stop_i_p, path.shape[0])
                         break
 
                 start_i_s = stop_i_p
 
                 if start_i_s >= path.shape[0]:
+                    # print("breaking! Sentences: ", start_i_s, path.shape[0])
                     break
 
             peak_i = np.argmax(total_value)
             value = total_value[peak_i]
+
+            if USE_PEAK_THRESHOLD:
+                # Get first idx where it is over the threshold
+                where_over = total_value > value * self._thresh_peak
+                if np.any(where_over):
+                    peak_i = np.where(where_over)[0][0]
+                    value = total_value[peak_i]
 
             # Update
             if value > max_value:

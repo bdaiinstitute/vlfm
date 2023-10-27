@@ -272,6 +272,7 @@ class VLNTrainer(PPOTrainer):
                     infos[0]["distance_to_goal"]
                 ) <= self.config.habitat.task.measurements.success.success_distance:
                     self.should_stop = True
+                    print("WITHIN GOAL DIST!")
 
             gt_path_for_viz = np.array(infos[0]["gt_path_vln"])
             gt_path_for_viz = gt_path_for_viz[:, :2]

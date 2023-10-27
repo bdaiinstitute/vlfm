@@ -138,13 +138,22 @@ class BaseVLNPolicy(BasePolicy):
                 pointnav_action = torch.tensor([[np.random.randint(1, 4)]])
 
             else:
-                print("GOAL: ", goal[:2])
                 pointnav_action = self._pointnav(goal[:2])
 
         action_numpy = pointnav_action.detach().cpu().numpy()[0]
         if len(action_numpy) == 1:
             action_numpy = action_numpy[0]
-        print(f"Step: {self._num_steps} | Mode: {mode} | Action: {action_numpy}")
+        if (mode != "navigate") or (goal is None):
+            print(f"Step: {self._num_steps} | Mode: {mode} | Action: {action_numpy}")
+        else:
+            xy = np.array2string(
+                self._observations_cache["robot_xy"], precision=2, floatmode="fixed"
+            )
+            g = np.array2string(goal[:2], precision=2, floatmode="fixed")
+            print(
+                f"Step: {self._num_steps} | Mode: {mode} | Action: {action_numpy} |"
+                f" Goal: {g} | Position: {xy}"
+            )
         self._policy_info.update(self._get_policy_info())
         self._num_steps += 1
 
