@@ -40,10 +40,7 @@ class BasePathPolicy(BaseVLNPolicy):
         self._cur_path_idx = 0
         self._last_plan_step = 0
 
-        self._vl_map: VLFMap = VLFMap(
-            obstacle_map=self._obstacle_map,
-            min_dist_goal=self._pointnav_stop_radius,
-        )
+        self._vl_map: VLFMap = VLFMap(obstacle_map=self._obstacle_map)
 
         if ENABLE_STAIRS:
             self.on_stairs = False
@@ -99,71 +96,48 @@ class BasePathPolicy(BaseVLNPolicy):
         )
 
     def _parse_instruction(self, instruction: str) -> List[str]:
-        split_strs = ["\r\n", "\n", "."]
-        parsed_instruct = []
+        raise NotImplementedError
 
-        working_list = [instruction]
+    def _stair_preplan_step(self) -> None:
+        xy = self._observations_cache["robot_xy"]
+        px = self._vl_map._xy_to_px(xy.reshape(1, 2)).reshape(2)
+        stair = self._vl_map.loc_get_stairs((px[0], px[1]))
 
-        for ss in split_strs:
-            working_list_new = []
-            for instruct in working_list:
-                parsed = instruct.split(ss)
-                working_list_new += parsed
-            working_list = working_list_new
-
-        for instruct in working_list:
-            instruct = instruct.strip()
-            if instruct != "":
-                parsed_instruct += [instruct]
-
-        print("PARSING: ", instruction)
-        print("OUPUT: ", parsed_instruct)
-        return parsed_instruct
-
-    def _plan(self) -> Tuple[np.ndarray, bool]:
-        ###Stair logic, just for working out if we need to switch the level on the map
-        if ENABLE_STAIRS:
-            xy = self._observations_cache["robot_xy"]
-            px = self._vl_map._xy_to_px(xy.reshape(1, 2)).reshape(2)
-            stair = self._vl_map.loc_get_stairs((px[0], px[1]))
-
-            if stair is None:
-                if self.on_stairs:
-                    # check if we've gone far enough that we think we're gone up/down the stairs
-                    # TODO: change this check to have a visual component?
-                    # Then could also fix the floor logic
-                    if (
-                        np.sqrt(
-                            float((px[0] - self.point_entered_stairs[0]) ** 2)
-                            + float((px[1] - self.point_entered_stairs[1]) ** 2)
+        if stair is None:
+            if self.on_stairs:
+                # check if we've gone far enough that we think we're gone up/down the stairs
+                # TODO: change this check to have a visual component?
+                # Then could also fix the floor logic
+                if (
+                    np.sqrt(
+                        float((px[0] - self.point_entered_stairs[0]) ** 2)
+                        + float((px[1] - self.point_entered_stairs[1]) ** 2)
+                    )
+                    / self.pixels_per_meter
+                    > 2.0
+                ):
+                    assert isinstance(self.stair, Stair)
+                    if self._vl_map._current_floor == self.stair.lower_floor:
+                        self._vl_map.change_floors(self.stair.higher_floor)
+                    elif self._vl_map._current_floor == self.stair.higher_floor:
+                        self._vl_map.change_floors(self.stair.lower_floor)
+                    else:
+                        raise Exception(
+                            "Something is wrong with the floor logic. Tried to go"
+                            + f" from {self._vl_map._current_floor} on stair from"
+                            + f" {self.stair.lower_floor} to {self.stair.higher_floor}"
                         )
-                        / self.pixels_per_meter
-                        > 2.0
-                    ):
-                        assert isinstance(self.stair, Stair)
-                        if self._vl_map._current_floor == self.stair.lower_floor:
-                            self._vl_map.change_floors(self.stair.higher_floor)
-                        elif self._vl_map._current_floor == self.stair.higher_floor:
-                            self._vl_map.change_floors(self.stair.lower_floor)
-                        else:
-                            raise Exception(
-                                "Something is wrong with the floor logic. Tried to go"
-                                + f" from {self._vl_map._current_floor} on stair from"
-                                + f" {self.stair.lower_floor} to"
-                                f" {self.stair.higher_floor}"
-                            )
-                    self.on_stairs = False
-                    self.point_entered_stairs = (0, 0)
-                    self.stair = None
+                self.on_stairs = False
+                self.point_entered_stairs = (0, 0)
+                self.stair = None
 
-            else:
-                if not self.on_stairs:
-                    self.on_stairs = True
-                    self.point_entered_stairs = px
-                    self.stair = stair
+        else:
+            if not self.on_stairs:
+                self.on_stairs = True
+                self.point_entered_stairs = px
+                self.stair = stair
 
-        ###Path planning
-
+    def _pre_plan_logic(self) -> Tuple[bool, bool, int]:
         if self._reached_goal:
             self._cur_path_idx += 1
             self._reached_goal = False
@@ -180,10 +154,18 @@ class BasePathPolicy(BaseVLNPolicy):
             self.n_steps_goal = 0
         # Check if actually close to position we will give as input
         xy = self._observations_cache["robot_xy"]
+        idx_path = self._cur_path_idx
         if len(self._path_to_follow) > self._cur_path_idx:
             path_pos = self._path_to_follow[self._cur_path_idx]
             if np.sqrt(np.sum(np.square(path_pos - xy))) > 1.0:
-                force_dont_stop = True
+                # if we are close to any point on the path assume we followed up to then
+                dists = np.sqrt(np.sum(np.square(self._path_to_follow - xy), axis=1))
+                # print("TOO FAR FROM LAST POS, DISTS: ", dists)
+                if np.any(dists < 1.0):
+                    idx_path = np.argmin(dists)
+                # otherwise set to -1 and we will check for this
+                else:
+                    idx_path = -1
 
         replan = False
         if ENABLE_REPLAN_AT_STEPS:
@@ -204,84 +186,10 @@ class BasePathPolicy(BaseVLNPolicy):
 
             self.last_xy = xy
 
-        if replan:
-            robot_xy = self._observations_cache["robot_xy"]
-            frontiers = self._observations_cache["frontier_sensor"]
+        return replan, force_dont_stop, idx_path
 
-            if np.array_equal(frontiers, np.zeros((1, 2))) or len(frontiers) == 0:
-                print("No frontiers found during exploration, stopping.")
-                self.why_stop = "No frontiers found"
-                return robot_xy, True
-
-            cur_instruct = self._instruction_parts[self._curr_instruction_idx]
-            if len(self._instruction_parts) > (self._curr_instruction_idx + 1):
-                next_instruct = self._instruction_parts[self._curr_instruction_idx + 1]
-                last_instruction = False
-            else:
-                next_instruct = ""
-                last_instruction = True
-
-            if len(self._path_vals) > 0:
-                cur_path_val = self._path_vals[
-                    min(self._cur_path_idx, len(self._path_vals) - 1)
-                ]
-                cur_path_len = min(self._cur_path_idx, len(self._path_vals) - 1) + 1
-                cur_path = self._path_to_follow
-            else:
-                cur_path_val = 0.0
-                cur_path_len = 0
-                cur_path = []
-
-            path, path_vals, switch_or_stop = self._vl_map.get_goal_for_instruction(
-                robot_xy,
-                frontiers,
-                cur_instruct,
-                next_instruct,
-                cur_path_val,
-                cur_path_len,
-                cur_path,
-            )
-
-            if path is None:  # No valid paths found
-                if len(self._path_to_follow) > (self._cur_path_idx + 1):
-                    # continue on previously chosen path
-                    self._cur_path_idx += 1
-                    return self._path_to_follow[self._cur_path_idx], False
-                else:
-                    self.times_no_paths += 1
-                if self.times_no_paths > 10:
-                    print(
-                        "STOPPING because cannot find paths"
-                        f" {self.times_no_paths} times"
-                    )
-                    self.why_stop = f"No paths found {self.times_no_paths} times"
-                    return None, True
-                else:
-                    return None, False
-            else:
-                self.times_no_paths = 0
-
-            self._path_to_follow = path
-            self._path_vals = path_vals
-
-            self._cur_path_idx = 0
-
-            self._last_plan_step = self._num_steps
-
-            if switch_or_stop:
-                if last_instruction:
-                    if (not force_dont_stop) and (
-                        self._num_steps > FORCE_DONT_STOP_UNTIL
-                    ):
-                        print("STOPPING (in planner)")
-                        self.why_stop = "Path value didn't increase enough"
-                        return robot_xy, True  # stop
-                    else:
-                        print("Forced not to stop!")
-                else:
-                    self._curr_instruction_idx += 1
-
-        return self._path_to_follow[self._cur_path_idx], False
+    def _plan(self) -> Tuple[np.ndarray, bool]:
+        raise NotImplementedError
 
     def _update_vl_map(self) -> None:
         for rgb, depth, tf, min_depth, max_depth, fov in self._observations_cache[

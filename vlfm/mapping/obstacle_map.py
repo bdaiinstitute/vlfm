@@ -205,9 +205,9 @@ class ObstacleMap(BaseMap):
         if gt_traj is not None:
             self._traj_vis.draw_gt_trajectory(vis_img, gt_traj)
 
-        cv2.imwrite(f"map_viz/obst_{self.viz_counter}.png", vis_img)
+        # cv2.imwrite(f"map_viz/obst_{self.viz_counter}.png", vis_img)
 
-        self.viz_counter += 1
+        # self.viz_counter += 1
 
         return vis_img
 

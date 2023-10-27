@@ -21,6 +21,8 @@ from vlfm.utils.geometry_utils import xyz_yaw_to_tf_matrix
 
 from .base_vln_policy import BaseVLNPolicy, ZSOSConfig
 from .path_policy import BasePathPolicy
+from .path_policy_mr import PathPolicyMR
+from .path_policy_sr import PathPolicySR
 
 
 class TorchActionIDs:
@@ -230,6 +232,16 @@ class ZSOSPolicyConfig(ZSOSConfig, PolicyConfig):
 
 @baseline_registry.register_policy
 class HabitatBasePathPolicy(HabitatMixin, BasePathPolicy):
+    pass
+
+
+@baseline_registry.register_policy
+class HabitatPathPolicySR(HabitatMixin, PathPolicySR):
+    pass
+
+
+@baseline_registry.register_policy
+class HabitatPathPolicyMR(HabitatMixin, PathPolicyMR):
     pass
 
 
