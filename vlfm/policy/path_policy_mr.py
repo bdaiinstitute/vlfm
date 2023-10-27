@@ -18,6 +18,7 @@ class PathPolicyMR(BasePathPolicy):
     ):
         super().__init__(*args, **kwargs)
         self._cur_path_idx = 0
+        self._pos_since_last: List[List[float]] = []
 
         self._path_selector: VLPathSelectorMR = VLPathSelectorMR(
             self._vl_map, min_dist_goal=self._pointnav_stop_radius
@@ -25,9 +26,9 @@ class PathPolicyMR(BasePathPolicy):
 
     def _reset(self) -> None:
         super()._reset()
-        self._cur_path_idx = 0
-
         self._path_selector.reset()
+        self._cur_path_idx = 0
+        self._pos_since_last = []
 
     def _parse_instruction(self, instruction: str) -> List[str]:
         split_strs = ["\r\n", "\n", "."]
@@ -58,9 +59,12 @@ class PathPolicyMR(BasePathPolicy):
 
         replan, force_dont_stop, idx_path = self._pre_plan_logic()
 
+        robot_xy = self._observations_cache["robot_xy"]
+
+        self._pos_since_last += [robot_xy]
+
         ###Path planning
         if replan:
-            robot_xy = self._observations_cache["robot_xy"]
             frontiers = self._observations_cache["frontier_sensor"]
 
             if np.array_equal(frontiers, np.zeros((1, 2))) or len(frontiers) == 0:
@@ -68,23 +72,16 @@ class PathPolicyMR(BasePathPolicy):
                 self.why_stop = "No frontiers found"
                 return robot_xy, True
 
-            if (len(self._path_vals) > 0) and (idx_path != -1):
-                cur_path_val = self._path_vals[min(idx_path, len(self._path_vals) - 1)]
-                cur_path_len = min(idx_path, len(self._path_vals) - 1) + 1
-                cur_path = self._path_to_follow
-            else:
-                cur_path_val = 0.0
-                cur_path_len = 0
-                cur_path = []
-
             path, path_vals, stop = self._path_selector.get_goal_for_instruction(
                 robot_xy,
                 frontiers,
                 self._instruction,
-                cur_path_val,
-                cur_path_len,
-                cur_path,
+                np.array(self._pos_since_last),
             )
+
+            self._pos_since_last = []
+
+            self._prev_path_idx = self._cur_path_idx
 
             if path is None:  # No valid paths found
                 if len(self._path_to_follow) > (self._cur_path_idx + 1):

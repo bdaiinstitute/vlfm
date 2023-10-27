@@ -17,13 +17,13 @@ class VLPathSelector:
     _thresh_switch = 0.1  # Not for last instruction part.
     # If change in value under threshold (as percentage of value up until now) then switch
     # Note we also switch when the next instruction is higher than the current
-    _thresh_stop = 0.4  # Last instruction part only.
+    _thresh_stop = 1.0  # Last instruction part only.
     # If change in value under threshold (as percentage of value up until now) then stop
     _prev_val_weight = (
         1.0  # Weighting for value of previous part of the path when comparing
     )
 
-    _thresh_peak = 0.9  # Stop path when at 80% of peak value
+    _thresh_peak = 0.9  # Stop path when at this of peak value
 
     def __init__(self, vl_map: VLFMap, min_dist_goal: float = 0.4):
         self._vl_map = vl_map

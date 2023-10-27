@@ -10,7 +10,7 @@ import torch
 from vlfm.mapping.vlfmap import VLFMap
 
 from .base import USE_PEAK_THRESHOLD, VLPathSelector
-from .utils import parse_instruction
+from .utils import get_closest_vals, get_dist, parse_instruction
 
 
 class TextType(Enum):
@@ -36,15 +36,23 @@ class VLPathSelectorMR(VLPathSelector):
     _weight_parts = 0.3
     _weight_words = 0.6
 
-    _thresh_peak_parts = 0.7
+    _thresh_peak_parts_val = 0.9
+    _thresh_peak_parts_switch = 0.7
+
+    _loop_dist_prev_path = 0.2
+    _loop_dist = 0.3
 
     def __init__(self, vl_map: VLFMap, min_dist_goal: float = 0.4):
         super().__init__(vl_map, min_dist_goal)
         self.instruction_tree: Optional[InstructionTree] = None
+        self.path: np.ndarray = np.array([])
+
+        # self._thresh_peak = 0.95  # Over-write
 
     def reset(self) -> None:
         super().reset()
         self.instruction_tree = None
+        self.path = np.array([])
 
     def get_best_values_for_words(
         self, words: List[str], image_embeddings: torch.tensor
@@ -70,7 +78,7 @@ class VLPathSelectorMR(VLPathSelector):
 
     def get_values_instruction_part(
         self, instruction: str, path: np.ndarray, image_embeddings: np.ndarry
-    ) -> Tuple[np.ndarray, int]:
+    ) -> Tuple[np.ndarray, int, int]:
         # Get text embeddings
         if instruction in self._cached_text_embeddings.keys():
             text_embed = self._cached_text_embeddings[instruction]
@@ -78,15 +86,110 @@ class VLPathSelectorMR(VLPathSelector):
             text_embed = self._vl_map._vl_model.get_text_embedding(instruction)
             self._cached_text_embeddings[instruction] = text_embed
 
-        _, c_similarity, peak_i = self.get_similarity(
-            path, image_embeddings, text_embed, thresh=self._thresh_peak_parts
+        value, c_similarity, peak_i = self.get_similarity(
+            path, image_embeddings, text_embed, thresh=1.0
         )
 
-        return c_similarity, peak_i
+        peak_i_l = peak_i
+        peak_i_h = peak_i
+
+        if c_similarity.size > 0:
+            # Get first idx where it is over the threshold
+            where_over = c_similarity > value * self._thresh_peak_parts_switch
+            if np.any(where_over):
+                peak_i_l = np.where(where_over)[0][0]
+
+            where_over = c_similarity > value * self._thresh_peak_parts_val
+            if np.any(where_over):
+                peak_i_h = np.where(where_over)[0][0]
+
+        return c_similarity, peak_i_h, peak_i_l
+
+    def get_path_value_main_loop(
+        self, path: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray, float]:
+        # Get image embeddings along path
+        image_embeddings = self._vl_map.get_embeddings_path(path)
+
+        assert self.instruction_tree is not None
+
+        best_path_vals_top, _, _ = self.get_values_instruction_part(
+            self.instruction_tree.text, path, image_embeddings
+        )
+
+        # TODO: allow trade-off in start/stop rather than hard start where previous stopped
+        # Although it is hard to work out how to implement, especially for average embeddings
+
+        start_i_s = 0
+
+        total_value = best_path_vals_top * self._weight_path
+
+        # print("PATH")
+
+        for sentence in self.instruction_tree.children:
+            bvs, peak_i_h, peak_i_l = self.get_values_instruction_part(
+                sentence.text, path[start_i_s:], image_embeddings[start_i_s:, ...]
+            )
+
+            start_i_p = start_i_s
+            stop_i_p = start_i_s + peak_i_l + 1
+
+            total_value[start_i_s : start_i_s + peak_i_h + 1] += (
+                bvs[: peak_i_h + 1] * self._weight_sentence
+            )
+
+            # print("SENT: ", peak_i, path.shape[0])
+
+            for part in sentence.children:
+                bvp, peak_i_h, peak_i_l = self.get_values_instruction_part(
+                    sentence.text,
+                    path[start_i_p:stop_i_p],
+                    image_embeddings[start_i_p:stop_i_p, ...],
+                )
+                stop_i_w = start_i_p + peak_i_l + 1
+
+                total_value[start_i_p : start_i_p + peak_i_h + 1] += (
+                    bvp[: peak_i_h + 1] * self._weight_parts
+                )
+
+                # print("VALS: ", peak_i, path.shape[0])
+
+                words = [child.text for child in part.children]
+                bvw = self.get_best_values_for_words(
+                    words, image_embeddings[start_i_p:stop_i_w, ...]
+                )
+
+                start_i_p = stop_i_w
+
+                total_value[start_i_p:stop_i_w] += np.mean(bvw) * self._weight_words
+
+                # print("VALS WORD: ", bvw)
+
+                if start_i_p >= path.shape[0] or start_i_p >= stop_i_p:
+                    # print("breaking! Parts: ", start_i_p, stop_i_p, path.shape[0])
+                    break
+
+            start_i_s = stop_i_p
+
+            if start_i_s >= path.shape[0]:
+                # print("breaking! Sentences: ", start_i_s, path.shape[0])
+                break
+
+        peak_i = np.argmax(total_value)
+        value = total_value[peak_i]
+
+        if USE_PEAK_THRESHOLD:
+            # Get first idx where it is over the threshold
+            where_over = total_value > value * self._thresh_peak
+            if np.any(where_over):
+                peak_i = np.where(where_over)[0][0]
+                value = total_value[peak_i]
+
+        return total_value, peak_i, value
 
     def get_best_path_instruction_full(
         self, instruction: str, paths: List[np.ndarray]
-    ) -> Tuple[np.ndarray, np.ndarray, float]:
+    ) -> Tuple[np.ndarray, np.ndarray, float, float]:
         """Returns best path, goal, waypoint for local planner, value for path"""
 
         if self.instruction_tree is None:
@@ -108,6 +211,9 @@ class VLPathSelectorMR(VLPathSelector):
                     sentence_it.add_child(part_it)
                 self.instruction_tree.add_child(sentence_it)
 
+        # Get value for previous part
+        _, _, value_prev_path = self.get_path_value_main_loop(self.path)
+
         # Note cannot easily vectorize across paths as the paths can have different numbers of points...
         max_value = 0.0
         best_path = None
@@ -115,102 +221,69 @@ class VLPathSelectorMR(VLPathSelector):
 
         for i in range(len(paths)):
             path = paths[i]
-            # Get image embeddings along path
-            image_embeddings = self._vl_map.get_embeddings_path(path)
 
-            best_path_vals_top, _ = self.get_values_instruction_part(
-                self.instruction_tree.text, path, image_embeddings
-            )
-
-            np.array([])
-            np.array([])
-
-            # TODO: allow trade-off in start/stop rather than hard start where previous stopped
-            # Although it is hard to work out how to implement, especially for average embeddings
-
-            start_i_s = 0
-
-            total_value = best_path_vals_top * self._weight_path
-
-            # print("PATH")
-
-            for sentence in self.instruction_tree.children:
-                bvs, peak_i = self.get_values_instruction_part(
-                    sentence.text, path[start_i_s:], image_embeddings[start_i_s:, ...]
+            # Check if path doubles back to a previously visited location
+            loop_removal_flag = False
+            ignore_idx = 4  # Ignore the first bit as we might be close to the end of the path at the start
+            if (self.path.size > 0) and (path.shape[0] > ignore_idx + 1):
+                pp_i, cp_i, dist = get_closest_vals(
+                    self.path, path[ignore_idx:].reshape(-1, 2)
                 )
-                np.array([])
-                np.array([])
-
-                start_i_p = start_i_s
-                stop_i_p = start_i_s + peak_i + 1
-
-                total_value[start_i_s:stop_i_p] += (
-                    bvs[: peak_i + 1] * self._weight_sentence
+                if dist < self._loop_dist:
+                    full_path = full_path = np.append(
+                        self.path[:pp_i, :].reshape(-1, 2),
+                        path[: cp_i + ignore_idx, :].reshape(-1, 2),
+                        axis=0,
+                    )
+                    loop_removal_flag = True
+                    print(
+                        "PATH HAS LOOP! ", full_path.shape, self.path.shape, path.shape
+                    )
+                else:
+                    full_path = np.append(
+                        self.path.reshape(-1, 2), path.reshape(-1, 2), axis=0
+                    )
+            else:
+                full_path = np.append(
+                    self.path.reshape(-1, 2), path.reshape(-1, 2), axis=0
                 )
 
-                # print("SENT: ", peak_i, path.shape[0])
-
-                for part in sentence.children:
-                    bvp, peak_i = self.get_values_instruction_part(
-                        sentence.text,
-                        path[start_i_p:stop_i_p],
-                        image_embeddings[start_i_p:stop_i_p, ...],
-                    )
-                    stop_i_w = start_i_p + peak_i + 1
-
-                    total_value[start_i_p:stop_i_w] += (
-                        bvp[: peak_i + 1] * self._weight_parts
-                    )
-
-                    # print("VALS: ", peak_i, path.shape[0])
-
-                    words = [child.text for child in part.children]
-                    bvw = self.get_best_values_for_words(
-                        words, image_embeddings[start_i_p:stop_i_w, ...]
-                    )
-
-                    start_i_p = stop_i_w
-
-                    total_value[start_i_p:stop_i_w] += np.mean(bvw) * self._weight_words
-
-                    # print("VALS WORD: ", bvw)
-
-                    if start_i_p >= path.shape[0] or start_i_p >= stop_i_p:
-                        # print("breaking! Parts: ", start_i_p, stop_i_p, path.shape[0])
-                        break
-
-                start_i_s = stop_i_p
-
-                if start_i_s >= path.shape[0]:
-                    # print("breaking! Sentences: ", start_i_s, path.shape[0])
-                    break
-
-            peak_i = np.argmax(total_value)
-            value = total_value[peak_i]
-
-            if USE_PEAK_THRESHOLD:
-                # Get first idx where it is over the threshold
-                where_over = total_value > value * self._thresh_peak
-                if np.any(where_over):
-                    peak_i = np.where(where_over)[0][0]
-                    value = total_value[peak_i]
+            total_value, peak_i, value = self.get_path_value_main_loop(full_path)
 
             # Update
             if value > max_value:
-                max_value = value
-                best_path = path[:peak_i, :]
-                best_path_vals = total_value[:peak_i]
+                if loop_removal_flag:
+                    opi = pp_i
+                else:
+                    opi = self.path.shape[0]
 
-        return best_path, best_path_vals, max_value
+                if peak_i > opi:
+                    max_value = value
+                    best_path = path[: peak_i - opi + 1, :]
+                    best_path_vals = total_value[opi : peak_i + 1]
+
+        return best_path, best_path_vals, max_value, value_prev_path
+
+    def remove_loop(self) -> bool:
+        for i in range(self.path.shape[0] - 1, -1, -1):
+            for j in range(i):
+                dist = get_dist(self.path[i], self.path[j])
+                if dist < self._loop_dist_prev_path:
+                    self.path = np.append(
+                        self.path[:j].reshape(-1, 2),
+                        self.path[i:].reshape(-1, 2),
+                        axis=0,
+                    )
+                    return True
+
+        return False
 
     def get_goal_for_instruction(
         self,
         agent_pos: np.ndarray,
         waypoints: np.ndarray,
         instruction: str,
-        last_path_val: float,
-        last_path_len: int,
-        last_path: List[List[float]],
+        last_path: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray, bool]:
         """Selects the best waypoint from the given list of waypoints.
 
@@ -228,36 +301,43 @@ class VLPathSelectorMR(VLPathSelector):
             the value for the path up to each point along the path,
             and whether to start using the next instruction (or stop if no next)
         """
+
+        if last_path.size > 0:
+            self.path = np.append(
+                self.path.reshape(-1, 2), last_path.reshape(-1, 2), axis=0
+            )
+            # Cannot use ignore_locs otherwise previous path value is always 0
+            # So need another way of preventing backtracking...
+
+            # Remove loops from saved path
+            removing_loops = True
+            # print("BEFORE REMOVING LOOPS, PATH: ", self.path)
+            while removing_loops:
+                removing_loops = self.remove_loop()
+
+            # print("AFTER REMOVING LOOPS, PATH: ", self.path)
+
         paths = self.generate_paths(agent_pos, waypoints)
 
         if len(paths) == 0:
+            print("NO PATHS GENERATED!")
             return None, None, False
 
-        best_path_curr, best_path_vals_curr, max_value_curr = (
+        best_path_curr, best_path_vals_curr, val_with_part, val_without_part = (
             self.get_best_path_instruction_full(instruction, paths)
         )
 
         if best_path_curr is None:
+            print("NO BEST PATH CURR")
             return None, None, False
 
-        len_curr = len(best_path_vals_curr)
+        if best_path_curr.size == 0:
+            print("PATH SIZE 0!")
+            return None, None, False
 
-        self._cur_path_val += last_path_val * last_path_len
-        self._cur_path_len += last_path_len
+        print("PATH VAL DEBUG: ", val_with_part, val_without_part, self.path.shape)
 
-        if last_path_len > 0:
-            self.ignore_locs = np.append(
-                self.ignore_locs.reshape(-1, 2),
-                (np.array(last_path)[:last_path_len, :]).reshape(-1, 2),
-                axis=0,
-            )
-
-        if self._cur_path_val != 0:
-            val_with_part = (max_value_curr * len_curr + self._cur_path_val) / (
-                len_curr + self._cur_path_len
-            )
-            val_without_part = self._cur_path_val / self._cur_path_len
-
+        if val_without_part != 0:
             should_stop = (
                 (val_with_part - val_without_part) / val_without_part
             ) <= self._thresh_stop
@@ -268,5 +348,6 @@ class VLPathSelectorMR(VLPathSelector):
             )
         else:
             should_stop = False
+
         self._vl_map.set_paths_for_viz([best_path_curr], [(255, 0, 0)])
         return best_path_curr, best_path_vals_curr, should_stop
