@@ -1,14 +1,14 @@
-# Copyright [2023] Boston Dynamics AI Institute, Inc.
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
 repos:
 -   repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: 'v0.0.263'
+    rev: 'v0.1.0'
     hooks:
     -   id: ruff
         args: ['--fix', '--config', 'pyproject.toml']
 
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v4.4.0
+  rev: v4.5.0
   hooks:
   -   id: check-yaml
       args: ['--unsafe']
@@ -21,7 +21,7 @@ repos:
   -   id: check-shebang-scripts-are-executable
 
 -   repo: https://github.com/psf/black
-    rev: 23.3.0
+    rev: 23.10.0
     hooks:
     -   id: black
         language_version: python3.9
@@ -29,7 +29,7 @@ repos:
         verbose: true
 
 -   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.2.0
+    rev: v1.6.1
     hooks:
     -   id: mypy
         pass_filenames: false
