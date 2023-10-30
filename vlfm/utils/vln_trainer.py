@@ -35,16 +35,12 @@ from habitat_baselines.utils.info_dict import (
     extract_scalars_from_info as extract_scalars_from_info_habitat,
 )
 from omegaconf import OmegaConf
+from options import get_args
 
 
 def extract_scalars_from_info(info: Dict[str, Any]) -> Dict[str, float]:
     info_filtered = {k: v for k, v in info.items() if not isinstance(v, list)}
     return extract_scalars_from_info_habitat(info_filtered)
-
-
-ANALYSIS_SAVE_LOCATION = "failure_analysis/"
-ORACLE_STOP = False
-LOG_SUCCES_IF_ORACLE_STOP = True
 
 
 @baseline_registry.register_trainer(name="vln")
@@ -67,10 +63,16 @@ class VLNTrainer(PPOTrainer):
         Returns:
             None
         """
+        # get args
+        args = get_args()
+
+        ORACLE_STOP = args.enable_oracle_stop
+        LOG_SUCCES_IF_ORACLE_STOP = args.enable_log_success_if_oracle_stop
+
         # set-up failure analysis
-        os.makedirs(ANALYSIS_SAVE_LOCATION, exist_ok=True)
-        file_success = open(ANALYSIS_SAVE_LOCATION + "successes.txt", "w")
-        file_fail = open(ANALYSIS_SAVE_LOCATION + "failures.txt", "w")
+        os.makedirs(args.analysis_save_location, exist_ok=True)
+        file_success = open(args.analysis_save_location + "successes.txt", "w")
+        file_fail = open(args.analysis_save_location + "failures.txt", "w")
 
         if ORACLE_STOP or LOG_SUCCES_IF_ORACLE_STOP:
             self.should_stop = False

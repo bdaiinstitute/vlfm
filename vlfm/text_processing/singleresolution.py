@@ -1,5 +1,6 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
+from argparse import Namespace
 from typing import List, Tuple
 
 import numpy as np
@@ -10,8 +11,8 @@ from .base import VLPathSelector
 
 
 class VLPathSelectorSR(VLPathSelector):
-    def __init__(self, vl_map: VLFMap, min_dist_goal: float = 0.4):
-        super().__init__(vl_map, min_dist_goal)
+    def __init__(self, options: Namespace, vl_map: VLFMap, min_dist_goal: float = 0.4):
+        super().__init__(options, vl_map, min_dist_goal)
 
     def reset(self) -> None:
         super().reset()

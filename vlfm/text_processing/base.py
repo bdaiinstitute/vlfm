@@ -1,5 +1,6 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
+from argparse import Namespace
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -10,23 +11,19 @@ from vlfm.mapping.vlfmap import VLFMap
 from vlfm.path_planning.path_planner import get_paths
 from vlfm.path_planning.utils import get_agent_radius_in_px
 
-USE_PEAK_THRESHOLD = True
-
 
 class VLPathSelector:
-    _thresh_switch = 0.1  # Not for last instruction part.
-    # If change in value under threshold (as percentage of value up until now) then switch
-    # Note we also switch when the next instruction is higher than the current
-    _thresh_stop = 1.0  # Last instruction part only.
-    # If change in value under threshold (as percentage of value up until now) then stop
-    _prev_val_weight = (
-        1.0  # Weighting for value of previous part of the path when comparing
-    )
-
-    _thresh_peak = 0.9  # Stop path when at this of peak value
-
-    def __init__(self, vl_map: VLFMap, min_dist_goal: float = 0.4):
+    def __init__(self, options: Namespace, vl_map: VLFMap, min_dist_goal: float = 0.4):
+        self.args = options
         self._vl_map = vl_map
+
+        self._thresh_switch = options.path_thresh_switch
+        self._thresh_stop = options.path_thresh_stop
+
+        self._use_peak_threshold = options.enable_peak_threshold
+        self._thresh_peak = options.path_thresh_peak
+
+        self._prev_val_weight = options.path_prev_val_weight
 
         self._cur_path_val = 0.0
         self._cur_path_len = 0
@@ -63,7 +60,7 @@ class VLPathSelector:
         peak_i = np.argmax(c_similarity)
         value = c_similarity[peak_i]
 
-        if USE_PEAK_THRESHOLD:
+        if self._use_peak_threshold:
             if thresh == -1.0:
                 thresh = self._thresh_peak
             if c_similarity.size > 0:
@@ -115,7 +112,7 @@ class VLPathSelector:
         if thresh == -1.0:
             thresh = self._thresh_peak
 
-        if method == "average_sim":
+        if method == "average sim":
             return self.similarity_main_loop(
                 image_embeddings, text_embed, denom, thresh=thresh
             )

@@ -1,6 +1,7 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 from __future__ import annotations
 
+from argparse import Namespace
 from enum import Enum
 from typing import List, Optional, Tuple
 
@@ -9,7 +10,7 @@ import torch
 
 from vlfm.mapping.vlfmap import VLFMap
 
-from .base import USE_PEAK_THRESHOLD, VLPathSelector
+from .base import VLPathSelector
 from .utils import get_closest_vals, get_dist, parse_instruction
 
 
@@ -31,23 +32,21 @@ class InstructionTree:
 
 
 class VLPathSelectorMR(VLPathSelector):
-    _weight_path = 1.0
-    _weight_sentence = 0.6
-    _weight_parts = 0.3
-    _weight_words = 0.6
-
-    _thresh_peak_parts_val = 0.9
-    _thresh_peak_parts_switch = 0.7
-
     _loop_dist_prev_path = 0.2
     _loop_dist = 0.3
 
-    def __init__(self, vl_map: VLFMap, min_dist_goal: float = 0.4):
-        super().__init__(vl_map, min_dist_goal)
+    def __init__(self, options: Namespace, vl_map: VLFMap, min_dist_goal: float = 0.4):
+        super().__init__(options, vl_map, min_dist_goal)
         self.instruction_tree: Optional[InstructionTree] = None
         self.path: np.ndarray = np.array([])
 
-        # self._thresh_peak = 0.95  # Over-write
+        self._weight_path = self.args.path_weight_path
+        self._weight_sentence = self.args.path_weight_sentence
+        self._weight_parts = self.args.path_weight_parts
+        self._weight_words = self.args.path_weight_words
+
+        self._thresh_peak_parts_val = self.args.path_thresh_peak_parts_val
+        self._thresh_peak_parts_switch = self.args.path_thresh_peak_parts_switch
 
     def reset(self) -> None:
         super().reset()
@@ -178,7 +177,7 @@ class VLPathSelectorMR(VLPathSelector):
         peak_i = np.argmax(total_value)
         value = total_value[peak_i]
 
-        if USE_PEAK_THRESHOLD:
+        if self.args.enable_peak_threshold:
             # Get first idx where it is over the threshold
             where_over = total_value > value * self._thresh_peak
             if np.any(where_over):

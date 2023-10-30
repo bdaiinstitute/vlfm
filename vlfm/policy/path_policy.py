@@ -7,20 +7,12 @@ import numpy as np
 from torch import Tensor
 
 from vlfm.mapping.vlfmap import VLFMap
-from vlfm.mapping.vlmap import ENABLE_STAIRS, Stair
+from vlfm.mapping.vlmap import Stair
 
 from .base_vln_policy import BaseVLNPolicy
 
-ENABLE_REPLAN_AT_STEPS = False
-
-ENABLE_REPLAN_WHEN_STUCK = True
-
-FORCE_DONT_STOP_UNTIL = 33  # 10 steps after initialization
-
 
 class BasePathPolicy(BaseVLNPolicy):
-    _replan_interval = 30
-
     _target_object_color: Tuple[int, int, int] = (0, 255, 0)
     _selected_frontier_color: Tuple[int, int, int] = (0, 255, 255)
     _frontier_color: Tuple[int, int, int] = (0, 0, 255)
@@ -40,20 +32,25 @@ class BasePathPolicy(BaseVLNPolicy):
         self._cur_path_idx = 0
         self._last_plan_step = 0
 
-        self._vl_map: VLFMap = VLFMap(obstacle_map=self._obstacle_map)
+        self._vl_map: VLFMap = VLFMap(
+            vl_model_type=self.args.vl_feature_type, obstacle_map=self._obstacle_map
+        )
 
-        if ENABLE_STAIRS:
+        if self._vl_map.enable_stairs:
             self.on_stairs = False
             self.point_entered_stairs = (0, 0)
             self.stair: Optional[Stair] = None
 
-        if ENABLE_REPLAN_WHEN_STUCK:
+        if self.args.enable_replan_when_stuck:
             self.last_xy = np.array([0, 0])
             self.n_at_xy = 0
 
         self.n_steps_goal = 0
         self.times_no_paths = 0
         self.why_stop = "no stop"
+
+        self._replan_interval = self.args.replan_interval
+        self._force_dont_stop_until = self.args.force_dont_stop_until
 
     def _reset(self) -> None:
         super()._reset()
@@ -64,12 +61,12 @@ class BasePathPolicy(BaseVLNPolicy):
 
         self._vl_map.reset()
 
-        if ENABLE_STAIRS:
+        if self._vl_map.enable_stairs:
             self.on_stairs = False
             self.point_entered_stairs = (0, 0)
             self.stair = None
 
-        if ENABLE_REPLAN_WHEN_STUCK:
+        if self.args.enable_replan_when_stuck:
             self.last_xy = np.array([0, 0])
             self.n_at_xy = 0
 
@@ -149,7 +146,8 @@ class BasePathPolicy(BaseVLNPolicy):
 
         if self.n_steps_goal > 20:
             print("CAN'T GET TO CURRENT SUBGOAL, ADVANCING")
-            # force_dont_stop = True  # Not at subgoal so don't want to stop
+            if self.force_dont_stop_after_stuck:
+                force_dont_stop = True
             self._cur_path_idx += 1
             self.n_steps_goal = 0
         # Check if actually close to position we will give as input
@@ -168,13 +166,13 @@ class BasePathPolicy(BaseVLNPolicy):
                     idx_path = -1
 
         replan = False
-        if ENABLE_REPLAN_AT_STEPS:
+        if self.args.enable_replan_at_steps:
             if self._num_steps > (self._last_plan_step + self._replan_interval):
                 replan = True
         if len(self._path_to_follow) < self._cur_path_idx + 1:
             replan = True
 
-        if ENABLE_REPLAN_WHEN_STUCK:
+        if self.args.enable_replan_when_stuck:
             if np.sqrt(np.sum(np.square(self.last_xy - xy))) < 0.05:
                 self.n_at_xy += 1
             else:
@@ -183,7 +181,8 @@ class BasePathPolicy(BaseVLNPolicy):
                 print("IS STUCK! Replanning")
                 replan = True
                 self.n_at_xy = 0
-                # force_dont_stop = True
+                if self.force_dont_stop_after_stuck:
+                    force_dont_stop = True
 
             self.last_xy = xy
 
@@ -244,7 +243,7 @@ class BasePathPolicy(BaseVLNPolicy):
             self._curr_instruction_idx
         ]
 
-        if ENABLE_STAIRS:
+        if self._vl_map.enable_stairs:
             policy_info["render_below_images"] += ["on stairs"]
             if self.on_stairs:
                 assert isinstance(self.stair, Stair)

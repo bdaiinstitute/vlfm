@@ -19,8 +19,6 @@ from vlfm.utils.img_utils import (
 from vlfm.vlm.blip2_unimodal import BLIP2unimodal
 from vlfm.vlm.vl_model import BaseVL
 
-ENABLE_STAIRS = True
-
 
 class Stair:
     def __init__(
@@ -53,16 +51,17 @@ class VLMap(BaseMap):
 
     def __init__(
         self,
-        feats_sz: List[int] = [32, 256],
+        vl_model_type: str,
         size: int = 1000,
         use_max_confidence: bool = True,
         fusion_type: str = "default",
         obstacle_map: Optional["ObstacleMap"] = None,
         device: Optional[Any] = None,
+        enable_stairs: bool = True,
     ) -> None:
         """
         Args:
-            feats_sz: The shape of the image features.
+            feats_sz: Which VL model to use.
             size: The size of the value map in pixels.
             use_max_confidence: Whether to use the maximum confidence value in the value
                 map or a weighted average confidence value.
@@ -75,6 +74,16 @@ class VLMap(BaseMap):
 
         if device is None:
             device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
+
+        self.vl_model_type = vl_model_type
+        if vl_model_type == "BLIP2":
+            feats_sz = [32, 256]
+        elif vl_model_type == "CLIP":
+            feats_sz = [512]
+        else:
+            raise Exception(f"Invalid VL model type {vl_model_type}")
+
+        self.enable_stairs = enable_stairs
 
         self.device = device
 
@@ -101,7 +110,7 @@ class VLMap(BaseMap):
         self.stair_text_cache: List[torch.tensor] = []
         self.upstair_text_cache: List[torch.tensor] = []
 
-        if ENABLE_STAIRS:
+        if self.enable_stairs:
             self._stair_dict: Dict[Tuple[int, int], Stair] = {}
 
             # Current VL map in GPU but other floors will not fit so store in cpu
@@ -113,7 +122,10 @@ class VLMap(BaseMap):
         #     port=int(os.environ.get("VLMODEL_PORT", "12182"))
         # ) #Server not currently working properly because of the datatypes
 
-        self._vl_model = BLIP2unimodal()
+        if self.vl_model_type == "BLIP2":
+            self._vl_model = BLIP2unimodal()
+        else:
+            raise Exception(f"Invalid VL model type {self.vl_model_type}")
 
     def reset(self) -> None:
         super().reset()
@@ -126,7 +138,7 @@ class VLMap(BaseMap):
         self._min_confidence = 0.25
         self._points_started_instructions = {}
 
-        if ENABLE_STAIRS:
+        if self.enable_stairs:
             self._stair_dict = {}
             self._map_per_level = {}
             self._current_floor = 0
@@ -238,7 +250,7 @@ class VLMap(BaseMap):
             depth, tf_camera_to_episodic, min_depth, max_depth, fov
         )
 
-        if ENABLE_STAIRS:
+        if self.enable_stairs:
             # Stairs check
             if self.has_stairs(image_embedding):
                 locs = np.nonzero(curr_map != 0)

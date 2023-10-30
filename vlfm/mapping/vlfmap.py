@@ -27,7 +27,7 @@ class VLFMap(VLMap):
 
     def __init__(
         self,
-        feats_sz: List[int] = [32, 256],
+        vl_model_type: str,
         size: int = 1000,
         use_max_confidence: bool = True,
         fusion_type: str = "default",
@@ -35,7 +35,7 @@ class VLFMap(VLMap):
     ) -> None:
         """
         Args:
-            feats_sz: The shape of the image features.
+            vl_model_type: Which VL model to use.
             size: The size of the value map in pixels.
             use_max_confidence: Whether to use the maximum confidence value in the value
                 map or a weighted average confidence value.
@@ -44,7 +44,9 @@ class VLFMap(VLMap):
             obstacle_map: An optional obstacle map to use for overriding the occluded
                 areas of the FOV
         """
-        super().__init__(feats_sz, size, use_max_confidence, fusion_type, obstacle_map)
+        super().__init__(
+            vl_model_type, size, use_max_confidence, fusion_type, obstacle_map
+        )
 
         self.viz_counter: int = 0
 

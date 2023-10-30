@@ -4,11 +4,10 @@ from typing import Any, List, Tuple
 
 import numpy as np
 
-from vlfm.mapping.vlmap import ENABLE_STAIRS
 from vlfm.text_processing.singleresolution import VLPathSelectorSR
 from vlfm.text_processing.utils import parse_instruction
 
-from .path_policy import FORCE_DONT_STOP_UNTIL, BasePathPolicy
+from .path_policy import BasePathPolicy
 
 
 class PathPolicySR(BasePathPolicy):
@@ -21,7 +20,7 @@ class PathPolicySR(BasePathPolicy):
         self._cur_path_idx = 0
 
         self._path_selector: VLPathSelectorSR = VLPathSelectorSR(
-            self._vl_map, min_dist_goal=self._pointnav_stop_radius
+            self.args, self._vl_map, min_dist_goal=self._pointnav_stop_radius
         )
 
     def _reset(self) -> None:
@@ -39,7 +38,7 @@ class PathPolicySR(BasePathPolicy):
 
     def _plan(self) -> Tuple[np.ndarray, bool]:
         ###Stair logic, just for working out if we need to switch the level on the map
-        if ENABLE_STAIRS:
+        if self._vl_map.enable_stairs:
             self._stair_preplan_step()
 
         replan, force_dont_stop, idx_path = self._pre_plan_logic()
@@ -112,7 +111,7 @@ class PathPolicySR(BasePathPolicy):
             if switch_or_stop:
                 if last_instruction:
                     if (not force_dont_stop) and (
-                        self._num_steps > FORCE_DONT_STOP_UNTIL
+                        self._num_steps > self._force_dont_stop_until
                     ):
                         print("STOPPING (in planner)")
                         self.why_stop = "Path value didn't increase enough"
