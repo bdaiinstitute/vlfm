@@ -1,7 +1,6 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import os
-from argparse import Namespace
 from dataclasses import dataclass, fields
 from typing import Any, Dict, List, Tuple
 
@@ -26,6 +25,9 @@ except Exception:
         pass
 
 
+from vlfm.options import get_args
+
+
 class BaseVLNPolicy(BasePolicy):
     _policy_info: Dict[str, Any] = {}
     _stop_action: Tensor = None  # MUST BE SET BY SUBCLASS
@@ -38,7 +40,6 @@ class BaseVLNPolicy(BasePolicy):
         pointnav_policy_path: str,
         depth_image_shape: Tuple[int, int],
         pointnav_stop_radius: float,
-        options: Namespace,
         visualize: bool = True,
         compute_frontiers: bool = True,
         min_obstacle_height: float = 0.15,
@@ -52,7 +53,7 @@ class BaseVLNPolicy(BasePolicy):
         super().__init__()
         # seperate function to allow for easy changing
         self._vl_model = None
-        self.args = options
+        self.args = get_args()
 
         self._pointnav_policy = WrappedPointNavResNetPolicy(pointnav_policy_path)
         self._depth_image_shape = tuple(depth_image_shape)

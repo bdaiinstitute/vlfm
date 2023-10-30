@@ -11,11 +11,11 @@ def get_args() -> argparse.Namespace:
 
     # Logging etc
     parser.add_argument(
-        "--analysis_save_location", type=str, deafult="failure_analysis/"
+        "--analysis_save_location", type=str, default="failure_analysis/"
     )
     parser.add_argument(
         "--disable_log_success_if_oracle_stop",
-        dest="--enable_log_success_if_oracle_stop",
+        dest="enable_log_success_if_oracle_stop",
         action="store_false",
         default=True,
     )
@@ -31,7 +31,7 @@ def get_args() -> argparse.Namespace:
         default=True,
     )
 
-    parser.add_argument("--force_dont_stop_until", type=int, deafult=33)
+    parser.add_argument("--force_dont_stop_until", type=int, default=33)
 
     parser.add_argument(
         "--force_dont_stop_after_stuck", action="store_true", default=False
@@ -52,11 +52,11 @@ def get_args() -> argparse.Namespace:
         "--disable_peak_threshold",
         dest="enable_peak_threshold",
         action="store_false",
-        deafult=True,
+        default=True,
     )
     parser.add_argument("--path_thresh_peak", type=float, default=0.9)
 
-    parser.add_argument("--path_prev_val_weight", typre=float, deafult=1.0)
+    parser.add_argument("--path_prev_val_weight", type=float, default=1.0)
 
     # For multiresolution
     parser.add_argument("--path_weight_path", default=1.0)
@@ -69,15 +69,15 @@ def get_args() -> argparse.Namespace:
 
     # Stairs
     parser.add_argument(
-        "--disable_stairs", dest="--enable_stairs", action="store_false", default=True
+        "--disable_stairs", dest="enable_stairs", action="store_false", default=True
     )
 
     # Map
     parser.add_argument(
         "--vl_feature_type",
         type=str,
-        deafult="BLIP2_unimodal",
-        choices=["BLIP2_unimodal", "CLIP", "Lseg"],
+        default="BLIP2",
+        choices=["BLIP2", "CLIP", "Lseg"],
     )
 
     parser.add_argument("--map_size", type=int, default=1000)

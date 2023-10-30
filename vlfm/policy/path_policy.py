@@ -51,6 +51,7 @@ class BasePathPolicy(BaseVLNPolicy):
 
         self._replan_interval = self.args.replan_interval
         self._force_dont_stop_until = self.args.force_dont_stop_until
+        self.force_dont_stop_after_stuck = self.args.force_dont_stop_after_stuck
 
     def _reset(self) -> None:
         super()._reset()

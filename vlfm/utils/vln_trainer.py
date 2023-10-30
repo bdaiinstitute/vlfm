@@ -35,6 +35,7 @@ from habitat_baselines.utils.info_dict import (
     extract_scalars_from_info as extract_scalars_from_info_habitat,
 )
 from omegaconf import OmegaConf
+
 from vlfm.options import get_args
 
 
@@ -65,6 +66,8 @@ class VLNTrainer(PPOTrainer):
         """
         # get args
         args = get_args()
+
+        print(args)
 
         ORACLE_STOP = args.enable_oracle_stop
         LOG_SUCCES_IF_ORACLE_STOP = args.enable_log_success_if_oracle_stop
