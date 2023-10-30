@@ -101,10 +101,9 @@ class VLFMap(VLMap):
         circle_mask = np.where((circle_mask > 0).flatten())[0]
 
         overlap_values = cropped_image.reshape(-1, self._feat_channels)[circle_mask, :]
+        mask_nz = torch.where(overlap_values.any(axis=0))[0]
         # Filter out any values that are 0 (i.e. pixels that weren't seen yet)
-        overlap_values = overlap_values[overlap_values != 0].reshape(
-            -1, self._feat_channels
-        )
+        overlap_values = overlap_values[:, mask_nz].reshape(-1, self._feat_channels)
 
         if overlap_values.shape[0] == 0:
             return torch.zeros(1, self._feat_channels, device=cropped_image.device)
