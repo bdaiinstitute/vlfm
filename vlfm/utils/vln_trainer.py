@@ -35,7 +35,7 @@ from habitat_baselines.utils.info_dict import (
     extract_scalars_from_info as extract_scalars_from_info_habitat,
 )
 from omegaconf import OmegaConf
-from options import get_args
+from vlfm.options import get_args
 
 
 def extract_scalars_from_info(info: Dict[str, Any]) -> Dict[str, float]:
