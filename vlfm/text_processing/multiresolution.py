@@ -40,18 +40,48 @@ class VLPathSelectorMR(VLPathSelector):
         self.instruction_tree: Optional[InstructionTree] = None
         self.path: np.ndarray = np.array([])
 
-        self._weight_path = self.args.path_weight_path
-        self._weight_sentence = self.args.path_weight_sentence
-        self._weight_parts = self.args.path_weight_parts
-        self._weight_words = self.args.path_weight_words
+        self._weight_path = self.args.multiresolution.path_weight_path
+        self._weight_sentence = self.args.multiresolution.path_weight_sentence
+        self._weight_parts = self.args.multiresolution.path_weight_parts
+        self._weight_words = self.args.multiresolution.path_weight_words
 
-        self._thresh_peak_parts_val = self.args.path_thresh_peak_parts_val
-        self._thresh_peak_parts_switch = self.args.path_thresh_peak_parts_switch
+        self._thresh_peak_parts_val = (
+            self.args.multiresolution.path_thresh_peak_parts_val
+        )
+        self._thresh_peak_parts_switch = (
+            self.args.multiresolution.path_thresh_peak_parts_switch
+        )
+
+        self._enable_log_success_thresh = self.args.logging.enable_log_success_thresh
+
+        if self._enable_log_success_thresh:
+            self.past_thresh: List[Tuple[float, float]] = []  # percentage, abs
+            self.past_thresh_is_updated = False
+
+        self._calculate_path_from_origin = (
+            self.args.multiresolution.calculate_path_from_origin
+        )
+
+        if self._calculate_path_from_origin:
+            self.prev_path_value = 0.0
+
+        self._store_points_on_paths = self.args.multiresolution.store_prev_points
+
+        if self._store_points_on_paths:
+            self._n_pts_store = self.args.multiresolution.n_points_store
+            self._extra_waypoints: np.ndarray = np.array([])
 
     def reset(self) -> None:
         super().reset()
         self.instruction_tree = None
         self.path = np.array([])
+        if self._enable_log_success_thresh:
+            self.past_thresh = []
+            self.past_thresh_is_updated = False
+        if self._calculate_path_from_origin:
+            self.prev_path_value = 0.0
+        if self._store_points_on_paths:
+            self._extra_waypoints = np.array([])
 
     def get_best_values_for_words(
         self, words: List[str], image_embeddings: torch.tensor
@@ -177,7 +207,7 @@ class VLPathSelectorMR(VLPathSelector):
         peak_i = np.argmax(total_value)
         value = total_value[peak_i]
 
-        if self.args.enable_peak_threshold:
+        if self.args.similarity_calc.enable_peak_threshold:
             # Get first idx where it is over the threshold
             where_over = total_value > value * self._thresh_peak
             if np.any(where_over):
@@ -187,7 +217,10 @@ class VLPathSelectorMR(VLPathSelector):
         return total_value, peak_i, value
 
     def get_best_path_instruction_full(
-        self, instruction: str, paths: List[np.ndarray]
+        self,
+        instruction: str,
+        paths: List[np.ndarray],
+        path_to_curr_loc: Optional[np.ndarry] = None,
     ) -> Tuple[np.ndarray, np.ndarray, float, float]:
         """Returns best path, goal, waypoint for local planner, value for path"""
 
@@ -211,7 +244,10 @@ class VLPathSelectorMR(VLPathSelector):
                 self.instruction_tree.add_child(sentence_it)
 
         # Get value for previous part
-        _, _, value_prev_path = self.get_path_value_main_loop(self.path)
+        if self._calculate_path_from_origin:
+            _, _, value_prev_path = self.get_path_value_main_loop(path_to_curr_loc)
+        else:
+            _, _, value_prev_path = self.get_path_value_main_loop(self.path)
 
         # Note cannot easily vectorize across paths as the paths can have different numbers of points...
         max_value = 0.0
@@ -221,37 +257,45 @@ class VLPathSelectorMR(VLPathSelector):
         for i in range(len(paths)):
             path = paths[i]
 
-            # Check if path doubles back to a previously visited location
-            loop_removal_flag = False
-            ignore_idx = 4  # Ignore the first bit as we might be close to the end of the path at the start
-            if (self.path.size > 0) and (path.shape[0] > ignore_idx + 1):
-                pp_i, cp_i, dist = get_closest_vals(
-                    self.path, path[ignore_idx:].reshape(-1, 2)
-                )
-                if dist < self._loop_dist:
-                    full_path = full_path = np.append(
-                        self.path[:pp_i, :].reshape(-1, 2),
-                        path[: cp_i + ignore_idx, :].reshape(-1, 2),
-                        axis=0,
+            if not self._calculate_path_from_origin:
+                # Check if path doubles back to a previously visited location
+                loop_removal_flag = False
+                ignore_idx = 4  # Ignore the first bit as we might be close to the end of the path at the start
+                if (self.path.size > 0) and (path.shape[0] > ignore_idx + 1):
+                    pp_i, cp_i, dist = get_closest_vals(
+                        self.path, path[ignore_idx:].reshape(-1, 2)
                     )
-                    loop_removal_flag = True
-                    print(
-                        "PATH HAS LOOP! ", full_path.shape, self.path.shape, path.shape
-                    )
+                    if dist < self._loop_dist:
+                        full_path = full_path = np.append(
+                            self.path[:pp_i, :].reshape(-1, 2),
+                            path[: cp_i + ignore_idx, :].reshape(-1, 2),
+                            axis=0,
+                        )
+                        loop_removal_flag = True
+                        print(
+                            "PATH HAS LOOP! ",
+                            full_path.shape,
+                            self.path.shape,
+                            path.shape,
+                        )
+                    else:
+                        full_path = np.append(
+                            self.path.reshape(-1, 2), path.reshape(-1, 2), axis=0
+                        )
                 else:
                     full_path = np.append(
                         self.path.reshape(-1, 2), path.reshape(-1, 2), axis=0
                     )
             else:
-                full_path = np.append(
-                    self.path.reshape(-1, 2), path.reshape(-1, 2), axis=0
-                )
+                full_path = path
 
             total_value, peak_i, value = self.get_path_value_main_loop(full_path)
 
             # Update
             if value > max_value:
-                if loop_removal_flag:
+                if self._calculate_path_from_origin:
+                    opi = 0
+                elif loop_removal_flag:
                     opi = pp_i
                 else:
                     opi = self.path.shape[0]
@@ -280,6 +324,7 @@ class VLPathSelectorMR(VLPathSelector):
     def get_goal_for_instruction(
         self,
         agent_pos: np.ndarray,
+        agent_yaw: float,
         waypoints: np.ndarray,
         instruction: str,
         last_path: np.ndarray,
@@ -287,7 +332,7 @@ class VLPathSelectorMR(VLPathSelector):
         """Selects the best waypoint from the given list of waypoints.
 
         Args:
-            agent_pos (Tuple[float,float]): current agent position
+            agent_pos (np.ndarray): current agent position
             waypoints (np.ndarray): An array of 2D waypoints to make paths to
             instruction (str): The full instruction the agent is trying to follow
             last_path_val (float): The value for the part of the path we travelled
@@ -300,31 +345,70 @@ class VLPathSelectorMR(VLPathSelector):
             the value for the path up to each point along the path,
             and whether to start using the next instruction (or stop if no next)
         """
-
-        if last_path.size > 0:
-            self.path = np.append(
-                self.path.reshape(-1, 2), last_path.reshape(-1, 2), axis=0
+        if self._store_points_on_paths and (self._extra_waypoints.size) > 0:
+            waypoints = np.append(
+                waypoints, self._extra_waypoints.reshape(-1, 2), axis=0
             )
-            # Cannot use ignore_locs otherwise previous path value is always 0
-            # So need another way of preventing backtracking...
 
-            # Remove loops from saved path
-            removing_loops = True
-            # print("BEFORE REMOVING LOOPS, PATH: ", self.path)
-            while removing_loops:
-                removing_loops = self.remove_loop()
+        if self._calculate_path_from_origin:
+            # Add waypoints
+            if self._add_directional_waypoints:
+                dir_waypoints = self.get_directional_waypoints(agent_pos, agent_yaw)
+                waypoints = np.append(waypoints, dir_waypoints, axis=0)
 
-            # print("AFTER REMOVING LOOPS, PATH: ", self.path)
+            paths = self.generate_paths(np.array([0.0, 0.0]), waypoints)
 
-        paths = self.generate_paths(agent_pos, waypoints)
+        else:
+            if last_path.size > 0:
+                self.path = np.append(
+                    self.path.reshape(-1, 2), last_path.reshape(-1, 2), axis=0
+                )
+                # Cannot use ignore_locs otherwise previous path value is always 0
+                # So need another way of preventing backtracking...
+
+                # Remove loops from saved path
+                removing_loops = True
+                # print("BEFORE REMOVING LOOPS, PATH: ", self.path)
+                while removing_loops:
+                    removing_loops = self.remove_loop()
+
+                # print("AFTER REMOVING LOOPS, PATH: ", self.path)
+
+            if self._add_directional_waypoints:
+                dir_waypoints = self.get_directional_waypoints(agent_pos, agent_yaw)
+                waypoints = np.append(waypoints, dir_waypoints, axis=0)
+
+            paths = self.generate_paths(agent_pos, waypoints)
 
         if len(paths) == 0:
             print("NO PATHS GENERATED!")
             return None, None, False
 
-        best_path_curr, best_path_vals_curr, val_with_part, val_without_part = (
-            self.get_best_path_instruction_full(instruction, paths)
-        )
+        if self._calculate_path_from_origin:
+            print("Generating path from origin to current loc")
+            path_to_curr_loc = self.generate_paths(
+                np.array([0.0, 0.0]), agent_pos.reshape(1, 2), one_path=True
+            )
+            print("done")
+            if len(path_to_curr_loc) > 0:
+                best_path_curr, best_path_vals_curr, val_with_part, val_without_part = (
+                    self.get_best_path_instruction_full(
+                        instruction, paths, path_to_curr_loc[0]
+                    )
+                )
+            else:
+                best_path_curr, best_path_vals_curr, val_with_part, val_without_part = (
+                    self.get_best_path_instruction_full(
+                        instruction, paths, np.array([0.0, 0.0]).reshape(1, 2)
+                    )
+                )
+                val_without_part = self.prev_path_value
+            self.prev_path_value = val_with_part
+
+        else:
+            best_path_curr, best_path_vals_curr, val_with_part, val_without_part = (
+                self.get_best_path_instruction_full(instruction, paths)
+            )
 
         if best_path_curr is None:
             print("NO BEST PATH CURR")
@@ -334,19 +418,79 @@ class VLPathSelectorMR(VLPathSelector):
             print("PATH SIZE 0!")
             return None, None, False
 
+        if self._store_points_on_paths:
+            if best_path_curr.shape[0] - 1 <= self._n_pts_store:
+                extra_points = best_path_curr[1:, :]
+            else:
+                interval = int(np.floor(best_path_curr.shape[0] / (self._n_pts_store)))
+                idx = [(i + 1) * interval - 1 for i in range(self._n_pts_store)]
+                extra_points = best_path_curr[idx, :]
+            self._extra_waypoints = np.append(
+                self._extra_waypoints.reshape(-1, 2), extra_points, axis=0
+            )
+
+        if self._enable_log_success_thresh:
+            # Check if less than previous values, if not would have already stopped!
+            val_a = val_with_part - val_without_part
+            val_p = val_a / val_without_part
+            is_less = True
+            if len(self.past_thresh) > 0:
+                for i in range(len(self.past_thresh)):
+                    if (
+                        val_p > self.past_thresh[i][0]
+                        and val_a > self.past_thresh[i][1]
+                    ):
+                        is_less = False
+                        break
+            if is_less:
+                self.past_thresh += [(val_p, val_a)]
+                self.past_thresh_is_updated = True
+
         print("PATH VAL DEBUG: ", val_with_part, val_without_part, self.path.shape)
 
         if val_without_part != 0:
             should_stop = (
                 (val_with_part - val_without_part) / val_without_part
-            ) <= self._thresh_stop
+            ) <= self._thresh_stop and (
+                val_with_part - val_without_part
+            ) <= self._path_thresh_stop_abs
             print(
                 "STOP THRESH: ",
                 (val_with_part - val_without_part) / val_without_part,
                 self._thresh_stop,
+                val_with_part - val_without_part,
             )
         else:
             should_stop = False
 
-        self._vl_map.set_paths_for_viz([best_path_curr], [(255, 0, 0)])
-        return best_path_curr, best_path_vals_curr, should_stop
+        if self._calculate_path_from_origin:
+            print("Generating path from current loc to new goal")
+            path_to_best = self.generate_paths(
+                agent_pos, best_path_curr[-1, :].reshape(1, 2), one_path=True
+            )
+            print("done")
+            if len(path_to_best) > 0:
+                path_to_best = path_to_best[0][1:]
+            else:
+                if len(path_to_curr_loc) > 0:
+                    path_to_best = np.append(
+                        np.flip(path_to_curr_loc, 0), best_path_curr[1:, :], axis=0
+                    )
+                else:
+                    path_to_best = best_path_curr[-1, :].reshape(1, 2)
+            self._vl_map.set_paths_for_viz(
+                [best_path_curr, path_to_best], [(255, 0, 0), (0, 0, 255)]
+            )
+
+            return path_to_best, best_path_vals_curr, should_stop
+
+        else:
+            self._vl_map.set_paths_for_viz([best_path_curr], [(255, 0, 0)])
+            return best_path_curr, best_path_vals_curr, should_stop
+
+    def get_last_thresh(self) -> Optional[Tuple[float, float]]:
+        if self.past_thresh_is_updated:
+            self.past_thresh_is_updated = False
+            return self.past_thresh[-1]
+        self.past_thresh_is_updated = False
+        return None

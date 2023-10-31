@@ -33,7 +33,10 @@ class BasePathPolicy(BaseVLNPolicy):
         self._last_plan_step = 0
 
         self._vl_map: VLFMap = VLFMap(
-            vl_model_type=self.args.vl_feature_type, obstacle_map=self._obstacle_map
+            vl_model_type=self.args.map.vl_feature_type,
+            size=self.args.map.map_size,
+            obstacle_map=self._obstacle_map,
+            enable_stairs=self.args.map.enable_stairs,
         )
 
         if self._vl_map.enable_stairs:
@@ -41,7 +44,7 @@ class BasePathPolicy(BaseVLNPolicy):
             self.point_entered_stairs = (0, 0)
             self.stair: Optional[Stair] = None
 
-        if self.args.enable_replan_when_stuck:
+        if self.args.replanning.enable_replan_when_stuck:
             self.last_xy = np.array([0, 0])
             self.n_at_xy = 0
 
@@ -49,9 +52,11 @@ class BasePathPolicy(BaseVLNPolicy):
         self.times_no_paths = 0
         self.why_stop = "no stop"
 
-        self._replan_interval = self.args.replan_interval
-        self._force_dont_stop_until = self.args.force_dont_stop_until
-        self.force_dont_stop_after_stuck = self.args.force_dont_stop_after_stuck
+        self._replan_interval = self.args.replanning.replan_interval
+        self._force_dont_stop_until = self.args.replanning.force_dont_stop_until
+        self.force_dont_stop_after_stuck = (
+            self.args.replanning.force_dont_stop_after_stuck
+        )
 
     def _reset(self) -> None:
         super()._reset()
@@ -67,7 +72,7 @@ class BasePathPolicy(BaseVLNPolicy):
             self.point_entered_stairs = (0, 0)
             self.stair = None
 
-        if self.args.enable_replan_when_stuck:
+        if self.args.replanning.enable_replan_when_stuck:
             self.last_xy = np.array([0, 0])
             self.n_at_xy = 0
 
@@ -167,13 +172,13 @@ class BasePathPolicy(BaseVLNPolicy):
                     idx_path = -1
 
         replan = False
-        if self.args.enable_replan_at_steps:
+        if self.args.replanning.enable_replan_at_steps:
             if self._num_steps > (self._last_plan_step + self._replan_interval):
                 replan = True
         if len(self._path_to_follow) < self._cur_path_idx + 1:
             replan = True
 
-        if self.args.enable_replan_when_stuck:
+        if self.args.replanning.enable_replan_when_stuck:
             if np.sqrt(np.sum(np.square(self.last_xy - xy))) < 0.05:
                 self.n_at_xy += 1
             else:

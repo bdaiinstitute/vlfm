@@ -18,6 +18,9 @@ defaults:
     - gt_path_vln
   - /habitat_baselines/rl/policy: zsos_policy
   - _self_
+  - options:
+    - default_params
+
 
 habitat:
   environment:

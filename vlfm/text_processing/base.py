@@ -17,13 +17,19 @@ class VLPathSelector:
         self.args = options
         self._vl_map = vl_map
 
-        self._thresh_switch = options.path_thresh_switch
-        self._thresh_stop = options.path_thresh_stop
+        self._thresh_switch = options.similarity_calc.path_thresh_switch
+        self._thresh_stop = options.similarity_calc.path_thresh_stop
 
-        self._use_peak_threshold = options.enable_peak_threshold
-        self._thresh_peak = options.path_thresh_peak
+        self._path_thresh_stop_abs = options.similarity_calc.path_thresh_stop_abs
 
-        self._prev_val_weight = options.path_prev_val_weight
+        self._use_peak_threshold = options.similarity_calc.enable_peak_threshold
+        self._thresh_peak = options.similarity_calc.path_thresh_peak
+
+        self._prev_val_weight = options.similarity_calc.path_prev_val_weight
+
+        self._add_directional_waypoints = (
+            options.similarity_calc.enable_directional_waypoints
+        )
 
         self._cur_path_val = 0.0
         self._cur_path_len = 0
@@ -150,11 +156,11 @@ class VLPathSelector:
             raise Exception(f"Invalid method {method} for get_similarity")
 
     def generate_paths(
-        self, agent_pos: np.ndarray, waypoints: np.ndarray
+        self, agent_pos: np.ndarray, waypoints: np.ndarray, one_path: bool = False
     ) -> List[np.ndarray]:
         # Make paths to the waypoints
         robot_radius_px = get_agent_radius_in_px(self._vl_map.pixels_per_meter)
-        agent_pos_px = self._vl_map._xy_to_cvpx(agent_pos.reshape((1, 2)))[0, :]
+        agent_pos_px = self._vl_map._xy_to_cvpx(agent_pos.reshape(1, 2))[0, :]
 
         # Only go in explored areas that are navigable
         # Everything else is assumed occupied
@@ -184,10 +190,11 @@ class VLPathSelector:
             rand_area,
             robot_radius_px,
             method="both",
+            one_path=one_path,
         )
 
         if len(paths_px) == 0:
-            print("No valid paths to frontiers found!")
+            print(f"No valid paths found! One_path: {one_path}")
             return []
 
         # print("PX: ", paths_px)
@@ -204,10 +211,45 @@ class VLPathSelector:
                 if np.all(path[-1, :] == path[-2, :]):
                     path = path[:-1, :]
 
-            if (
+            if one_path or (
                 np.sqrt(np.sum(np.square(path[-1, :] - agent_pos)))
                 >= self.min_dist_goal
             ):
                 paths += [path]
 
         return paths
+
+    def get_directional_waypoints(
+        self, agent_pos: np.ndarray, agent_yaw: float, n_waypoints: int = 8
+    ) -> np.ndarray:
+        # Get point 1m above agent
+        up_p = agent_pos.copy()
+        up_p[1] -= 1.0
+
+        waypoints = []
+        ax = agent_pos[0]
+        ay = agent_pos[1]
+        # Rotate into appropriate yaw:
+        for i in range(n_waypoints):
+            yaw = agent_yaw + np.pi * 2 * i / n_waypoints
+            s = np.sin(yaw)
+            c = np.cos(yaw)
+
+            pt = np.array(
+                [
+                    ax + c * (up_p[0] - ax) - s * (up_p[1] - ay),
+                    ay + s * (up_p[0] - ax) + c * (up_p[1] - ay),
+                ]
+            )
+
+            # Check if in bounds
+            pt_px = self._vl_map._xy_to_px(pt.reshape(1, 2))[0]
+            if (
+                0 <= pt_px[0]
+                and pt_px[0] < self._vl_map.size
+                and 0 <= pt_px[1]
+                and pt_px[1] < self._vl_map.size
+            ):
+                waypoints += [pt]
+
+        return np.array(waypoints)

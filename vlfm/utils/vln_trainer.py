@@ -2,7 +2,7 @@
 
 import os
 from collections import defaultdict
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import torch
@@ -36,8 +36,6 @@ from habitat_baselines.utils.info_dict import (
 )
 from omegaconf import OmegaConf
 
-from vlfm.options import get_args
-
 
 def extract_scalars_from_info(info: Dict[str, Any]) -> Dict[str, float]:
     info_filtered = {k: v for k, v in info.items() if not isinstance(v, list)}
@@ -65,20 +63,25 @@ class VLNTrainer(PPOTrainer):
             None
         """
         # get args
-        args = get_args()
-
-        print(args)
+        args = self.config.habitat_baselines.rl.policy.options
 
         ORACLE_STOP = args.enable_oracle_stop
-        LOG_SUCCES_IF_ORACLE_STOP = args.enable_log_success_if_oracle_stop
+        LOG_SUCCES_IF_ORACLE_STOP = args.logging.enable_log_success_if_oracle_stop
+        LOG_THRESH = args.logging.enable_log_success_thresh
 
         # set-up failure analysis
-        os.makedirs(args.analysis_save_location, exist_ok=True)
-        file_success = open(args.analysis_save_location + "successes.txt", "w")
-        file_fail = open(args.analysis_save_location + "failures.txt", "w")
+        os.makedirs(args.logging.analysis_save_location, exist_ok=True)
+        file_success = open(args.logging.analysis_save_location + "successes.txt", "w")
+        file_fail = open(args.logging.analysis_save_location + "failures.txt", "w")
+
+        file_log = open("logging_info.txt", "w")
 
         if ORACLE_STOP or LOG_SUCCES_IF_ORACLE_STOP:
             self.should_stop = False
+
+        if LOG_THRESH:
+            self.thresh_dict: Dict[Tuple[float, float], int] = {}
+            best_thresh = None
 
         gt_path_for_viz = None
 
@@ -279,6 +282,76 @@ class VLNTrainer(PPOTrainer):
                     self.should_stop = True
                     print("WITHIN GOAL DIST! ", infos[0]["distance_to_goal"])
 
+            if LOG_THRESH:
+                thresh = self._agent.actor_critic._path_selector.get_last_thresh()
+                if thresh is not None:
+                    update_thresh = False
+                    if thresh not in self.thresh_dict.keys():
+                        self.thresh_dict[thresh] = 0
+                        update_thresh = True
+                        min_over_0 = (np.inf, np.inf)
+                        min_over_1 = (np.inf, np.inf)
+                    in_dist = (
+                        (infos[0]["distance_to_goal"])
+                        <= self.config.habitat.task.measurements.success.success_distance
+                    )
+
+                    best_thresh = None
+                    best_val = 0
+
+                    if update_thresh:
+                        for k in self.thresh_dict.keys():
+                            if (k[0] >= thresh[0] and k[1] >= thresh[1]) and (
+                                k != thresh
+                            ):
+                                if k[0] < min_over_0[0]:
+                                    min_over_0 = k
+                                elif k[0] == min_over_0[0]:
+                                    if k[1] < min_over_0[1]:
+                                        min_over_0 = k
+                                if k[1] < min_over_1[1]:
+                                    min_over_1 = k
+                                elif k[1] == min_over_1[1]:
+                                    if k[0] < min_over_1[0]:
+                                        min_over_1 = k
+                        if min_over_0 in self.thresh_dict.keys():
+                            if min_over_1 in self.thresh_dict.keys():
+                                if (
+                                    self.thresh_dict[min_over_0]
+                                    > self.thresh_dict[min_over_1]
+                                ):
+                                    self.thresh_dict[thresh] = self.thresh_dict[
+                                        min_over_0
+                                    ]
+                                else:
+                                    self.thresh_dict[thresh] = self.thresh_dict[
+                                        min_over_1
+                                    ]
+                            else:
+                                self.thresh_dict[thresh] = self.thresh_dict[min_over_0]
+                        elif min_over_1 in self.thresh_dict.keys():
+                            self.thresh_dict[thresh] = self.thresh_dict[min_over_1]
+
+                    for k in self.thresh_dict.keys():
+                        if in_dist:
+                            if k[0] <= thresh[0] and k[1] <= thresh[1]:
+                                self.thresh_dict[k] += 1
+
+                        if self.thresh_dict[k] > best_val:
+                            best_thresh = k
+                            best_val = self.thresh_dict[k]
+
+                    if (
+                        best_thresh is not None
+                    ) and best_thresh in self.thresh_dict.keys():
+                        print(
+                            f"BEST THRESH SO FAR: {best_thresh}, gives"
+                            f" {self.thresh_dict[best_thresh]}/{num_total+1} ="
+                            f" {self.thresh_dict[best_thresh]/(num_total+1)}"
+                        )
+                    else:
+                        print("NO BEST THRESH")
+
             gt_path_for_viz = np.array(infos[0]["gt_path_vln"])
             gt_path_for_viz = gt_path_for_viz[:, :2]
 
@@ -355,6 +428,14 @@ class VLNTrainer(PPOTrainer):
                         f"Success rate: {num_successes / num_total * 100:.2f}% "
                         f"({num_successes} out of {num_total})"
                     )
+
+                    file_log.write(
+                        "Success rate:"
+                        f" {num_successes / num_total * 100:.2f} ({num_successes} out"
+                        f" of {num_total})"
+                    )
+                    file_log.write("\n")
+
                     if LOG_SUCCES_IF_ORACLE_STOP:
                         if self.should_stop:
                             num_os_successes += 1
@@ -363,6 +444,44 @@ class VLNTrainer(PPOTrainer):
                             f" {num_os_successes / num_total * 100:.2f}%"
                             f" ({num_os_successes} out of {num_total})"
                         )
+
+                        file_log.write(
+                            "Success rate with OS:"
+                            f" {num_os_successes / num_total * 100:.2f} ({num_os_successes} out"
+                            f" of {num_total})"
+                        )
+                        file_log.write("\n")
+
+                    if LOG_THRESH:
+                        if (
+                            best_thresh is not None
+                        ) and best_thresh in self.thresh_dict.keys():
+                            print(
+                                f"BEST THRESH SO FAR: {best_thresh}, gives"
+                                f" {self.thresh_dict[best_thresh]}/{num_total} ="
+                                f" {self.thresh_dict[best_thresh]/num_total}"
+                            )
+                            file_log.write(
+                                f"BEST THRESH SO FAR: {best_thresh}, gives"
+                                f" {self.thresh_dict[best_thresh]}/{num_total} ="
+                                f" {self.thresh_dict[best_thresh]/num_total}"
+                            )
+                            file_log.write("\n")
+                            close0 = 0.1
+                            close1 = 5.0
+                            print("CLOSE THRESHOLD VALS")
+                            file_log.write("CLOSE THRESHOLD VALS")
+                            file_log.write("\n")
+                            for k in self.thresh_dict.keys():
+                                if (
+                                    np.abs(k[0] - best_thresh[0]) < close0
+                                    and np.abs(k[1] - best_thresh[1]) < close1
+                                ):
+                                    print("* ", k, self.thresh_dict[k])
+                                    file_log.write(f"* {k}: {self.thresh_dict[k]}")
+                                    file_log.write("\n")
+
+                    file_log.flush()
 
                     from vlfm.utils.episode_stats_logger import (
                         log_episode_stats,

@@ -32,6 +32,8 @@ class VLFMap(VLMap):
         use_max_confidence: bool = True,
         fusion_type: str = "default",
         obstacle_map: Optional["ObstacleMap"] = None,
+        device: Optional[Any] = None,
+        enable_stairs: bool = True,
     ) -> None:
         """
         Args:
@@ -45,10 +47,17 @@ class VLFMap(VLMap):
                 areas of the FOV
         """
         super().__init__(
-            vl_model_type, size, use_max_confidence, fusion_type, obstacle_map
+            vl_model_type,
+            size,
+            use_max_confidence,
+            fusion_type,
+            obstacle_map,
+            device,
+            enable_stairs,
         )
 
         self.viz_counter: int = 0
+        self._extra_waypoints_px: List[np.ndarray] = []
 
     def reset(self) -> None:
         super().reset()
@@ -198,6 +207,10 @@ class VLFMap(VLMap):
                 map_img, self._path_positions[i], self._path_cols[i]
             )
 
+        # Draw extra markers
+        for loc in self._extra_waypoints_px:
+            cv2.circle(map_img, tuple([int(i) for i in loc]), 5, (200, 0, 200), 2)
+
         # cv2.imwrite(f"map_viz/conf_{self.viz_counter}.png", map_img)
 
         # embed_nz = np.flipud(np.sum(self._vl_map != 0, axis=2))
@@ -207,3 +220,6 @@ class VLFMap(VLMap):
         # self.viz_counter += 1
 
         return map_img
+
+    # def set_extra_waypoints_px(self, extra_waypoints_xy: np.ndarray) -> None:
+    #     self._extra_waypoints_px = extra_waypoints_px

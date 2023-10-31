@@ -1,0 +1,53 @@
+# @package _global_
+
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+
+habitat_baselines:
+  rl:
+    policy:
+      options:
+        enable_oracle_stop: False
+
+        logging:
+          enable_log_success_if_oracle_stop: True
+          analysis_save_location: failure_analysis/
+          enable_log_success_thresh: True
+
+        replanning:
+          enable_replan_at_steps: True
+          replan_interval: 25
+          enable_replan_when_stuck: True
+          force_dont_stop_until: 33
+          force_dont_stop_after_stuck: True
+
+        similarity_calc:
+          path_similarity_method: weighted average embeddings
+          path_thresh_switch: 0.1
+          path_thresh_stop: 0.05 #0.5
+          path_thresh_stop_abs: 1.0 #20.0
+          enable_peak_threshold: True
+          path_thresh_peak: 0.9
+          path_prev_val_weight: 1.0
+          enable_directional_waypoints: True
+
+        multiresolution:
+          path_weight_path: 1.0
+          path_weight_sentence: 0.6
+          path_weight_parts: 0.3
+          path_weight_words: 0.6
+
+          path_thresh_peak_parts_val: 0.9
+          path_thresh_peak_parts_switch: 0.7
+
+          calculate_path_from_origin: True
+          store_prev_points: True
+          n_points_store: 5
+
+
+        map:
+          enable_stairs: True
+          vl_feature_type: BLIP2
+          map_size: 1000
+

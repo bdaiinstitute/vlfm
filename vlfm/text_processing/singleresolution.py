@@ -58,6 +58,7 @@ class VLPathSelectorSR(VLPathSelector):
     def get_goal_for_instruction(
         self,
         agent_pos: np.ndarray,
+        agent_yaw: float,
         waypoints: np.ndarray,
         cur_instruct: str,
         next_instruct: str,
@@ -84,6 +85,10 @@ class VLPathSelectorSR(VLPathSelector):
             the value for the path up to each point along the path,
             and whether to start using the next instruction (or stop if no next)
         """
+        if self._add_directional_waypoints:
+            dir_waypoints = self.get_directional_waypoints(agent_pos, agent_yaw)
+            waypoints = np.append(waypoints, dir_waypoints, axis=0)
+
         paths = self.generate_paths(agent_pos, waypoints)
 
         if len(paths) == 0:
@@ -124,7 +129,16 @@ class VLPathSelectorSR(VLPathSelector):
 
                 should_stop = (
                     (val_with_part - val_without_part) / val_without_part
-                ) <= self._thresh_stop
+                ) <= self._thresh_stop and (
+                    val_with_part - val_without_part
+                ) <= self._path_thresh_stop_abs
+                print(
+                    "STOP THRESH: ",
+                    val_with_part,
+                    val_without_part,
+                    (val_with_part - val_without_part) / val_without_part,
+                    self._thresh_stop,
+                )
             else:
                 should_stop = False
             self._vl_map.set_paths_for_viz([best_path_curr], [(255, 0, 0)])
@@ -141,6 +155,7 @@ class VLPathSelectorSR(VLPathSelector):
                 max_value_curr * len_curr + self._cur_path_val * self._prev_val_weight
             ) / (len_curr + self._cur_path_len):
                 switch = True
+
             # We also check if current instruction's best path will not improve much,
             # in case there is a difference in the scale of the value between the
             # current and next instruction that makes it hard to switch with the above check
@@ -154,6 +169,14 @@ class VLPathSelectorSR(VLPathSelector):
                     (val_with_part - val_without_part) / val_without_part
                 ) <= self._thresh_switch:
                     switch = True
+
+                print(
+                    "SWICTH THRESH: ",
+                    val_with_part,
+                    val_without_part,
+                    (val_with_part - val_without_part) / val_without_part,
+                    self._thresh_switch,
+                )
 
             if switch:
                 self._points_started_instructions[next_instruct] = agent_pos

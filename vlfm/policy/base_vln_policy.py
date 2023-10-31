@@ -25,9 +25,6 @@ except Exception:
         pass
 
 
-from vlfm.options import get_args
-
-
 class BaseVLNPolicy(BasePolicy):
     _policy_info: Dict[str, Any] = {}
     _stop_action: Tensor = None  # MUST BE SET BY SUBCLASS
@@ -40,6 +37,7 @@ class BaseVLNPolicy(BasePolicy):
         pointnav_policy_path: str,
         depth_image_shape: Tuple[int, int],
         pointnav_stop_radius: float,
+        options: Any,
         visualize: bool = True,
         compute_frontiers: bool = True,
         min_obstacle_height: float = 0.15,
@@ -50,10 +48,10 @@ class BaseVLNPolicy(BasePolicy):
         *args: Any,
         **kwargs: Any,
     ) -> None:
-        super().__init__()
+        super().__init__(args, kwargs)
         # seperate function to allow for easy changing
         self._vl_model = None
-        self.args = get_args()
+        self.args = options
 
         self._pointnav_policy = WrappedPointNavResNetPolicy(pointnav_policy_path)
         self._depth_image_shape = tuple(depth_image_shape)
@@ -303,6 +301,7 @@ class BaseVLNPolicy(BasePolicy):
 class ZSOSConfig:
     name: str = "HabitatVLNPolicy"
     pointnav_policy_path: str = "data/pointnav_weights.pth"
+    options: Any = None
     depth_image_shape: Tuple[int, int] = (224, 224)
     pointnav_stop_radius: float = 0.9
     use_max_confidence: bool = False

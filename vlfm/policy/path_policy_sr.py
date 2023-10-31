@@ -47,6 +47,7 @@ class PathPolicySR(BasePathPolicy):
         if replan:
             robot_xy = self._observations_cache["robot_xy"]
             frontiers = self._observations_cache["frontier_sensor"]
+            yaw = self._observations_cache["robot_heading"]
 
             if np.array_equal(frontiers, np.zeros((1, 2))) or len(frontiers) == 0:
                 print("No frontiers found during exploration, stopping.")
@@ -73,6 +74,7 @@ class PathPolicySR(BasePathPolicy):
             path, path_vals, switch_or_stop = (
                 self._path_selector.get_goal_for_instruction(
                     robot_xy,
+                    yaw,
                     frontiers,
                     cur_instruct,
                     next_instruct,
