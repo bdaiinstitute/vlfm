@@ -220,18 +220,21 @@ class VLPathSelector:
         return paths
 
     def get_directional_waypoints(
-        self, agent_pos: np.ndarray, agent_yaw: float, n_waypoints: int = 8
+        self, agent_pos: np.ndarray, agent_yaw: float
     ) -> np.ndarray:
-        # Get point 1m above agent
+        # Get point above agent
         up_p = agent_pos.copy()
-        up_p[1] -= 1.0
+        up_p[1] -= self.args.similarity_calc.direction_waypoints_dist
 
         waypoints = []
         ax = agent_pos[0]
         ay = agent_pos[1]
         # Rotate into appropriate yaw:
-        for i in range(n_waypoints):
-            yaw = agent_yaw + np.pi * 2 * i / n_waypoints
+        for i in range(self.args.similarity_calc.direction_waypoints_n):
+            yaw = (
+                agent_yaw
+                + np.pi * 2 * i / self.args.similarity_calc.direction_waypoints_n
+            )
             s = np.sin(yaw)
             c = np.cos(yaw)
 

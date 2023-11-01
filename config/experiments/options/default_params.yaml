@@ -32,6 +32,8 @@ habitat_baselines:
           path_thresh_peak: 0.9
           path_prev_val_weight: 1.0
           enable_directional_waypoints: True
+          direction_waypoints_dist: 3.0
+          direction_waypoints_n: 8
 
         multiresolution:
           path_weight_path: 1.0
