@@ -298,7 +298,7 @@ class VLNTrainer(PPOTrainer):
 
                     for k in self.thresh_dict.keys():
                         if in_dist:
-                            if k[0] <= thresh[0] and k[1] <= thresh[1]:
+                            if thresh[0] <= k[0] and thresh[1] <= k[1]:
                                 if num_total not in self.thresh_dict[k]:
                                     self.thresh_dict[k] += [num_total]
 

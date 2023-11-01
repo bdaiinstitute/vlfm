@@ -188,6 +188,7 @@ class BasePathPolicy(BaseVLNPolicy):
             if self._reached_goal:
                 print("REPLAN because reached goal")
                 replan = True
+                self._reached_goal = False
 
         if self.args.replanning.enable_replan_at_steps:
             if self._num_steps > (self._last_plan_step + self._replan_interval):
