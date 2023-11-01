@@ -63,7 +63,7 @@ class VLPathSelectorMR(VLPathSelector):
         )
 
         if self._calculate_path_from_origin:
-            self.prev_path_value = 0.0
+            self.prev_path_value = 1.0
 
         self._store_points_on_paths = self.args.multiresolution.store_prev_points
 
@@ -79,7 +79,7 @@ class VLPathSelectorMR(VLPathSelector):
             self.past_thresh = []
             self.past_thresh_is_updated = False
         if self._calculate_path_from_origin:
-            self.prev_path_value = 0.0
+            self.prev_path_value = 1.0
         if self._store_points_on_paths:
             self._extra_waypoints = np.array([])
 
@@ -328,6 +328,7 @@ class VLPathSelectorMR(VLPathSelector):
         waypoints: np.ndarray,
         instruction: str,
         last_path: np.ndarray,
+        force_no_stop: bool = False
     ) -> Tuple[np.ndarray, np.ndarray, bool]:
         """Selects the best waypoint from the given list of waypoints.
 
@@ -402,7 +403,7 @@ class VLPathSelectorMR(VLPathSelector):
                         instruction, paths, np.array([0.0, 0.0]).reshape(1, 2)
                     )
                 )
-                val_without_part = self.prev_path_value
+            val_without_part = self.prev_path_value #TODO: check if better with this here or in else
             self.prev_path_value = val_with_part
 
         else:
@@ -429,7 +430,16 @@ class VLPathSelectorMR(VLPathSelector):
                 self._extra_waypoints.reshape(-1, 2), extra_points, axis=0
             )
 
-        if self._enable_log_success_thresh:
+        if self._store_points_on_paths or self._add_directional_waypoints:
+            extra_waypoints = np.array([])
+            if self._store_points_on_paths:
+                extra_waypoints = np.append(extra_waypoints.reshape(-1, 2), self._extra_waypoints.reshape(-1, 2), axis=0)
+            if self._add_directional_waypoints:
+                extra_waypoints = np.append(extra_waypoints.reshape(-1, 2), dir_waypoints.reshape(-1, 2), axis=0)
+
+            self._vl_map.set_extra_waypoints(extra_waypoints)
+
+        if self._enable_log_success_thresh and (not force_no_stop):
             # Check if less than previous values, if not would have already stopped!
             val_a = val_with_part - val_without_part
             val_p = val_a / val_without_part
@@ -470,7 +480,9 @@ class VLPathSelectorMR(VLPathSelector):
             )
             print("done")
             if len(path_to_best) > 0:
-                path_to_best = path_to_best[0][1:]
+                path_to_best = path_to_best[0]
+                if path_to_best.shape[0] > 1:
+                    path_to_best = (path_to_best[1:]).reshape(-1,2)
             else:
                 if len(path_to_curr_loc) > 0:
                     path_to_best = np.append(

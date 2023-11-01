@@ -221,5 +221,6 @@ class VLFMap(VLMap):
 
         return map_img
 
-    # def set_extra_waypoints_px(self, extra_waypoints_xy: np.ndarray) -> None:
-    #     self._extra_waypoints_px = extra_waypoints_px
+    def set_extra_waypoints(self, extra_waypoints_xy: np.ndarray) -> None:
+        extra_waypoints_px = self._xy_to_cvpx(extra_waypoints_xy)
+        self._extra_waypoints_px = extra_waypoints_px

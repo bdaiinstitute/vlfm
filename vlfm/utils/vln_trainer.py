@@ -80,7 +80,7 @@ class VLNTrainer(PPOTrainer):
             self.should_stop = False
 
         if LOG_THRESH:
-            self.thresh_dict: Dict[Tuple[float, float], int] = {}
+            self.thresh_dict: Dict[Tuple[float, float], List[int]] = {}
             best_thresh = None
 
         gt_path_for_viz = None
@@ -287,7 +287,7 @@ class VLNTrainer(PPOTrainer):
                 if thresh is not None:
                     update_thresh = False
                     if thresh not in self.thresh_dict.keys():
-                        self.thresh_dict[thresh] = 0
+                        self.thresh_dict[thresh] = []
                         update_thresh = True
                         min_over_0 = (np.inf, np.inf)
                         min_over_1 = (np.inf, np.inf)
@@ -317,8 +317,8 @@ class VLNTrainer(PPOTrainer):
                         if min_over_0 in self.thresh_dict.keys():
                             if min_over_1 in self.thresh_dict.keys():
                                 if (
-                                    self.thresh_dict[min_over_0]
-                                    > self.thresh_dict[min_over_1]
+                                    len(self.thresh_dict[min_over_0])
+                                    > len(self.thresh_dict[min_over_1])
                                 ):
                                     self.thresh_dict[thresh] = self.thresh_dict[
                                         min_over_0
@@ -335,19 +335,20 @@ class VLNTrainer(PPOTrainer):
                     for k in self.thresh_dict.keys():
                         if in_dist:
                             if k[0] <= thresh[0] and k[1] <= thresh[1]:
-                                self.thresh_dict[k] += 1
+                                if num_total not in self.thresh_dict[k]:
+                                    self.thresh_dict[k] += [num_total]
 
-                        if self.thresh_dict[k] > best_val:
+                        if len(self.thresh_dict[k]) > best_val:
                             best_thresh = k
-                            best_val = self.thresh_dict[k]
+                            best_val = len(self.thresh_dict[k])
 
                     if (
                         best_thresh is not None
                     ) and best_thresh in self.thresh_dict.keys():
                         print(
                             f"BEST THRESH SO FAR: {best_thresh}, gives"
-                            f" {self.thresh_dict[best_thresh]}/{num_total+1} ="
-                            f" {self.thresh_dict[best_thresh]/(num_total+1)}"
+                            f" {len(self.thresh_dict[best_thresh])}/{num_total+1} ="
+                            f" {len(self.thresh_dict[best_thresh])/(num_total+1)}"
                         )
                     else:
                         print("NO BEST THRESH")
@@ -458,13 +459,13 @@ class VLNTrainer(PPOTrainer):
                         ) and best_thresh in self.thresh_dict.keys():
                             print(
                                 f"BEST THRESH SO FAR: {best_thresh}, gives"
-                                f" {self.thresh_dict[best_thresh]}/{num_total} ="
-                                f" {self.thresh_dict[best_thresh]/num_total}"
+                                f" {len(self.thresh_dict[best_thresh])}/{num_total} ="
+                                f" {len(self.thresh_dict[best_thresh])/num_total}"
                             )
                             file_log.write(
                                 f"BEST THRESH SO FAR: {best_thresh}, gives"
-                                f" {self.thresh_dict[best_thresh]}/{num_total} ="
-                                f" {self.thresh_dict[best_thresh]/num_total}"
+                                f" {len(self.thresh_dict[best_thresh])}/{num_total} ="
+                                f" {len(self.thresh_dict[best_thresh])/num_total}"
                             )
                             file_log.write("\n")
                             close0 = 0.1
