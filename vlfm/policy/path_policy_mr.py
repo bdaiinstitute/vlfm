@@ -78,7 +78,7 @@ class PathPolicyMR(BasePathPolicy):
                 frontiers,
                 self._instruction,
                 np.array(self._pos_since_last),
-                force_dont_stop
+                force_dont_stop,
             )
 
             self._pos_since_last = []

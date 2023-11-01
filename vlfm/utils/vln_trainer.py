@@ -316,9 +316,8 @@ class VLNTrainer(PPOTrainer):
                                         min_over_1 = k
                         if min_over_0 in self.thresh_dict.keys():
                             if min_over_1 in self.thresh_dict.keys():
-                                if (
-                                    len(self.thresh_dict[min_over_0])
-                                    > len(self.thresh_dict[min_over_1])
+                                if len(self.thresh_dict[min_over_0]) > len(
+                                    self.thresh_dict[min_over_1]
                                 ):
                                     self.thresh_dict[thresh] = self.thresh_dict[
                                         min_over_0
@@ -478,8 +477,8 @@ class VLNTrainer(PPOTrainer):
                                     np.abs(k[0] - best_thresh[0]) < close0
                                     and np.abs(k[1] - best_thresh[1]) < close1
                                 ):
-                                    print("* ", k, self.thresh_dict[k])
-                                    file_log.write(f"* {k}: {self.thresh_dict[k]}")
+                                    print("* ", k, len(self.thresh_dict[k]))
+                                    file_log.write(f"* {k}: {len(self.thresh_dict[k])}")
                                     file_log.write("\n")
 
                     file_log.flush()
