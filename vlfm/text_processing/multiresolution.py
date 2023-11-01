@@ -329,6 +329,7 @@ class VLPathSelectorMR(VLPathSelector):
         instruction: str,
         last_path: np.ndarray,
         force_no_stop: bool = False,
+        return_full_path: bool = True
     ) -> Tuple[np.ndarray, np.ndarray, bool]:
         """Selects the best waypoint from the given list of waypoints.
 
@@ -347,8 +348,18 @@ class VLPathSelectorMR(VLPathSelector):
             and whether to start using the next instruction (or stop if no next)
         """
         if self._store_points_on_paths and (self._extra_waypoints.size) > 0:
+            #TODO: remove any extra waypoints that are on obstacles
+            bad_idx = []
+            for i in range(self._extra_waypoints.shape[0]):
+                pt = self._extra_waypoints[i,:]
+                if self._vl_map.is_on_obstacle(pt):
+                    bad_idx += [i]
+            if len(bad_idx) > 0:
+                print("Deleting cached waypoints on obstacles!")
+                self._extra_waypoints = np.delete(self._extra_waypoints, bad_idx, axis=0)
+
             waypoints = np.append(
-                waypoints, self._extra_waypoints.reshape(-1, 2), axis=0
+                waypoints, self._extra_waypoints, axis=0
             )
 
         if self._calculate_path_from_origin:
@@ -403,9 +414,9 @@ class VLPathSelectorMR(VLPathSelector):
                         instruction, paths, np.array([0.0, 0.0]).reshape(1, 2)
                     )
                 )
-            val_without_part = (
-                self.prev_path_value
-            )  # TODO: check if better with this here or in else
+                val_without_part = (
+                    self.prev_path_value
+                )  # TODO: check if better with this here or in else
             self.prev_path_value = val_with_part
 
         else:
@@ -482,25 +493,32 @@ class VLPathSelectorMR(VLPathSelector):
             should_stop = False
 
         if self._calculate_path_from_origin:
-            print("Generating path from current loc to new goal")
-            path_to_best_list = self.generate_paths(
-                agent_pos, best_path_curr[-1, :].reshape(1, 2), one_path=True
-            )
-            print("done")
-            if len(path_to_best_list) > 0:
-                path_to_best = path_to_best_list[0]
-                if path_to_best.shape[0] > 1:
-                    path_to_best = (path_to_best[1:]).reshape(-1, 2)
-            else:
-                if len(path_to_curr_loc) > 0:
-                    path_to_best = np.append(
-                        np.flip(path_to_curr_loc, 0), best_path_curr[1:, :], axis=0
-                    )
+            if return_full_path:
+                print("Generating path from current loc to new goal")
+                path_to_best_list = self.generate_paths(
+                    agent_pos, best_path_curr[-1, :].reshape(1, 2), one_path=True
+                )
+                print("done")
+                if len(path_to_best_list) > 0:
+                    path_to_best = path_to_best_list[0]
+                    if path_to_best.shape[0] > 1:
+                        path_to_best = (path_to_best[1:]).reshape(-1, 2)
                 else:
-                    path_to_best = best_path_curr[-1, :].reshape(1, 2)
-            self._vl_map.set_paths_for_viz(
-                [best_path_curr, path_to_best], [(255, 0, 0), (0, 0, 255)]
-            )
+                    if len(path_to_curr_loc) > 0:
+                        path_to_best = np.append(
+                            np.flip(path_to_curr_loc, 0), best_path_curr[1:, :], axis=0
+                        )
+                    else:
+                        path_to_best = best_path_curr[-1, :].reshape(1, 2)
+                self._vl_map.set_paths_for_viz(
+                    [best_path_curr, path_to_best], [(255, 0, 0), (0, 0, 255)]
+                )
+            else:
+                path_to_best = best_path_curr[-1, :].reshape(1, 2)
+                best_path_vals_curr = best_path_vals_curr[-1]
+                self._vl_map.set_paths_for_viz(
+                    [best_path_curr], [(255, 0, 0)]
+                )
 
             return path_to_best, best_path_vals_curr, should_stop
 

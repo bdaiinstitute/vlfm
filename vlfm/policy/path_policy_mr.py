@@ -79,16 +79,18 @@ class PathPolicyMR(BasePathPolicy):
                 self._instruction,
                 np.array(self._pos_since_last),
                 force_dont_stop,
+                return_full_path=self.args.use_path_waypoints
             )
 
             self._pos_since_last = []
 
-            self._prev_path_idx = self._cur_path_idx
-
             if path is None:  # No valid paths found
                 if len(self._path_to_follow) > (self._cur_path_idx + 1):
                     # continue on previously chosen path
-                    self._cur_path_idx += 1
+                    if self.args.use_path_waypoints:
+                        self._cur_path_idx += 1
+                    else:
+                        self._cur_path_idx = len(self._path_to_follow) - 1
                     return self._path_to_follow[self._cur_path_idx], False
                 else:
                     self.times_no_paths += 1
@@ -107,7 +109,10 @@ class PathPolicyMR(BasePathPolicy):
             self._path_to_follow = path
             self._path_vals = path_vals
 
-            self._cur_path_idx = 0
+            if self.args.use_path_waypoints:
+                self._cur_path_idx = 0
+            else:
+                self._cur_path_idx = len(self._path_to_follow) - 1
 
             self._last_plan_step = self._num_steps
 

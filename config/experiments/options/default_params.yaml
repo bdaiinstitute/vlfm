@@ -9,6 +9,7 @@ habitat_baselines:
     policy:
       options:
         enable_oracle_stop: False
+        use_path_waypoints: False
 
         logging:
           enable_log_success_if_oracle_stop: True
@@ -50,4 +51,3 @@ habitat_baselines:
           enable_stairs: True
           vl_feature_type: BLIP2
           map_size: 1000
-

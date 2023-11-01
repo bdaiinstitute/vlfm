@@ -141,42 +141,68 @@ class BasePathPolicy(BaseVLNPolicy):
                 self.stair = stair
 
     def _pre_plan_logic(self) -> Tuple[bool, bool, int]:
-        if self._reached_goal:
-            self._cur_path_idx += 1
-            self._reached_goal = False
-            self.n_steps_goal = 0
-        else:
-            self.n_steps_goal += 1
-
+        replan = False
         force_dont_stop = False
 
-        if self.n_steps_goal > 20:
-            print("CAN'T GET TO CURRENT SUBGOAL, ADVANCING")
-            if self.force_dont_stop_after_stuck:
-                force_dont_stop = True
-            self._cur_path_idx += 1
-            self.n_steps_goal = 0
-        # Check if actually close to position we will give as input
         xy = self._observations_cache["robot_xy"]
-        idx_path = self._cur_path_idx
-        if len(self._path_to_follow) > self._cur_path_idx:
-            path_pos = self._path_to_follow[self._cur_path_idx]
-            if np.sqrt(np.sum(np.square(path_pos - xy))) > 1.0:
-                # if we are close to any point on the path assume we followed up to then
-                dists = np.sqrt(np.sum(np.square(self._path_to_follow - xy), axis=1))
-                # print("TOO FAR FROM LAST POS, DISTS: ", dists)
-                if np.any(dists < 1.0):
-                    idx_path = np.argmin(dists)
-                # otherwise set to -1 and we will check for this
-                else:
-                    idx_path = -1
 
-        replan = False
+        if self.args.use_path_waypoints:
+            if self._reached_goal:
+                self._cur_path_idx += 1
+                self._reached_goal = False
+                self.n_steps_goal = 0
+            else:
+                self.n_steps_goal += 1
+
+            if self.n_steps_goal > 20:
+                print("CAN'T GET TO CURRENT SUBGOAL, ADVANCING")
+                if self.force_dont_stop_after_stuck:
+                    force_dont_stop = True
+                self._cur_path_idx += 1
+                self.n_steps_goal = 0
+            # Check if actually close to position we will give as input
+            idx_path = self._cur_path_idx
+            if len(self._path_to_follow) > self._cur_path_idx:
+                path_pos = self._path_to_follow[self._cur_path_idx]
+                if np.sqrt(np.sum(np.square(path_pos - xy))) > 1.0:
+                    # if we are close to any point on the path assume we followed up to then
+                    dists = np.sqrt(
+                        np.sum(np.square(self._path_to_follow - xy), axis=1)
+                    )
+                    # print("TOO FAR FROM LAST POS, DISTS: ", dists)
+                    if np.any(dists < 1.0):
+                        idx_path = np.argmin(dists)
+                    # otherwise set to -1 and we will check for this
+                    else:
+                        idx_path = -1
+
+            if len(self._path_to_follow) < self._cur_path_idx + 1:
+                replan = True
+
+        else:
+            idx_path = -1
+            if len(self._path_to_follow) == 0:
+                replan = True
+            if self._reached_goal:
+                replan = True
+
         if self.args.replanning.enable_replan_at_steps:
             if self._num_steps > (self._last_plan_step + self._replan_interval):
                 replan = True
-        if len(self._path_to_follow) < self._cur_path_idx + 1:
-            replan = True
+
+        # Work out if end goal is on an obstacle, if so replan:
+        if self._vl_map._obstacle_map is not None:
+            occ_map = 1 - self._vl_map._obstacle_map._navigable_map
+
+            occ_map = np.flipud(occ_map)
+        else:
+            raise Exception("ObstacleMap for VLFMap cannot be none when using paths!")
+
+        if len(self._path_to_follow) > 0:
+            if self._vl_map.is_on_obstacle(np.array(self._path_to_follow[len(self._path_to_follow) - 1])):
+                if self.force_dont_stop_after_stuck:
+                    force_dont_stop = True
+                replan = True
 
         if self.args.replanning.enable_replan_when_stuck:
             if np.sqrt(np.sum(np.square(self.last_xy - xy))) < 0.05:

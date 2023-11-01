@@ -65,6 +65,7 @@ class VLFMap(VLMap):
         self._path_cols = []
 
         self.viz_counter = 0
+        self._extra_waypoints_px = []
 
     def embedding_value_within_radius(
         self,

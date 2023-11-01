@@ -250,6 +250,10 @@ class VLPathSelector:
                 and 0 <= pt_px[1]
                 and pt_px[1] < self._vl_map.size
             ):
-                waypoints += [pt]
+                #Check that not on obstacle
+                if not self._vl_map.is_on_obstacle(pt):
+                    waypoints += [pt]
+
+            
 
         return np.array(waypoints)

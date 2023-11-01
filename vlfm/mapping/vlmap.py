@@ -509,6 +509,20 @@ class VLMap(BaseMap):
             self._vl_map = np.nan_to_num(self._vl_map)
             self._map = np.nan_to_num(self._map)
 
+    def is_on_obstacle(self, xy: np.ndarray) -> bool:
+        if self._obstacle_map is not None:
+            occ_map = 1 - self._obstacle_map._navigable_map
+
+            occ_map = np.flipud(occ_map)
+        else:
+            raise Exception("ObstacleMap for VLFMap cannot be none when checking if no obstacle!")
+
+        assert(xy.size==2), f"xy for is_on_obstacle should be a single point. Shape is {xy.shape}"
+
+        goal_px = self._xy_to_cvpx(xy.reshape(1,2))
+
+        return occ_map[goal_px[0,1], goal_px[0,0]] > 0.5
+
 
 def remap(
     value: float, from_low: float, from_high: float, to_low: float, to_high: float

@@ -167,7 +167,7 @@ habitat_baselines:
   force_torch_single_threaded: True
 
   eval:
-    split: "val_unseen"
+    split: "val_seen"
     video_option: ["disk"] #["tensorboard"]
 
   rl:
