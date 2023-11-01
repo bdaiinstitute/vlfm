@@ -64,7 +64,7 @@ class VLPathSelectorSR(VLPathSelector):
         next_instruct: str,
         last_path_val: float,
         last_path_len: int,
-        last_path: List[List[float]]
+        last_path: List[List[float]],
     ) -> Tuple[np.ndarray, np.ndarray, bool]:
         """Selects the best waypoint from the given list of waypoints.
 

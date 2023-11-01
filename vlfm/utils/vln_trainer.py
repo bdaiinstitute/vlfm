@@ -81,6 +81,9 @@ class VLNTrainer(PPOTrainer):
 
         if LOG_THRESH:
             self.thresh_dict: Dict[Tuple[float, float], List[int]] = {}
+            for i in np.linspace(-1.0, 1.5, 25):
+                for j in np.linspace(-20.0, 40.0, 60):
+                    self.thresh_dict[(i, j)] = []
             best_thresh = None
 
         gt_path_for_viz = None
@@ -285,12 +288,6 @@ class VLNTrainer(PPOTrainer):
             if LOG_THRESH:
                 thresh = self._agent.actor_critic._path_selector.get_last_thresh()
                 if thresh is not None:
-                    update_thresh = False
-                    if thresh not in self.thresh_dict.keys():
-                        self.thresh_dict[thresh] = []
-                        update_thresh = True
-                        min_over_0 = (np.inf, np.inf)
-                        min_over_1 = (np.inf, np.inf)
                     in_dist = (
                         (infos[0]["distance_to_goal"])
                         <= self.config.habitat.task.measurements.success.success_distance
@@ -298,38 +295,6 @@ class VLNTrainer(PPOTrainer):
 
                     best_thresh = None
                     best_val = 0
-
-                    if update_thresh:
-                        for k in self.thresh_dict.keys():
-                            if (k[0] >= thresh[0] and k[1] >= thresh[1]) and (
-                                k != thresh
-                            ):
-                                if k[0] < min_over_0[0]:
-                                    min_over_0 = k
-                                elif k[0] == min_over_0[0]:
-                                    if k[1] < min_over_0[1]:
-                                        min_over_0 = k
-                                if k[1] < min_over_1[1]:
-                                    min_over_1 = k
-                                elif k[1] == min_over_1[1]:
-                                    if k[0] < min_over_1[0]:
-                                        min_over_1 = k
-                        if min_over_0 in self.thresh_dict.keys():
-                            if min_over_1 in self.thresh_dict.keys():
-                                if len(self.thresh_dict[min_over_0]) > len(
-                                    self.thresh_dict[min_over_1]
-                                ):
-                                    self.thresh_dict[thresh] = self.thresh_dict[
-                                        min_over_0
-                                    ]
-                                else:
-                                    self.thresh_dict[thresh] = self.thresh_dict[
-                                        min_over_1
-                                    ]
-                            else:
-                                self.thresh_dict[thresh] = self.thresh_dict[min_over_0]
-                        elif min_over_1 in self.thresh_dict.keys():
-                            self.thresh_dict[thresh] = self.thresh_dict[min_over_1]
 
                     for k in self.thresh_dict.keys():
                         if in_dist:
@@ -467,7 +432,7 @@ class VLNTrainer(PPOTrainer):
                                 f" {len(self.thresh_dict[best_thresh])/num_total}"
                             )
                             file_log.write("\n")
-                            close0 = 0.1
+                            close0 = 0.5
                             close1 = 5.0
                             print("CLOSE THRESHOLD VALS")
                             file_log.write("CLOSE THRESHOLD VALS")

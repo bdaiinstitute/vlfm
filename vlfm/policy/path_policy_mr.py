@@ -79,7 +79,7 @@ class PathPolicyMR(BasePathPolicy):
                 self._instruction,
                 np.array(self._pos_since_last),
                 force_dont_stop,
-                return_full_path=self.args.use_path_waypoints
+                return_full_path=self.args.use_path_waypoints,
             )
 
             self._pos_since_last = []
@@ -125,5 +125,10 @@ class PathPolicyMR(BasePathPolicy):
                     return robot_xy, True  # stop
                 else:
                     print("Forced not to stop!")
+
+            elif np.sqrt(np.sum(np.square(self._path_to_follow[len(self._path_to_follow)-1] - robot_xy))) < self._pointnav_stop_radius: 
+                print("STOPPING (in planner) because goal is current location")
+                self.why_stop = "Planner chose current location as goal"
+                return robot_xy, True
 
         return self._path_to_follow[self._cur_path_idx], False

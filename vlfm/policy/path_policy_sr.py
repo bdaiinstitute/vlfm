@@ -80,7 +80,7 @@ class PathPolicySR(BasePathPolicy):
                     next_instruct,
                     cur_path_val,
                     cur_path_len,
-                    cur_path
+                    cur_path,
                 )
             )
 

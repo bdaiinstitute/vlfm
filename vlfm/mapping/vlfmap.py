@@ -155,42 +155,6 @@ class VLFMap(VLMap):
         self._path_positions = paths
         self._path_cols = path_cols
 
-    # TODO: get rid of these and use the _xy_to_px
-    def _xy_to_cvpx(self, points: np.ndarray) -> np.ndarray:
-        """Converts an array of (x, y) coordinates to cv pixel coordinates.
-
-        i.e. (x,y) with origin in top left
-
-        Args:
-            points: The array of (x, y) coordinates to convert.
-
-        Returns:
-            The array of (x, y) pixel coordinates.
-        """
-        px = (
-            np.rint(points[:, ::-1] * self.pixels_per_meter)
-            + self._episode_pixel_origin
-        )
-        px[:, 0] = self._map.shape[0] - px[:, 0]
-        px[:, 1] = self._map.shape[1] - px[:, 1]
-        return px.astype(int)
-
-    def _cvpx_to_xy(self, px: np.ndarray) -> np.ndarray:
-        """Converts an array of cv pixel coordinates to (x, y) coordinates.
-
-        Args:
-            px: The array of pixel coordinates to convert.
-
-        Returns:
-            The array of (x, y) coordinates.
-        """
-        px_copy = px.copy()
-        # px_copy[:, 0] = self._map.shape[0] + px_copy[:, 0]
-        # px_copy[:, 1] = self._map.shape[1] + px_copy[:, 1]
-        # px_copy[:, ::-1]
-        points = (px_copy - self._episode_pixel_origin) / self.pixels_per_meter
-        return -points[:, ::-1]
-
     def visualize(
         self,
         markers: Optional[List[Tuple[np.ndarray, Dict[str, Any]]]] = None,

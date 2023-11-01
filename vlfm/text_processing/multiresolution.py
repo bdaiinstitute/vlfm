@@ -329,7 +329,7 @@ class VLPathSelectorMR(VLPathSelector):
         instruction: str,
         last_path: np.ndarray,
         force_no_stop: bool = False,
-        return_full_path: bool = True
+        return_full_path: bool = True,
     ) -> Tuple[np.ndarray, np.ndarray, bool]:
         """Selects the best waypoint from the given list of waypoints.
 
@@ -348,19 +348,19 @@ class VLPathSelectorMR(VLPathSelector):
             and whether to start using the next instruction (or stop if no next)
         """
         if self._store_points_on_paths and (self._extra_waypoints.size) > 0:
-            #TODO: remove any extra waypoints that are on obstacles
+            # TODO: remove any extra waypoints that are on obstacles
             bad_idx = []
             for i in range(self._extra_waypoints.shape[0]):
-                pt = self._extra_waypoints[i,:]
+                pt = self._extra_waypoints[i, :]
                 if self._vl_map.is_on_obstacle(pt):
                     bad_idx += [i]
             if len(bad_idx) > 0:
                 print("Deleting cached waypoints on obstacles!")
-                self._extra_waypoints = np.delete(self._extra_waypoints, bad_idx, axis=0)
+                self._extra_waypoints = np.delete(
+                    self._extra_waypoints, bad_idx, axis=0
+                )
 
-            waypoints = np.append(
-                waypoints, self._extra_waypoints, axis=0
-            )
+            waypoints = np.append(waypoints, self._extra_waypoints, axis=0)
 
         if self._calculate_path_from_origin:
             # Add waypoints
@@ -516,9 +516,7 @@ class VLPathSelectorMR(VLPathSelector):
             else:
                 path_to_best = best_path_curr[-1, :].reshape(1, 2)
                 best_path_vals_curr = best_path_vals_curr[-1]
-                self._vl_map.set_paths_for_viz(
-                    [best_path_curr], [(255, 0, 0)]
-                )
+                self._vl_map.set_paths_for_viz([best_path_curr], [(255, 0, 0)])
 
             return path_to_best, best_path_vals_curr, should_stop
 

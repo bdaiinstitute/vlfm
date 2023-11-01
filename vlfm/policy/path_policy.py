@@ -177,17 +177,21 @@ class BasePathPolicy(BaseVLNPolicy):
                         idx_path = -1
 
             if len(self._path_to_follow) < self._cur_path_idx + 1:
+                print("REPLAN because ran out of waypoints")
                 replan = True
 
         else:
             idx_path = -1
             if len(self._path_to_follow) == 0:
+                print("REPLAN because no path to follow")
                 replan = True
             if self._reached_goal:
+                print("REPLAN because reached goal")
                 replan = True
 
         if self.args.replanning.enable_replan_at_steps:
             if self._num_steps > (self._last_plan_step + self._replan_interval):
+                print("REPLAN at steps")
                 replan = True
 
         # Work out if end goal is on an obstacle, if so replan:
@@ -199,9 +203,12 @@ class BasePathPolicy(BaseVLNPolicy):
             raise Exception("ObstacleMap for VLFMap cannot be none when using paths!")
 
         if len(self._path_to_follow) > 0:
-            if self._vl_map.is_on_obstacle(np.array(self._path_to_follow[len(self._path_to_follow) - 1])):
+            if self._vl_map.is_on_obstacle(
+                np.array(self._path_to_follow[len(self._path_to_follow) - 1])
+            ):
                 if self.force_dont_stop_after_stuck:
                     force_dont_stop = True
+                print("REPLAN because goal is on obstacle")
                 replan = True
 
         if self.args.replanning.enable_replan_when_stuck:
