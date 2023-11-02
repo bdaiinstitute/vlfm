@@ -91,61 +91,6 @@ habitat:
         success_distance: 3.0
       spl:
         type: SPL
-      # steps_taken:
-      #   type: NumStepsMeasurement
-      # path_length:
-      # oracle_success:
-      # ndtw:
-
-      
-    # goal_sensor_uuid: pointgoal
-    # count_obj_collisions: true
-    # settle_steps: 5
-    # constraint_violation_ends_episode: true
-    # constraint_violation_drops_object: false
-    # force_regenerate: false
-    # should_save_to_cache: false
-    # object_in_hand_sample_prob: 0.167
-    # min_start_distance: 3.0
-    # render_target: true
-    # physics_stability_steps: 1
-    # num_spawn_attempts: 200
-    # spawn_max_dist_to_obj: 2.0
-    # base_angle_noise: 0.523599
-    # ee_sample_factor: 0.2
-    # ee_exclude_region: 0.0
-    # base_noise: 0.05
-    # spawn_region_scale: 0.2
-    # joint_max_impulse: -1.0
-    # desired_resting_position:
-    # - 0.5
-    # - 0.0
-    # - 1.0
-    # use_marker_t: true
-    # cache_robot_init: false
-    # success_state: 0.0
-    # should_enforce_target_within_reach: false
-    # task_spec_base_path: habitat/task/rearrange/pddl/
-    # task_spec: ''
-    # pddl_domain_def: replica_cad
-    # obj_succ_thresh: 0.3
-    # enable_safe_drop: false
-    # art_succ_thresh: 0.15
-    # robot_at_thresh: 2.0
-    # filter_nav_to_tasks: []
-    # actions:
-    #   stop:
-    #     type: StopAction
-    #     agent_index: 0
-    #   move_forward:
-    #     type: MoveForwardAction
-    #     agent_index: 0
-    #   turn_left:
-    #     type: TurnLeftAction
-    #     agent_index: 0
-    #   turn_right:
-    #     type: TurnRightAction
-    #     agent_index: 0
 
 habitat_baselines:
   evaluate: True
@@ -171,10 +116,6 @@ habitat_baselines:
     video_option: ["disk"] #["tensorboard"]
 
   rl:
-
-    policy:
-      name: "HabitatPathPolicyMR"
-      pointnav_stop_radius: 0.4
 
     ppo:
       # ppo params

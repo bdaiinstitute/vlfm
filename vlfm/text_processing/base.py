@@ -25,8 +25,6 @@ class VLPathSelector:
         self._use_peak_threshold = options.similarity_calc.enable_peak_threshold
         self._thresh_peak = options.similarity_calc.path_thresh_peak
 
-        self._prev_val_weight = options.similarity_calc.path_prev_val_weight
-
         self._add_directional_waypoints = (
             options.similarity_calc.enable_directional_waypoints
         )
@@ -39,8 +37,7 @@ class VLPathSelector:
         self._points_started_instructions: Dict[str, np.ndarray] = {}
         self._cached_text_embeddings: Dict[str, np.ndarray] = {}
 
-        self.ignore_locs: np.ndarray = np.array([])
-        self.ignore_radius = 0.5
+        self.prev_path_value = 1.0
 
     def reset(self) -> None:
         self._cur_path_val = 0.0
@@ -49,7 +46,7 @@ class VLPathSelector:
         self._points_started_instructions = {}
         self._cached_text_embeddings = {}
 
-        self.ignore_locs = np.array([])
+        self.prev_path_value = 1.0
 
     def similarity_main_loop(
         self,
@@ -91,20 +88,6 @@ class VLPathSelector:
             torch.any(image_embeddings[i, ...] != 0)
             for i in range(image_embeddings.shape[0])
         ]
-
-        # Set backtracking to zero
-        if self.ignore_locs.shape[0] > 0:
-            for j in range(len(path)):
-                if np.any(
-                    np.sqrt(
-                        np.sum(
-                            np.square(path[j, :].reshape(-1, 2) - self.ignore_locs),
-                            axis=1,
-                        )
-                    )
-                    < self.ignore_radius
-                ):
-                    image_embeddings[j, ...] = 0
 
         # Denom that ignores the original zeros
         denom_l = []
@@ -154,6 +137,81 @@ class VLPathSelector:
 
         else:
             raise Exception(f"Invalid method {method} for get_similarity")
+
+    def get_path_value_main_loop(
+        self, path: np.ndarray, instruction: str
+    ) -> Tuple[float, np.ndarray, np.ndarray]:
+        raise NotImplementedError
+
+    def get_best_path_instruction(
+        self,
+        instruction: str,
+        paths: List[np.ndarray],
+        path_to_curr_loc: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray, float, float]:
+        """Returns best path, goal, waypoint for local planner, value for path"""
+        # Get value for previous part
+        value_prev_path, _, _ = self.get_path_value_main_loop(
+            path_to_curr_loc, instruction
+        )
+
+        # Note cannot easily vectorize across paths as the paths can have different numbers of points...
+        max_value = 0.0
+        best_path = None
+        best_path_vals = None
+
+        for i in range(len(paths)):
+            path = paths[i]
+
+            full_path = np.append(path_to_curr_loc, path, axis=0)
+
+            value, total_value, peak_i = self.get_path_value_main_loop(
+                full_path, instruction
+            )
+
+            # Update
+            if value > max_value:
+                max_value = value
+                best_path = path[: peak_i + 1, :]
+                best_path_vals = total_value[: peak_i + 1]
+
+        return best_path, best_path_vals, max_value, value_prev_path
+
+    def get_path_to_return(
+        self,
+        agent_pos: np.ndarray,
+        best_path_curr: np.ndarray,
+        best_path_vals_curr: np.ndarray,
+        path_to_curr_loc: np.ndarray,
+        return_full_path: bool,
+        vis_path: bool,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        if return_full_path:
+            path_to_best_list = self.generate_paths(
+                agent_pos, best_path_curr[-1, :].reshape(1, 2), one_path=True
+            )
+            if len(path_to_best_list) > 0:
+                path_to_best = path_to_best_list[0]
+                if path_to_best.shape[0] > 1:
+                    path_to_best = (path_to_best[1:]).reshape(-1, 2)
+            else:
+                if len(path_to_curr_loc) > 0:
+                    path_to_best = np.append(
+                        np.flip(path_to_curr_loc, 0), best_path_curr[1:, :], axis=0
+                    )
+                else:
+                    path_to_best = best_path_curr[-1, :].reshape(1, 2)
+            if vis_path:
+                self._vl_map.set_paths_for_viz(
+                    [best_path_curr, path_to_best], [(255, 0, 0), (0, 0, 255)]
+                )
+        else:
+            path_to_best = best_path_curr[-1, :].reshape(1, 2)
+            best_path_vals_curr = best_path_vals_curr[-1]
+            if vis_path:
+                self._vl_map.set_paths_for_viz([best_path_curr], [(255, 0, 0)])
+
+        return path_to_best, best_path_vals_curr
 
     def generate_paths(
         self, agent_pos: np.ndarray, waypoints: np.ndarray, one_path: bool = False

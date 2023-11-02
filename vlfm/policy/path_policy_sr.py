@@ -62,15 +62,6 @@ class PathPolicySR(BasePathPolicy):
                 next_instruct = ""
                 last_instruction = True
 
-            if len(self._path_vals) > 0 and (idx_path != -1):
-                cur_path_val = self._path_vals[min(idx_path, len(self._path_vals) - 1)]
-                cur_path_len = min(idx_path, len(self._path_vals) - 1) + 1
-                cur_path = self._path_to_follow
-            else:
-                cur_path_val = 0.0
-                cur_path_len = 0
-                cur_path = []
-
             path, path_vals, switch_or_stop = (
                 self._path_selector.get_goal_for_instruction(
                     robot_xy,
@@ -78,9 +69,7 @@ class PathPolicySR(BasePathPolicy):
                     frontiers,
                     cur_instruct,
                     next_instruct,
-                    cur_path_val,
-                    cur_path_len,
-                    cur_path,
+                    return_full_path=self.args.use_path_waypoints,
                 )
             )
 

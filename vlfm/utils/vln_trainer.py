@@ -81,8 +81,8 @@ class VLNTrainer(PPOTrainer):
 
         if LOG_THRESH:
             self.thresh_dict: Dict[Tuple[float, float], List[int]] = {}
-            for i in np.linspace(-1.0, 1.5, 25):
-                for j in np.linspace(-20.0, 40.0, 60):
+            for i in np.linspace(-1.0, 1.5, 26):
+                for j in np.linspace(-20.0, 40.0, 61):
                     self.thresh_dict[(i, j)] = []
             best_thresh = None
 
@@ -434,7 +434,7 @@ class VLNTrainer(PPOTrainer):
                             file_log.write("\n")
                             close0 = 0.5
                             close1 = 5.0
-                            print("CLOSE THRESHOLD VALS")
+                            # print("CLOSE THRESHOLD VALS")
                             file_log.write("CLOSE THRESHOLD VALS")
                             file_log.write("\n")
                             for k in self.thresh_dict.keys():
@@ -442,7 +442,7 @@ class VLNTrainer(PPOTrainer):
                                     np.abs(k[0] - best_thresh[0]) < close0
                                     and np.abs(k[1] - best_thresh[1]) < close1
                                 ):
-                                    print("* ", k, len(self.thresh_dict[k]))
+                                    # print("* ", k, len(self.thresh_dict[k]))
                                     file_log.write(f"* {k}: {len(self.thresh_dict[k])}")
                                     file_log.write("\n")
 

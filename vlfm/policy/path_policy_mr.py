@@ -77,7 +77,6 @@ class PathPolicyMR(BasePathPolicy):
                 yaw,
                 frontiers,
                 self._instruction,
-                np.array(self._pos_since_last),
                 force_dont_stop,
                 return_full_path=self.args.use_path_waypoints,
             )
