@@ -8,7 +8,7 @@ habitat_baselines:
   rl:
     policy:
       name: "HabitatPathPolicyMR"
-      pointnav_stop_radius: 0.4
+      pointnav_stop_radius: 0.1
 
 
       options:
@@ -62,8 +62,8 @@ habitat_baselines:
           # path_thresh_stop_abs: 20.0
 
           # path_similarity_method: weighted average embeddings
-          # path_thresh_stop: 1.3
-          # path_thresh_stop_abs: 10.0
+          # path_thresh_stop: 1.5
+          # path_thresh_stop_abs: 16.0
 
           # path_similarity_method: average embeddings
           # path_thresh_stop: 0.5

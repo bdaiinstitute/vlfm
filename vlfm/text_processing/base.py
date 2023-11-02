@@ -220,11 +220,13 @@ class VLPathSelector:
         self, agent_pos: np.ndarray, waypoints: np.ndarray, one_path: bool = False
     ) -> List[np.ndarray]:
         # Only use waypoints that are inside the radius limit
-        if self._limit_waypoint_radius:
+        if self._limit_waypoint_radius and (not one_path):
             dists = np.sqrt(
                 np.sum(np.square(waypoints - agent_pos.reshape(1, 2)), axis=1)
             )
+            print("N waypoints before radius enforcement: ", waypoints.shape[0])
             waypoints = waypoints[dists <= self._waypoints_radius_limit]
+            print("N waypoints after radius enforcement: ", waypoints.shape[0])
 
         # Make paths to the waypoints
         robot_radius_px = get_agent_radius_in_px(self._vl_map.pixels_per_meter)
