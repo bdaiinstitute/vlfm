@@ -382,8 +382,12 @@ class VLMap(BaseMap):
         py = int(-cam_y * self.pixels_per_meter) + self._episode_pixel_origin[1]
 
         # Overlay the new data onto the map
-        curr_map = np.zeros_like(self._map)
-        curr_map = place_img_in_img(curr_map, curr_data, px, py)
+        if 0 <= px < self._map.shape[0] and 0 <= py < self._map.shape[1]:
+            curr_map = np.zeros_like(self._map)
+            curr_map = place_img_in_img(curr_map, curr_data, px, py)
+        else:
+            print("Update would be outside map! Not updating!")
+            curr_map = self._map
 
         return curr_map
 
