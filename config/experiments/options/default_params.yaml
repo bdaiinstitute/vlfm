@@ -28,7 +28,11 @@ habitat_baselines:
           force_dont_stop_after_stuck: True
 
         similarity_calc:
+          limit_waypoint_radius: True
+          waypoints_radius_limit: 10.0
+
           #Thresholds for logging thresh:
+          path_thresh_switch: 0.5
           path_similarity_method: average sim
           path_thresh_stop: -1.0 #0.5
           path_thresh_stop_abs: -20.0 #20.0

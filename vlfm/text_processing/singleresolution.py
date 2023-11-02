@@ -125,7 +125,7 @@ class VLPathSelectorSR(VLPathSelector):
                 best_path_vals_curr,
                 path_to_curr_loc,
                 return_full_path,
-                should_stop,
+                not should_stop,
             )
 
             return path_to_best, best_path_vals_curr, should_stop
@@ -168,7 +168,7 @@ class VLPathSelectorSR(VLPathSelector):
                     best_path_vals_next,
                     path_to_curr_loc,
                     return_full_path,
-                    False,
+                    True,
                 )
                 return path_to_best, best_path_vals_next, True
             else:
@@ -178,6 +178,6 @@ class VLPathSelectorSR(VLPathSelector):
                     best_path_vals_curr,
                     path_to_curr_loc,
                     return_full_path,
-                    False,
+                    True,
                 )
                 return path_to_best, best_path_vals_curr, False

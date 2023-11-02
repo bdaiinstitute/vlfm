@@ -39,6 +39,9 @@ class VLPathSelector:
 
         self.prev_path_value = 1.0
 
+        self._limit_waypoint_radius = options.similarity_calc.limit_waypoint_radius
+        self._waypoints_radius_limit = options.similarity_calc.waypoints_radius_limit
+
     def reset(self) -> None:
         self._cur_path_val = 0.0
         self._cur_path_len = 0
@@ -216,6 +219,13 @@ class VLPathSelector:
     def generate_paths(
         self, agent_pos: np.ndarray, waypoints: np.ndarray, one_path: bool = False
     ) -> List[np.ndarray]:
+        # Only use waypoints that are inside the radius limit
+        if self._limit_waypoint_radius:
+            dists = np.sqrt(
+                np.sum(np.square(waypoints - agent_pos.reshape(1, 2)), axis=1)
+            )
+            waypoints = waypoints[dists <= self._waypoints_radius_limit]
+
         # Make paths to the waypoints
         robot_radius_px = get_agent_radius_in_px(self._vl_map.pixels_per_meter)
         agent_pos_px = self._vl_map._xy_to_cvpx(agent_pos.reshape(1, 2))[0, :]
