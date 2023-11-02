@@ -28,6 +28,7 @@ habitat_baselines:
           enable_replan_when_stuck: True
           force_dont_stop_until: 33
           force_dont_stop_after_stuck: True
+          goal_stop_dist: 0.1
 
         similarity_calc:
           limit_waypoint_radius: True

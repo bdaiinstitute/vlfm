@@ -111,5 +111,24 @@ class PathPolicySR(BasePathPolicy):
                         print("Forced not to stop!")
                 else:
                     self._curr_instruction_idx += 1
+            elif (
+                last_instruction
+                and (not force_dont_stop)
+                and (self._num_steps > self._force_dont_stop_until)
+            ):
+                if (
+                    np.sqrt(
+                        np.sum(
+                            np.square(
+                                self._path_to_follow[len(self._path_to_follow) - 1]
+                                - robot_xy
+                            )
+                        )
+                    )
+                    < self.args.replanning.goal_stop_dist
+                ):
+                    print("STOPPING (in planner) because goal is current location")
+                    self.why_stop = "Planner chose current location as goal"
+                    return robot_xy, True
 
         return self._path_to_follow[self._cur_path_idx], False

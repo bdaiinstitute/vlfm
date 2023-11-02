@@ -134,7 +134,7 @@ class PathPolicyMR(BasePathPolicy):
                         )
                     )
                 )
-                < self._pointnav_stop_radius
+                < self.args.replanning.goal_stop_dist
             ):
                 print("STOPPING (in planner) because goal is current location")
                 self.why_stop = "Planner chose current location as goal"
