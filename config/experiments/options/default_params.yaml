@@ -5,6 +5,8 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
 habitat_baselines:
+  test_episode_count: 260 #Set to -1 to use all episodes
+
   rl:
     policy:
       name: "HabitatPathPolicyMR"
