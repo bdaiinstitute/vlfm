@@ -514,6 +514,7 @@ class VLNTrainer(PPOTrainer):
 
         file_success.close()
         file_fail.close()
+        file_log.close()
 
         if "ZSOS_DONE_PATH" in os.environ:
             # Create an empty file at ZSOS_DONE_PATH to signal that the

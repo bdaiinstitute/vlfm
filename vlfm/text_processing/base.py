@@ -83,7 +83,7 @@ class VLPathSelector:
         path: np.ndarray,
         image_embeddings: torch.tensor,
         text_embed: torch.tensor,
-        method: str = "weighted average embeddings",
+        method: str = "",
         thresh: float = -1.0,
     ) -> Tuple[float, np.ndarray, int]:
         # Get original indices of zeros
@@ -100,6 +100,9 @@ class VLPathSelector:
                 denom_i += 1
             denom_l += [denom_i]
         denom = np.array(denom_l)
+
+        if method == "":
+            method = self.args.similarity_calc.path_similarity_method
 
         if thresh == -1.0:
             thresh = self._thresh_peak

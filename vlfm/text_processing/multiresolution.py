@@ -1,10 +1,12 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 from __future__ import annotations
 
+import os
 from argparse import Namespace
 from enum import Enum
 from typing import List, Optional, Tuple
 
+import cv2
 import numpy as np
 import torch
 
@@ -63,6 +65,16 @@ class VLPathSelectorMR(VLPathSelector):
             self._n_pts_store = self.args.multiresolution.n_points_store
             self._extra_waypoints: np.ndarray = np.array([])
 
+        self.episode_counter = 0
+        self.viz_counter = 0
+        self.img_save_folder = "path_viz"
+
+        os.makedirs(f"{self.img_save_folder}", exist_ok=True)
+        self.gt_path_for_viz: Optional[np.ndarray] = None
+
+    def set_gt_path_for_viz(self, gt_path_for_viz: np.ndarray) -> None:
+        self.gt_path_for_viz = gt_path_for_viz
+
     def reset(self) -> None:
         super().reset()
         self.instruction_tree = None
@@ -71,6 +83,10 @@ class VLPathSelectorMR(VLPathSelector):
             self.past_thresh_is_updated = False
         if self._store_points_on_paths:
             self._extra_waypoints = np.array([])
+
+        self.episode_counter += 1
+        self.viz_counter = 0
+        self.start_yaw = 0.0
 
     def get_best_values_for_words(
         self, words: List[str], image_embeddings: torch.tensor
@@ -271,6 +287,8 @@ class VLPathSelectorMR(VLPathSelector):
 
         paths = self.generate_paths(np.array([0.0, 0.0]), waypoints)
 
+        # self.save_imgs_for_shape_comparision(paths, instruction)
+
         if len(paths) == 0:
             print("NO PATHS GENERATED!")
             return None, None, False
@@ -282,6 +300,7 @@ class VLPathSelectorMR(VLPathSelector):
             best_path_curr, best_path_vals_curr, val_with_part, val_without_part = (
                 self.get_best_path_instruction(instruction, paths, path_to_curr_loc[0])
             )
+
         else:
             best_path_curr, best_path_vals_curr, val_with_part, val_without_part = (
                 self.get_best_path_instruction(
@@ -380,3 +399,58 @@ class VLPathSelectorMR(VLPathSelector):
             return self.past_thresh[-1]
         self.past_thresh_is_updated = False
         return None
+
+    def save_imgs_for_shape_comparision(
+        self, paths: np.ndarray, instruction: str
+    ) -> None:
+        assert self._vl_map._obstacle_map is not None
+
+        fd_n = f"{self.img_save_folder}/{self.episode_counter:04}_{self.viz_counter:03}"
+        os.makedirs(fd_n, exist_ok=True)
+        file_log = open(f"{fd_n}/instruction.txt", "w")
+        file_log.write(instruction)
+        file_log.close()
+
+        obstacle_map_clean = (
+            np.ones((*self._vl_map._obstacle_map._map.shape[:2], 3), dtype=np.uint8)
+            * 255
+        )
+        # Draw explored area in light green
+        obstacle_map_clean[self._vl_map._obstacle_map.explored_area == 1] = (
+            200,
+            255,
+            200,
+        )
+        # Draw unnavigable areas in gray
+        obstacle_map_clean[self._vl_map._obstacle_map._navigable_map == 0] = (
+            self._vl_map._obstacle_map.radius_padding_color
+        )
+        # Draw obstacles in black
+        obstacle_map_clean[self._vl_map._obstacle_map._map == 1] = (0, 0, 0)
+        obstacle_map_clean = cv2.flip(obstacle_map_clean, 0)
+
+        if self.gt_path_for_viz is not None:  # ignore
+            obstacle_map_gt = obstacle_map_clean.copy()
+            self._vl_map._obstacle_map._traj_vis.draw_gt_trajectory(
+                obstacle_map_gt, self.gt_path_for_viz
+            )
+
+            cv2.imwrite(f"{fd_n}/gt.png", obstacle_map_gt)
+            np.save(f"{fd_n}/gt.npy", self.gt_path_for_viz)
+
+        if len(paths) > 0:
+            fd_npi = f"{fd_n}/generated_paths_images"
+            fd_npp = f"{fd_n}/generated_paths_points"
+            os.makedirs(fd_npi, exist_ok=True)
+            os.makedirs(fd_npp, exist_ok=True)
+            for i in range(len(paths)):
+                obstacle_map_path = obstacle_map_clean.copy()
+                path = paths[i]
+                self._vl_map._obstacle_map._traj_vis.draw_gt_trajectory(
+                    obstacle_map_path, path
+                )
+
+                cv2.imwrite(f"{fd_npi}/{i:04}.png", obstacle_map_path)
+                np.save(f"{fd_npp}/{i:04}.npy", path)
+
+        self.viz_counter += 1

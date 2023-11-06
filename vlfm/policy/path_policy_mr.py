@@ -23,6 +23,10 @@ class PathPolicyMR(BasePathPolicy):
             self.args, self._vl_map, min_dist_goal=self._pointnav_stop_radius
         )
 
+    def set_gt_path_for_viz(self, gt_path_for_viz: np.ndarray) -> None:
+        super().set_gt_path_for_viz(gt_path_for_viz)
+        self._path_selector.set_gt_path_for_viz(gt_path_for_viz)
+
     def _reset(self) -> None:
         super()._reset()
         self._path_selector.reset()

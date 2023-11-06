@@ -20,11 +20,11 @@ habitat_baselines:
         logging:
           enable_log_success_if_oracle_stop: True
           analysis_save_location: failure_analysis/
-          enable_log_success_thresh: True #Must change to false if using single resolution!
+          enable_log_success_thresh: False #Must change to false if using single resolution!
 
         replanning:
           enable_replan_at_steps: False
-          replan_interval: 50
+          replan_interval: 40
           enable_replan_when_stuck: True
           force_dont_stop_until: 33
           force_dont_stop_after_stuck: True
@@ -35,21 +35,21 @@ habitat_baselines:
           waypoints_radius_limit: 10.0
 
           #Thresholds for logging thresh:
-          path_thresh_switch: 0.5
-          path_similarity_method: average sim
-          path_thresh_stop: -1.0 #0.5
-          path_thresh_stop_abs: -20.0 #20.0
+          # path_thresh_switch: 0.5
+          # path_similarity_method: average sim
+          # path_thresh_stop: -1.0 
+          # path_thresh_stop_abs: -20.0 
 
           #SINGLE RESOLUTION
           #Uncomment for one method
           # path_similarity_method: average sim
-          # path_thresh_switch: 0.5
-          # path_thresh_stop: 0.5
+          # path_thresh_switch: 0.0
+          # path_thresh_stop: 0.0
           # path_thresh_stop_abs: 20.0
 
           # path_similarity_method: weighted average embeddings
-          # path_thresh_switch: 0.5
-          # path_thresh_stop: 0.5
+          # path_thresh_switch: 5.0
+          # path_thresh_stop: 20.0
           # path_thresh_stop_abs: 20.0
 
           # path_similarity_method: average embeddings
@@ -58,19 +58,21 @@ habitat_baselines:
           # path_thresh_stop_abs: 20.0
 
           #MULTIRESOLUTION
-          # path_thresh_switch: 0.5 #doesn't do anything for multiresolution
-          #Uncomment for one method
-          # path_similarity_method: average sim
-          # path_thresh_stop: 0.5
-          # path_thresh_stop_abs: 20.0
+          # #Uncomment for one method
+          path_similarity_method: average sim
+          path_thresh_stop: 0.6
+          path_thresh_stop_abs: 1.0
+          path_thresh_switch: 0.5
 
           # path_similarity_method: weighted average embeddings
           # path_thresh_stop: 1.5
-          # path_thresh_stop_abs: 16.0
+          # path_thresh_stop_abs: 29.0
+          # path_thresh_switch: 0.5
 
           # path_similarity_method: average embeddings
           # path_thresh_stop: 0.5
           # path_thresh_stop_abs: 20.0
+          # path_thresh_switch: 0.5
           
           enable_peak_threshold: True
           path_thresh_peak: 0.9
