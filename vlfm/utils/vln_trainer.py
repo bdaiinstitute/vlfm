@@ -86,7 +86,7 @@ class VLNTrainer(PPOTrainer):
                     self.thresh_dict[(i, j)] = []
             best_thresh = None
 
-        gt_path_for_viz = None
+        # gt_path_for_viz = None
 
         if self._is_distributed:
             raise RuntimeError("Evaluation does not support distributed mode")
@@ -213,6 +213,9 @@ class VLNTrainer(PPOTrainer):
             current_episodes_info = self.envs.current_episodes()
 
             with inference_mode():
+                gt_path_for_viz = self.envs.call(["get_gt_path"])[0]
+                gt_path_for_viz = gt_path_for_viz[:, :2]
+                self._agent.actor_critic.set_envs(self.envs)
                 self._agent.actor_critic.set_instruction(instructions[0])
                 self._agent.actor_critic.set_gt_path_for_viz(gt_path_for_viz)
                 action_data = self._agent.actor_critic.act(
@@ -317,8 +320,8 @@ class VLNTrainer(PPOTrainer):
                     else:
                         print("NO BEST THRESH")
 
-            gt_path_for_viz = np.array(infos[0]["gt_path_vln"])
-            gt_path_for_viz = gt_path_for_viz[:, :2]
+            # gt_path_for_viz = np.array(infos[0]["gt_path_vln"])
+            # gt_path_for_viz = gt_path_for_viz[:, :2]
 
             # Split off instructions
             instructions_curr = instructions.copy()
@@ -488,7 +491,7 @@ class VLNTrainer(PPOTrainer):
                     if ORACLE_STOP or LOG_SUCCES_IF_ORACLE_STOP:
                         self.should_stop = False
 
-                    gt_path_for_viz = None
+                    # gt_path_for_viz = None
 
             not_done_masks = not_done_masks.to(device=self.device)
             (

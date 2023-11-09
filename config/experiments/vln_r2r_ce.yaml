@@ -15,7 +15,7 @@ defaults:
   - /habitat/task/measurements:
     - frontier_exploration_map
     - traveled_stairs
-    - gt_path_vln
+    # - gt_path_vln
   - /habitat_baselines/rl/policy: zsos_policy
   - _self_
   - options:

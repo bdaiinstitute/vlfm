@@ -4,6 +4,9 @@
 
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
+habitat:
+  env_task: PrivEnv
+
 habitat_baselines:
   test_episode_count: 260 #Set to -1 to use all episodes
 
@@ -11,6 +14,7 @@ habitat_baselines:
     policy:
       name: "HabitatPathPolicyMR"
       pointnav_stop_radius: 0.4
+      use_gt_path: True
 
 
       options:
@@ -60,8 +64,8 @@ habitat_baselines:
           #MULTIRESOLUTION
           # #Uncomment for one method
           path_similarity_method: average sim
-          path_thresh_stop: 0.6
-          path_thresh_stop_abs: 1.0
+          path_thresh_stop: 0.0
+          path_thresh_stop_abs: 0.0
           path_thresh_switch: 0.5
 
           # path_similarity_method: weighted average embeddings
@@ -76,7 +80,7 @@ habitat_baselines:
           
           enable_peak_threshold: True
           path_thresh_peak: 0.9
-          enable_directional_waypoints: True
+          enable_directional_waypoints: False #True
           direction_waypoints_dist: 3.0
           direction_waypoints_n: 8
 

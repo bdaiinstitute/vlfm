@@ -2,7 +2,7 @@
 
 import os
 from dataclasses import dataclass, fields
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -16,6 +16,7 @@ from vlfm.policy.utils.pointnav_policy import WrappedPointNavResNetPolicy
 from vlfm.utils.geometry_utils import rho_theta
 
 try:
+    import habitat
     from habitat_baselines.common.tensor_dict import TensorDict
 
     from vlfm.policy.base_policy import BasePolicy
@@ -37,6 +38,7 @@ class BaseVLNPolicy(BasePolicy):
         pointnav_policy_path: str,
         depth_image_shape: Tuple[int, int],
         pointnav_stop_radius: float,
+        use_gt_path: bool,
         options: Any,
         visualize: bool = True,
         compute_frontiers: bool = True,
@@ -52,6 +54,7 @@ class BaseVLNPolicy(BasePolicy):
         # seperate function to allow for easy changing
         self._vl_model = None
         self.args = options
+        self._use_gt_path = use_gt_path
 
         self._pointnav_policy = WrappedPointNavResNetPolicy(pointnav_policy_path)
         self._depth_image_shape = tuple(depth_image_shape)
@@ -81,6 +84,8 @@ class BaseVLNPolicy(BasePolicy):
         self._instruction: str = ""
         self._instruction_parts: List[str] = []
 
+        self.envs: Optional[habitat.core.vector_env.VectorEnv] = None
+
     def _reset(self) -> None:
         self._curr_instruction_idx = 0
         self._instruction_parts = []
@@ -94,11 +99,16 @@ class BaseVLNPolicy(BasePolicy):
         self._did_reset = True
         self._reached_goal = False
 
+        self.envs = None
+
     def set_gt_path_for_viz(self, gt_path_for_viz: np.ndarray) -> None:
         self.gt_path_for_viz = gt_path_for_viz
 
     def set_instruction(self, instructions: str) -> None:
         self._instruction = instructions
+
+    def set_envs(self, envs: habitat.core.vector_env.VectorEnv) -> None:
+        self.envs = envs
 
     def act(
         self,
@@ -140,7 +150,10 @@ class BaseVLNPolicy(BasePolicy):
                 pointnav_action = torch.tensor([[np.random.randint(1, 4)]])
 
             else:
-                pointnav_action = self._pointnav(goal[:2])
+                if self._use_gt_path:
+                    pointnav_action = self._gtlocalnav(goal[:2])
+                else:
+                    pointnav_action = self._pointnav(goal[:2])
 
         action_numpy = pointnav_action.detach().cpu().numpy()[0]
         if len(action_numpy) == 1:
@@ -227,6 +240,15 @@ class BaseVLNPolicy(BasePolicy):
 
         return policy_info
 
+    def _gtlocalnav(self, goal: np.ndarray, stop: bool = False) -> Tensor:
+        assert self.envs is not None, "Trying to use gt paths without setting envs"
+        action = self.envs.call(["get_gt_path_action"], [{"goal": goal}])
+
+        if action.item() == self._stop_action.item():
+            print("Pointnav tried to stop, choosing random action!")
+            return self._choose_random_nonstop_action().to(action.device)
+        return action
+
     def _pointnav(self, goal: np.ndarray, stop: bool = False) -> Tensor:
         """
         Calculates rho and theta from the robot's current position to the goal using the
@@ -270,7 +292,7 @@ class BaseVLNPolicy(BasePolicy):
                 return self._stop_action
 
         action = self._pointnav_policy.act(obs_pointnav, masks, deterministic=True)
-        if action.item() == self._stop_action.item():  # TODO:
+        if action.item() == self._stop_action.item():
             print("Pointnav tried to stop, choosing random action!")
             return self._choose_random_nonstop_action().to(action.device)
         return action
@@ -301,6 +323,7 @@ class BaseVLNPolicy(BasePolicy):
 class ZSOSConfig:
     name: str = "HabitatVLNPolicy"
     pointnav_policy_path: str = "data/pointnav_weights.pth"
+    use_gt_path: bool = False
     options: Any = None
     depth_image_shape: Tuple[int, int] = (224, 224)
     pointnav_stop_radius: float = 0.9
