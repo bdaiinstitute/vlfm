@@ -9,10 +9,13 @@ habitat:
 
 habitat_baselines:
   test_episode_count: 260 #Set to -1 to use all episodes
+  eval:
+    split: "val_seen"
+    video_option: ['disk'] #[] or ["disk"] or ["tensorboard"]
 
   rl:
     policy:
-      name: "HabitatPathPolicyMR"
+      name: "HabitatPathPolicyMR" #"HabitatDataCollectionPolicy"
       pointnav_stop_radius: 0.4
       use_gt_path: True
 
@@ -85,7 +88,7 @@ habitat_baselines:
           direction_waypoints_n: 8
 
           enable_shape_sim: True
-          shape_sim_weight: 0.5
+          shape_sim_weight: 0.3
 
         multiresolution:
           path_weight_path: 1.0

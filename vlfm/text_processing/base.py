@@ -233,6 +233,8 @@ class VLPathSelector:
                     path, text_embed_shape, obstacle_map_clean
                 )
 
+                # print("VALUE COMP: ", value, value_s)
+
                 value = (
                     value * (1 - self._shape_sim_weight)
                     + value_s * self._shape_sim_weight

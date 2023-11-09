@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy as np
 from habitat import registry
@@ -39,7 +39,7 @@ class PrivEnv(GymHabitatEnv):
 
         return tensor([[best_action]])
 
-    def get_gt_path(self) -> np.ndarray:
+    def get_gt_path(self) -> Tuple[np.ndarray, np.ndarray]:
         episode = self.env.env.habitat_env.current_episode
 
         start_rot = (R.from_quat(episode.start_rotation)).as_matrix()
@@ -50,4 +50,8 @@ class PrivEnv(GymHabitatEnv):
         path = start_rot.T @ path.T
         path[[0, 1, 2], :] = path[[2, 0, 1], :]
         path[[0, 1], :] *= -1
-        return path.T
+
+        path_wc = np.array(episode.reference_path)
+        path_wc[:, [0, 1, 2]] = path_wc[:, [2, 0, 1]]
+
+        return path.T, path_wc

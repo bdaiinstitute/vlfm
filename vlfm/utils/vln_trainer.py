@@ -213,11 +213,14 @@ class VLNTrainer(PPOTrainer):
             current_episodes_info = self.envs.current_episodes()
 
             with inference_mode():
-                gt_path_for_viz = self.envs.call(["get_gt_path"])[0]
+                gt_path_for_viz, gt_path_for_viz_wc = self.envs.call(["get_gt_path"])[0]
                 gt_path_for_viz = gt_path_for_viz[:, :2]
+                gt_path_for_viz_wc = gt_path_for_viz_wc[:, :2]
                 self._agent.actor_critic.set_envs(self.envs)
                 self._agent.actor_critic.set_instruction(instructions[0])
-                self._agent.actor_critic.set_gt_path_for_viz(gt_path_for_viz)
+                self._agent.actor_critic.set_gt_path_for_viz(
+                    gt_path_for_viz, gt_path_for_viz_wc
+                )
                 action_data = self._agent.actor_critic.act(
                     batch,
                     test_recurrent_hidden_states,

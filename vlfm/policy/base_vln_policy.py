@@ -79,7 +79,8 @@ class BaseVLNPolicy(BasePolicy):
                 hole_area_thresh=hole_area_thresh,
             )
 
-        self.gt_path_for_viz = None
+        self.gt_path_for_viz: Optional[np.ndarray] = None
+        self.gt_path_world_coord: Optional[np.ndarray] = None
 
         self._instruction: str = ""
         self._instruction_parts: List[str] = []
@@ -101,8 +102,11 @@ class BaseVLNPolicy(BasePolicy):
 
         self.envs = None
 
-    def set_gt_path_for_viz(self, gt_path_for_viz: np.ndarray) -> None:
+    def set_gt_path_for_viz(
+        self, gt_path_for_viz: np.ndarray, gt_path_world_coord: np.ndarray
+    ) -> None:
         self.gt_path_for_viz = gt_path_for_viz
+        self.gt_path_world_coord = gt_path_world_coord
 
     def set_instruction(self, instructions: str) -> None:
         self._instruction = instructions
@@ -245,8 +249,17 @@ class BaseVLNPolicy(BasePolicy):
         action = self.envs.call(["get_gt_path_action"], [{"goal": goal}])[0]
 
         if action.item() == self._stop_action.item():
-            print("Pointnav tried to stop, choosing random action!")
+            print("GT path follower tried to stop, choosing random action!")
+            self._reached_goal = True
             return self._choose_random_nonstop_action().to(action.device)
+
+        robot_xy = self._observations_cache["robot_xy"]
+        heading = self._observations_cache["robot_heading"]
+        rho, theta = rho_theta(robot_xy, heading, goal)
+
+        if rho < self._pointnav_stop_radius:
+            self._reached_goal = True
+
         return action
 
     def _pointnav(self, goal: np.ndarray, stop: bool = False) -> Tensor:

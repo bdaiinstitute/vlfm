@@ -20,6 +20,7 @@ from vlfm.mapping.obstacle_map import ObstacleMap
 from vlfm.utils.geometry_utils import xyz_yaw_to_tf_matrix
 
 from .base_vln_policy import BaseVLNPolicy, ZSOSConfig
+from .data_collection_policy import DataCollectionPolicy
 from .path_policy import BasePathPolicy
 from .path_policy_mr import PathPolicyMR
 from .path_policy_sr import PathPolicySR
@@ -242,6 +243,11 @@ class HabitatPathPolicySR(HabitatMixin, PathPolicySR):
 
 @baseline_registry.register_policy
 class HabitatPathPolicyMR(HabitatMixin, PathPolicyMR):
+    pass
+
+
+@baseline_registry.register_policy
+class HabitatDataCollectionPolicy(HabitatMixin, DataCollectionPolicy):
     pass
 
 

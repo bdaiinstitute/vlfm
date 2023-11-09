@@ -111,10 +111,6 @@ habitat_baselines:
   # this improves performance considerably
   force_torch_single_threaded: True
 
-  eval:
-    split: "val_seen"
-    video_option: ["disk"] #["tensorboard"]
-
   rl:
 
     ppo:
