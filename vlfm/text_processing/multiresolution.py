@@ -293,18 +293,43 @@ class VLPathSelectorMR(VLPathSelector):
             print("NO PATHS GENERATED!")
             return None, None, False
 
+        if self._enable_shape_sim:
+            caption = (
+                "Map showing the path (in pink) that you'd take to follow this"
+                f" instruction: {instruction}"
+            )
+            if caption in self._cached_text_embeddings.keys():
+                text_embed_shape = self._cached_text_embeddings[caption]
+            else:
+                text_embed_shape = self._vl_map._vl_model.get_text_embedding(caption)
+                self._cached_text_embeddings[caption] = text_embed_shape
+            obstacle_map_clean = self.get_obstacle_map_clean()
+        else:
+            obstacle_map_clean = None
+            text_embed_shape = None
+
         path_to_curr_loc = self.generate_paths(
             np.array([0.0, 0.0]), agent_pos.reshape(1, 2), one_path=True
         )
         if len(path_to_curr_loc) > 0:
             best_path_curr, best_path_vals_curr, val_with_part, val_without_part = (
-                self.get_best_path_instruction(instruction, paths, path_to_curr_loc[0])
+                self.get_best_path_instruction(
+                    instruction,
+                    paths,
+                    path_to_curr_loc[0],
+                    obstacle_map_clean,
+                    text_embed_shape,
+                )
             )
 
         else:
             best_path_curr, best_path_vals_curr, val_with_part, val_without_part = (
                 self.get_best_path_instruction(
-                    instruction, paths, np.array([0.0, 0.0]).reshape(1, 2)
+                    instruction,
+                    paths,
+                    np.array([0.0, 0.0]).reshape(1, 2),
+                    obstacle_map_clean,
+                    text_embed_shape,
                 )
             )
             val_without_part = (

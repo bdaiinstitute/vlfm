@@ -1,8 +1,9 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
 from argparse import Namespace
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
+import cv2
 import numpy as np
 import torch
 from scipy.ndimage import binary_dilation
@@ -42,6 +43,9 @@ class VLPathSelector:
         self._limit_waypoint_radius = options.similarity_calc.limit_waypoint_radius
         self._waypoints_radius_limit = options.similarity_calc.waypoints_radius_limit
 
+        self._enable_shape_sim = options.similarity_calc.enable_shape_sim
+        self._shape_sim_weight = options.similarity_calc.shape_sim_weight
+
     def reset(self) -> None:
         self._cur_path_val = 0.0
         self._cur_path_len = 0
@@ -77,6 +81,47 @@ class VLPathSelector:
                     value = c_similarity[peak_i]
 
         return value, c_similarity, peak_i
+
+    def get_similarity_shape(
+        self, path: np.ndarray, text_embed: torch.tensor, obstacle_map_clean: np.ndarray
+    ) -> float:
+        obstacle_map_path = obstacle_map_clean.copy()
+
+        assert (
+            self._vl_map._obstacle_map is not None
+        ), "Obstacle map cannot be None while using the shape similarity!"
+
+        obstacle_map = self._vl_map._obstacle_map._traj_vis.draw_gt_trajectory(
+            obstacle_map_path, path
+        )
+
+        img_embed = self._vl_map._vl_model.get_image_embedding(obstacle_map)
+
+        return self._vl_map._vl_model.get_similarity(img_embed, text_embed)
+
+    def get_obstacle_map_clean(self) -> np.ndarray:
+        assert (
+            self._vl_map._obstacle_map is not None
+        ), "Obstacle map cannot be None while getting the obstacle map!"
+
+        obstacle_map_clean = (
+            np.ones((*self._vl_map._obstacle_map._map.shape[:2], 3), dtype=np.uint8)
+            * 255
+        )
+        # Draw explored area in light green
+        obstacle_map_clean[self._vl_map._obstacle_map.explored_area == 1] = (
+            200,
+            255,
+            200,
+        )
+        # Draw unnavigable areas in gray
+        obstacle_map_clean[self._vl_map._obstacle_map._navigable_map == 0] = (
+            self._vl_map._obstacle_map.radius_padding_color
+        )
+        # Draw obstacles in black
+        obstacle_map_clean[self._vl_map._obstacle_map._map == 1] = (0, 0, 0)
+        obstacle_map_clean = cv2.flip(obstacle_map_clean, 0)
+        return obstacle_map_clean
 
     def get_similarity(
         self,
@@ -154,6 +199,8 @@ class VLPathSelector:
         instruction: str,
         paths: List[np.ndarray],
         path_to_curr_loc: np.ndarray,
+        obstacle_map_clean: Optional[np.ndarray] = None,
+        text_embed_shape: Optional[torch.tensor] = None,
     ) -> Tuple[np.ndarray, np.ndarray, float, float]:
         """Returns best path, goal, waypoint for local planner, value for path"""
         # Get value for previous part
@@ -174,6 +221,26 @@ class VLPathSelector:
             value, total_value, peak_i = self.get_path_value_main_loop(
                 full_path, instruction
             )
+
+            if self._enable_shape_sim:
+                assert not (
+                    (obstacle_map_clean is None) or (text_embed_shape is None)
+                ), (
+                    "Need to pass obstacle_map_clean and text_embed_shape into"
+                    " get_best_path_instruction when using shape similarity!"
+                )
+                value_s = self.get_similarity_shape(
+                    path, text_embed_shape, obstacle_map_clean
+                )
+
+                value = (
+                    value * (1 - self._shape_sim_weight)
+                    + value_s * self._shape_sim_weight
+                )
+                total_value = (
+                    total_value * (1 - self._shape_sim_weight)
+                    + value_s * self._shape_sim_weight
+                )
 
             # Update
             if value > max_value:

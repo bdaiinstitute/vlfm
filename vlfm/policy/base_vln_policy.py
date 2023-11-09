@@ -242,7 +242,7 @@ class BaseVLNPolicy(BasePolicy):
 
     def _gtlocalnav(self, goal: np.ndarray, stop: bool = False) -> Tensor:
         assert self.envs is not None, "Trying to use gt paths without setting envs"
-        action = self.envs.call(["get_gt_path_action"], [{"goal": goal}])
+        action = self.envs.call(["get_gt_path_action"], [{"goal": goal}])[0]
 
         if action.item() == self._stop_action.item():
             print("Pointnav tried to stop, choosing random action!")

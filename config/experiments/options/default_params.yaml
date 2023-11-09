@@ -84,6 +84,9 @@ habitat_baselines:
           direction_waypoints_dist: 3.0
           direction_waypoints_n: 8
 
+          enable_shape_sim: True
+          shape_sim_weight: 0.5
+
         multiresolution:
           path_weight_path: 1.0
           path_weight_sentence: 0.6

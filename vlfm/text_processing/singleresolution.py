@@ -68,6 +68,21 @@ class VLPathSelectorSR(VLPathSelector):
             print("NO PATHS GENERATED!")
             return None, None, False
 
+        if self._enable_shape_sim:
+            caption = (
+                "Map showing the path (in pink) that you'd take to follow this"
+                f" instruction: {cur_instruct}"
+            )
+            if caption in self._cached_text_embeddings.keys():
+                text_embed_shape = self._cached_text_embeddings[caption]
+            else:
+                text_embed_shape = self._vl_map._vl_model.get_text_embedding(caption)
+                self._cached_text_embeddings[caption] = text_embed_shape
+            obstacle_map_clean = self.get_obstacle_map_clean()
+        else:
+            obstacle_map_clean = None
+            text_embed_shape = None
+
         if cur_instruct in self._points_started_instructions.keys():
             path_to_curr_loc = self.generate_paths(
                 self._points_started_instructions[cur_instruct],
@@ -81,12 +96,22 @@ class VLPathSelectorSR(VLPathSelector):
 
         if len(path_to_curr_loc) > 0:
             best_path_curr, best_path_vals_curr, val_with_part, val_without_part = (
-                self.get_best_path_instruction(cur_instruct, paths, path_to_curr_loc[0])
+                self.get_best_path_instruction(
+                    cur_instruct,
+                    paths,
+                    path_to_curr_loc[0],
+                    obstacle_map_clean,
+                    text_embed_shape,
+                )
             )
         else:
             best_path_curr, best_path_vals_curr, val_with_part, val_without_part = (
                 self.get_best_path_instruction(
-                    cur_instruct, paths, np.array([0.0, 0.0]).reshape(1, 2)
+                    cur_instruct,
+                    paths,
+                    np.array([0.0, 0.0]).reshape(1, 2),
+                    obstacle_map_clean,
+                    text_embed_shape,
                 )
             )
             val_without_part = (
@@ -131,9 +156,26 @@ class VLPathSelectorSR(VLPathSelector):
             return path_to_best, best_path_vals_curr, should_stop
 
         else:
+            if self._enable_shape_sim:
+                caption = (
+                    "Map showing the path (in pink) that you'd take to follow this"
+                    f" instruction: {next_instruct}"
+                )
+                if caption in self._cached_text_embeddings.keys():
+                    text_embed_shape = self._cached_text_embeddings[caption]
+                else:
+                    text_embed_shape = self._vl_map._vl_model.get_text_embedding(
+                        caption
+                    )
+                    self._cached_text_embeddings[caption] = text_embed_shape
+
             best_path_next, best_path_vals_next, max_value_next, _ = (
                 self.get_best_path_instruction(
-                    next_instruct, paths, np.array([0.0, 0.0]).reshape(1, 2)
+                    next_instruct,
+                    paths,
+                    np.array([0.0, 0.0]).reshape(1, 2),
+                    obstacle_map_clean,
+                    text_embed_shape,
                 )
             )
 
