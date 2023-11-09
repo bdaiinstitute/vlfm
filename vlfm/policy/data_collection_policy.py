@@ -50,6 +50,7 @@ class DataCollectionPolicy(BaseVLNPolicy):
         os.makedirs(f"{self.img_save_folder}", exist_ok=True)
 
         self.episode_counter = 0
+        self.start_ep = True
 
     def _reset(self) -> None:
         super()._reset()
@@ -64,6 +65,7 @@ class DataCollectionPolicy(BaseVLNPolicy):
             self.stair = None
 
         self.episode_counter += 1
+        self.start_ep = True
 
     def act(
         self,
@@ -87,7 +89,7 @@ class DataCollectionPolicy(BaseVLNPolicy):
         return [instruction]
 
     def _plan(self) -> Tuple[np.ndarray, bool]:
-        if self._num_steps % self.save_freq:
+        if not (self._num_steps % self.save_freq):
             self.save_data()
 
         assert (
@@ -104,15 +106,15 @@ class DataCollectionPolicy(BaseVLNPolicy):
         assert self._vl_map._obstacle_map is not None
 
         fd_n = f"{self.img_save_folder}/{self.episode_counter:04}"
-        os.makedirs(fd_n, exist_ok=True)
-        file_log = open(f"{fd_n}/instruction.txt", "w")
-        file_log.write(self._instruction)
-        file_log.close()
 
-        os.makedirs(f"{fd_n}/gt_traj_world_coord/", exist_ok=True)
-        os.makedirs(f"{fd_n}/gt_traj_im/", exist_ok=True)
-        os.makedirs(f"{fd_n}/gt_traj_np/", exist_ok=True)
-        os.makedirs(f"{fd_n}/gt_embeddings/", exist_ok=True)
+        if self.start_ep:
+            os.makedirs(fd_n, exist_ok=True)
+            file_log = open(f"{fd_n}/instruction.txt", "w")
+            file_log.write(self._instruction)
+            file_log.close()
+
+            os.makedirs(f"{fd_n}/gt_traj_im/", exist_ok=True)
+            os.makedirs(f"{fd_n}/gt_embeddings/", exist_ok=True)
 
         obstacle_map_clean = (
             np.ones((*self._vl_map._obstacle_map._map.shape[:2], 3), dtype=np.uint8)
@@ -126,9 +128,9 @@ class DataCollectionPolicy(BaseVLNPolicy):
         obstacle_map_clean[self._vl_map._obstacle_map._map == 1] = (0, 0, 0)
         obstacle_map_clean = cv2.flip(obstacle_map_clean, 0)
 
-        if self.gt_path_world_coord is not None:
+        if self.start_ep and (self.gt_path_world_coord is not None):
             np.save(
-                f"{fd_n}/gt_traj_world_coord/{self._num_steps:03}.npy",
+                f"{fd_n}/gt_traj_world_coord.npy",
                 self.gt_path_world_coord,
             )
 
@@ -139,13 +141,15 @@ class DataCollectionPolicy(BaseVLNPolicy):
             )
 
             cv2.imwrite(f"{fd_n}/gt_traj_im/{self._num_steps:03}.png", obstacle_map_gt)
-            np.save(f"{fd_n}/gt_traj_np/{self._num_steps:03}.npy", self.gt_path_for_viz)
+            if self.start_ep:
+                np.save(f"{fd_n}/gt_traj_np.npy", self.gt_path_for_viz)
 
             embeddings_path = self._vl_map.get_embeddings_path(self.gt_path_for_viz)
             np.save(
                 f"{fd_n}/gt_embeddings/{self._num_steps:03}.npy",
                 torch.mean(embeddings_path, dim=0).cpu().numpy(),
             )
+        self.start_ep = False
 
     def _update_vl_map(self) -> None:
         for rgb, depth, tf, min_depth, max_depth, fov in self._observations_cache[
