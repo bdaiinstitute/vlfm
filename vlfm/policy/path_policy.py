@@ -196,13 +196,6 @@ class BasePathPolicy(BaseVLNPolicy):
                 replan = True
 
         # Work out if end goal is on an obstacle, if so replan:
-        if self._vl_map._obstacle_map is not None:
-            occ_map = 1 - self._vl_map._obstacle_map._navigable_map
-
-            occ_map = np.flipud(occ_map)
-        else:
-            raise Exception("ObstacleMap for VLFMap cannot be none when using paths!")
-
         if len(self._path_to_follow) > 0:
             if self._vl_map.is_on_obstacle(
                 np.array(self._path_to_follow[len(self._path_to_follow) - 1])

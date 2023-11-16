@@ -272,7 +272,7 @@ class VLPathSelector:
             else:
                 if len(path_to_curr_loc) > 0:
                     path_to_best = np.append(
-                        np.flip(path_to_curr_loc, 0), best_path_curr[1:, :], axis=0
+                        np.flip(path_to_curr_loc[0], 0), best_path_curr[1:, :], axis=0
                     )
                 else:
                     path_to_best = best_path_curr[-1, :].reshape(1, 2)

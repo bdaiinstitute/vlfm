@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import cv2
 import numpy as np
 import torch
+from scipy.ndimage import binary_dilation
 
 from vlfm.mapping.base_map import BaseMap
 from vlfm.mapping.obstacle_map import ObstacleMap
@@ -18,8 +19,6 @@ from vlfm.utils.img_utils import (
 )
 from vlfm.vlm.blip2_unimodal import BLIP2unimodal
 from vlfm.vlm.vl_model import BaseVL
-
-# from scipy.ndimage import binary_dilation
 
 
 class Stair:
@@ -553,11 +552,11 @@ class VLMap(BaseMap):
 
     def is_on_obstacle(self, xy: np.ndarray) -> bool:
         if self._obstacle_map is not None:
-            occ_map = 1 - self._obstacle_map._navigable_map
-            # explored_area = binary_dilation(
-            #     self._vl_map._obstacle_map.explored_area, iterations=10
-            # )
-            # occ_map = 1 - (self._vl_map._obstacle_map._navigable_map * explored_area)
+            # occ_map = 1 - self._obstacle_map._navigable_map
+            explored_area = binary_dilation(
+                self._obstacle_map.explored_area, iterations=10
+            )
+            occ_map = 1 - (self._obstacle_map._navigable_map * explored_area)
 
             occ_map = np.flipud(occ_map)
         else:

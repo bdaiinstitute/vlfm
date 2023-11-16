@@ -134,14 +134,14 @@ class VLFMap(VLMap):
         """Extracts the image embeddings from the map at the points in the given path"""
         px = self._xy_to_px(path)
         if use_radius:
-            radius = get_agent_radius_in_px(self.pixels_per_meter)
+            radius = get_agent_radius_in_px(self.pixels_per_meter) * 3
 
             image_embeddings = torch.zeros(
                 px.shape[0], self._feat_channels, device=self.device
             )
             for i in range(px.shape[0]):
                 image_embeddings[i, :] = self.embedding_value_within_radius(
-                    px[i, [1, 0]], radius=radius
+                    px[i, [1, 0]], radius=radius, reduction="mean"
                 )
 
         else:

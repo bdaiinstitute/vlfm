@@ -221,6 +221,25 @@ class VLPathSelectorMR(VLPathSelector):
 
         return value, total_value, peak_i
 
+    def make_instruction_tree(self, instruction: str) -> None:
+        # print("INSTRUCTION: ", instruction)
+        self.instruction_tree = InstructionTree(instruction, TextType.INSTRUCTION)
+        sentences = parse_instruction(instruction, split_strs=["\r\n", "\n", "."])
+        # print("SENTENCES: ", sentences)
+        for sentence_s in sentences:
+            sentence_it = InstructionTree(sentence_s, TextType.SENTENCE)
+            parts = parse_instruction(sentence_s, split_strs=[",", ";"])
+            # print("PARTS: ", parts)
+            for part_s in parts:
+                part_it = InstructionTree(part_s, TextType.PART)
+                words = parse_instruction(part_s, split_strs=[" "])
+                # print("WORDS: ", words)
+                for word in words:
+                    word_it = InstructionTree(word, TextType.WORD)
+                    part_it.add_child(word_it)
+                sentence_it.add_child(part_it)
+            self.instruction_tree.add_child(sentence_it)
+
     def get_goal_for_instruction(
         self,
         agent_pos: np.ndarray,
@@ -247,23 +266,7 @@ class VLPathSelectorMR(VLPathSelector):
             and whether to start using the next instruction (or stop if no next)
         """
         if self.instruction_tree is None:
-            # print("INSTRUCTION: ", instruction)
-            self.instruction_tree = InstructionTree(instruction, TextType.INSTRUCTION)
-            sentences = parse_instruction(instruction, split_strs=["\r\n", "\n", "."])
-            # print("SENTENCES: ", sentences)
-            for sentence_s in sentences:
-                sentence_it = InstructionTree(sentence_s, TextType.SENTENCE)
-                parts = parse_instruction(sentence_s, split_strs=[",", ";"])
-                # print("PARTS: ", parts)
-                for part_s in parts:
-                    part_it = InstructionTree(part_s, TextType.PART)
-                    words = parse_instruction(part_s, split_strs=[" "])
-                    # print("WORDS: ", words)
-                    for word in words:
-                        word_it = InstructionTree(word, TextType.WORD)
-                        part_it.add_child(word_it)
-                    sentence_it.add_child(part_it)
-                self.instruction_tree.add_child(sentence_it)
+            self.make_instruction_tree(instruction)
 
         if self._store_points_on_paths and (self._extra_waypoints.size) > 0:
             # TODO: remove any extra waypoints that are on obstacles
