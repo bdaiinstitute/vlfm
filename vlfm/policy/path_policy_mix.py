@@ -201,6 +201,8 @@ class PathPolicyMix(BasePathPolicy):
                 next_instruct = ""
                 last_instruction = True
 
+            # TODO: return_full_path is from current pos to goal not the chosen path...
+            # Need to fix this!!
             path, path_vals, switch_or_stop = (
                 self._path_selector.get_goal_for_instruction(
                     robot_xy,
@@ -208,7 +210,7 @@ class PathPolicyMix(BasePathPolicy):
                     frontiers,
                     cur_instruct,
                     next_instruct,
-                    return_full_path=True,  # self.args.use_path_waypoints,
+                    return_chosen_path=True,
                 )
             )
 
@@ -239,7 +241,7 @@ class PathPolicyMix(BasePathPolicy):
                 self._path_vals = path_vals
             else:
                 self._path_to_follow = path[-1, :].reshape(1, 2)
-                self._path_vals = path_vals[-1]
+                self._path_vals = path_vals
 
             self._cur_path_idx = 0
 

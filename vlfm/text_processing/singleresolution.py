@@ -37,7 +37,8 @@ class VLPathSelectorSR(VLPathSelector):
         waypoints: np.ndarray,
         cur_instruct: str,
         next_instruct: str,
-        return_full_path: bool,
+        return_full_path: bool = False,
+        return_chosen_path: bool = False,
     ) -> Tuple[np.ndarray, np.ndarray, bool]:
         """Selects the best waypoint from the given list of waypoints.
 
@@ -151,6 +152,7 @@ class VLPathSelectorSR(VLPathSelector):
                 path_to_curr_loc,
                 return_full_path,
                 not should_stop,
+                return_chosen_path,
             )
 
             return path_to_best, best_path_vals_curr, should_stop
@@ -204,6 +206,7 @@ class VLPathSelectorSR(VLPathSelector):
 
             if switch:
                 self._points_started_instructions[next_instruct] = agent_pos
+
                 path_to_best, best_path_vals_next = self.get_path_to_return(
                     agent_pos,
                     best_path_next,
@@ -211,6 +214,7 @@ class VLPathSelectorSR(VLPathSelector):
                     path_to_curr_loc,
                     return_full_path,
                     True,
+                    return_chosen_path,
                 )
                 return path_to_best, best_path_vals_next, True
             else:
@@ -221,5 +225,6 @@ class VLPathSelectorSR(VLPathSelector):
                     path_to_curr_loc,
                     return_full_path,
                     True,
+                    return_chosen_path,
                 )
                 return path_to_best, best_path_vals_curr, False

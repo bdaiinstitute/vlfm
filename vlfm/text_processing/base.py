@@ -260,6 +260,7 @@ class VLPathSelector:
         path_to_curr_loc: np.ndarray,
         return_full_path: bool,
         vis_path: bool,
+        return_chosen_path: bool = False,
     ) -> Tuple[np.ndarray, np.ndarray]:
         if return_full_path:
             path_to_best_list = self.generate_paths(
@@ -285,6 +286,14 @@ class VLPathSelector:
             best_path_vals_curr = best_path_vals_curr[-1]
             if vis_path:
                 self._vl_map.set_paths_for_viz([best_path_curr], [(255, 0, 0)])
+
+        if return_chosen_path:
+            if len(path_to_curr_loc) > 0:
+                path_to_best = np.append(
+                    path_to_curr_loc[0], best_path_curr[1:, :], axis=0
+                )
+            else:
+                path_to_best = best_path_curr
 
         return path_to_best, best_path_vals_curr
 
