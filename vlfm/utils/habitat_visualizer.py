@@ -23,6 +23,8 @@ class HabitatVis:
         self.maps: List[np.ndarray] = []
         self.vis_maps: List[List[np.ndarray]] = []
         self.texts: List[List[str]] = []
+        self.full_instructions: List[str] = []
+        self.highlights: List[str] = []
         self.using_vis_maps = False
         self.using_annotated_rgb = False
         self.using_annotated_depth = False
@@ -33,6 +35,8 @@ class HabitatVis:
         self.maps = []
         self.vis_maps = []
         self.texts = []
+        self.full_instructions = []
+        self.highlights = []
         self.using_annotated_rgb = False
         self.using_annotated_depth = False
 
@@ -87,6 +91,13 @@ class HabitatVis:
             for text_key in policy_info[0].get("render_below_images", [])
             if text_key in policy_info[0]
         ]
+
+        if "instruction" in policy_info[0]:
+            self.full_instructions += [policy_info[0]["instruction"]]
+
+        if "current instruction part" in policy_info[0]:
+            self.highlights += [policy_info[0]["current instruction part"]]
+
         self.texts.append(text)
 
     def flush_frames(self, failure_cause: str) -> List[np.ndarray]:
@@ -110,8 +121,13 @@ class HabitatVis:
                 self.vis_maps[i],
                 self.texts[i],
             )
+            frame = add_text_to_image(
+                frame, self.full_instructions[i], top=True, highlight=self.highlights[i]
+            )
+
             failure_cause_text = "Failure cause: " + failure_cause
             frame = add_text_to_image(frame, failure_cause_text, top=True)
+
             frames.append(frame)
 
         if len(frames) > 0:

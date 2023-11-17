@@ -3,10 +3,11 @@
 from typing import Any
 
 import numpy as np
+import torch
 
 
 class BaseVL:
-    """BLIP 2 image and text embedding seperate."""
+    """image and text embedding seperate."""
 
     def __init__(
         self,
@@ -15,18 +16,18 @@ class BaseVL:
     ) -> None:
         pass
 
-    def get_image_embedding(self, image: np.ndarray) -> np.ndarray:
+    def get_image_embedding(self, image: np.ndarray) -> torch.tensor:
         raise NotImplementedError
 
-    def get_text_embedding(self, txt: str) -> np.ndarray:
+    def get_text_embedding(self, txt: str) -> torch.tensor:
         raise NotImplementedError
 
     def get_similarity(
-        self, image_embedding: np.ndarray, txt_embedding: np.ndarray
+        self, image_embedding: torch.tensor, txt_embedding: torch.tensor
     ) -> float:
         raise NotImplementedError
 
     def get_similarity_batch(
-        self, image_embeddings: np.ndarray, txt_embedding: np.ndarray
-    ) -> float:
+        self, image_embeddings: torch.tensor, txt_embedding: torch.tensor
+    ) -> np.ndarray:
         raise NotImplementedError

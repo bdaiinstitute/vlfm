@@ -267,7 +267,9 @@ class BasePathPolicy(BaseVLNPolicy):
             markers.append((self._last_goal, marker_kwargs))
 
         policy_info["vl_map"] = cv2.cvtColor(
-            self._vl_map.visualize(markers, gt_traj=self.gt_path_for_viz),
+            self._vl_map.visualize(
+                markers, gt_traj=self.gt_path_for_viz, instruction=self._instruction
+            ),
             cv2.COLOR_BGR2RGB,
         )
 

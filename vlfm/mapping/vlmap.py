@@ -1,5 +1,6 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
+import itertools
 import os
 import warnings
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -18,6 +19,7 @@ from vlfm.utils.img_utils import (
     rotate_image,
 )
 from vlfm.vlm.blip2_unimodal import BLIP2unimodal
+from vlfm.vlm.clip import CLIP
 from vlfm.vlm.vl_model import BaseVL
 
 
@@ -77,9 +79,9 @@ class VLMap(BaseMap):
             device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
 
         self.vl_model_type = vl_model_type
-        if vl_model_type == "BLIP2":
+        if vl_model_type == "BLIP2" or vl_model_type == "BLIP2_withcrop":
             feats_sz = [32, 256]
-        elif vl_model_type == "CLIP":
+        elif vl_model_type == "CLIP" or vl_model_type == "CLIP_withcrop":
             feats_sz = [512]
         else:
             raise Exception(f"Invalid VL model type {vl_model_type}")
@@ -123,8 +125,10 @@ class VLMap(BaseMap):
         #     port=int(os.environ.get("VLMODEL_PORT", "12182"))
         # ) #Server not currently working properly because of the datatypes
 
-        if self.vl_model_type == "BLIP2":
-            self._vl_model = BLIP2unimodal()
+        if self.vl_model_type == "BLIP2" or self.vl_model_type == "BLIP2_withcrop":
+            self._vl_model: BaseVL = BLIP2unimodal()
+        elif self.vl_model_type == "CLIP" or self.vl_model_type == "CLIP_withcrop":
+            self._vl_model = CLIP()
         else:
             raise Exception(f"Invalid VL model type {self.vl_model_type}")
 
@@ -143,6 +147,15 @@ class VLMap(BaseMap):
             self._stair_dict = {}
             self._map_per_level = {}
             self._current_floor = 0
+
+    def get_value_map(self, text: str) -> np.ndarray:
+        text_embed = self._vl_model.get_text_embedding(text)
+        return self._vl_model.get_similarity_batch(
+            self._vl_map.reshape(
+                [self._vl_map.shape[0] * self._vl_map.shape[1]] + list(self._feats_sz)
+            ),
+            text_embed,
+        ).reshape([self._vl_map.shape[0], self._vl_map.shape[1]])
 
     def has_stairs(
         self,
@@ -219,6 +232,67 @@ class VLMap(BaseMap):
 
         return None
 
+    def update_with_crop(
+        self,
+        image: np.ndarray,
+        depth: np.ndarray,
+        tf_camera_to_episodic: np.ndarray,
+        min_depth: float,
+        max_depth: float,
+        fov: float,
+        this_iter: int = 1,
+        total_iter: int = 1,
+    ) -> None:
+        width, height = image.shape[1], image.shape[0]
+
+        n_h = 3
+        n_w = 3
+        lefts = [0] * n_h + [
+            int(width * (i + 1) / n_w)
+            for i in itertools.chain.from_iterable(
+                itertools.repeat(x, n_h) for x in range(n_w - 1)
+            )
+        ]
+        rights = [
+            int(width * (i + 1) / n_w)
+            for i in itertools.chain.from_iterable(
+                itertools.repeat(x, n_h) for x in range(n_w - 1)
+            )
+        ] + [width] * n_h
+        tops = [int(height * i / n_h) for i in range(n_h)] * n_w
+        bottoms = [int(height * (i + 1) / n_h) for i in range(n_h)] * n_w
+
+        for i in range(len(lefts)):
+            image_crop = image[tops[i] : bottoms[i], lefts[i] : rights[i], :]
+            image_embedding = self._vl_model.get_image_embedding(image_crop)
+
+            curr_map = self._localize_new_data_crop(
+                depth,
+                tf_camera_to_episodic,
+                min_depth,
+                max_depth,
+                fov,
+                lefts[i],
+                rights[i],
+                tops[i],
+                bottoms[i],
+            )
+
+            # Fuse the new data with the existing data
+            self._fuse_new_data(curr_map, image_embedding.flatten())
+
+            if this_iter < total_iter:
+                self.update_with_crop(
+                    image_crop,
+                    depth,
+                    tf_camera_to_episodic,
+                    min_depth,
+                    max_depth,
+                    fov,
+                    this_iter + 1,
+                    total_iter,
+                )
+
     def update_map(
         self,
         image: np.ndarray,
@@ -251,6 +325,15 @@ class VLMap(BaseMap):
             depth, tf_camera_to_episodic, min_depth, max_depth, fov
         )
 
+        # Fuse the new data with the existing data
+        self._fuse_new_data(curr_map, image_embedding.flatten())
+
+        if "withcrop" in self.vl_model_type:
+            # Repeat for each crop, but need to keep the confidence from original depth image
+            self.update_with_crop(
+                image, depth, tf_camera_to_episodic, min_depth, max_depth, fov
+            )
+
         if self.enable_stairs:
             # Stairs check
             if self.has_stairs(image_embedding):
@@ -274,21 +357,24 @@ class VLMap(BaseMap):
                             )
                         self._stair_dict[px] = stair
 
-        # Fuse the new data with the existing data
-        self._fuse_new_data(curr_map, image_embedding.flatten())
-
     def visualize(
         self,
         markers: Optional[List[Tuple[np.ndarray, Dict[str, Any]]]] = None,
         obstacle_map: Optional["ObstacleMap"] = None,  # type: ignore # noqa: F821
         gt_traj: Optional[np.ndarray] = None,
+        instruction: str = "",
     ) -> np.ndarray:
         """Return an image representation of the map"""
-        # Visualize on top of confidence
-        # (as we don't have a good way of visualizing the embeddings)
+
+        if instruction == "":
+            # Visualize on top of confidence
+            # (as we don't have a good way of visualizing the embeddings)
+            reduced_map = self._map.copy()
+        else:
+            reduced_map = self.get_value_map(instruction)
 
         # Must negate the y values to get the correct orientation
-        reduced_map = self._map.copy()
+
         if obstacle_map is not None:
             reduced_map[obstacle_map.explored_area == 0] = 0
         map_img = np.flipud(reduced_map)
@@ -314,6 +400,100 @@ class VLMap(BaseMap):
                 map_img = self._traj_vis.draw_circle(map_img, pos, **marker_kwargs)
 
         return map_img
+
+    def _process_local_data_crop(
+        self,
+        depth: np.ndarray,
+        fov: float,
+        min_depth: float,
+        max_depth: float,
+        left: int,
+        right: int,
+        top: int,
+        bottom: int,
+    ) -> np.ndarray:
+        """Using the FOV and depth, return the visible portion of the FOV.
+
+        Args:
+            depth: The depth image to use for determining the visible portion of the
+                FOV.
+        Returns:
+            A mask of the visible portion of the FOV.
+        """
+        # Squeeze out the channel dimension if depth is a 3D array
+        if len(depth.shape) == 3:
+            depth = depth.squeeze(2)
+        # Squash depth image into one row with the max depth value for each column
+        depth_row = (
+            np.max(depth[top:bottom, :], axis=0) * (max_depth - min_depth) + min_depth
+        )
+
+        # Create a linspace of the same length as the depth row from -fov/2 to fov/2
+        angles = np.linspace(-fov / 2, fov / 2, len(depth_row))
+
+        # Assign each value in the row with an x, y coordinate depending on 'angles'
+        # and the max depth value for that column
+        x = depth_row[left:right]
+        y = depth_row[left:right] * np.tan(angles[left:right])
+
+        # Get blank cone mask
+        cone_mask = self._get_confidence_mask(fov, max_depth)
+
+        # Convert the x, y coordinates to pixel coordinates
+        x = (x * self.pixels_per_meter + cone_mask.shape[0] / 2).astype(int)
+        y = (y * self.pixels_per_meter + cone_mask.shape[1] / 2).astype(int)
+
+        # Create a contour from the x, y coordinates, with the top left and right
+        # corners of the image as the first two points
+        # TODO: this bit is probably wrong with the crops...
+        last_row = cone_mask.shape[0] - 1
+        last_col = cone_mask.shape[1] - 1
+        start = np.array([[0, last_col]])
+        end = np.array([[last_row, last_col]])
+        contour = np.concatenate((start, np.stack((y, x), axis=1), end), axis=0)
+
+        # Draw the contour onto the cone mask, in filled-in black
+        visible_mask = cv2.drawContours(cone_mask, [contour], -1, 0, -1)  # type: ignore
+
+        return visible_mask
+
+    def _localize_new_data_crop(
+        self,
+        depth: np.ndarray,
+        tf_camera_to_episodic: np.ndarray,
+        min_depth: float,
+        max_depth: float,
+        fov: float,
+        left: int,
+        right: int,
+        top: int,
+        bottom: int,
+    ) -> np.ndarray:
+        # Get new portion of the map
+        curr_data = self._process_local_data_crop(
+            depth, fov, min_depth, max_depth, left, right, top, bottom
+        )
+
+        # Rotate this new data to match the camera's orientation
+        yaw = extract_yaw(tf_camera_to_episodic)
+        curr_data = rotate_image(curr_data, -yaw)
+
+        # Determine where this mask should be overlaid
+        cam_x, cam_y = tf_camera_to_episodic[:2, 3] / tf_camera_to_episodic[3, 3]
+
+        # Convert to pixel units
+        px = int(cam_x * self.pixels_per_meter) + self._episode_pixel_origin[0]
+        py = int(-cam_y * self.pixels_per_meter) + self._episode_pixel_origin[1]
+
+        # Overlay the new data onto the map
+        if 0 <= px < self._map.shape[0] and 0 <= py < self._map.shape[1]:
+            curr_map = np.zeros_like(self._map)
+            curr_map = place_img_in_img(curr_map, curr_data, px, py)
+        else:
+            print("Update would be outside map! Not updating!")
+            curr_map = self._map
+
+        return curr_map
 
     def _process_local_data(
         self, depth: np.ndarray, fov: float, min_depth: float, max_depth: float

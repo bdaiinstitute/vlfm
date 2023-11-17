@@ -213,10 +213,11 @@ class BaseVLNPolicy(BasePolicy):
             "yaw": np.rad2deg(self._observations_cache["robot_heading"]),
             "nav_goal": self._last_goal,
             "stop_called": self._called_stop,
+            "render_below_images": [],
             # don't render these on egocentric images when making videos:
-            "render_below_images": [
-                "instruction",
-            ],
+            # "render_below_images": [
+            #     "instruction",
+            # ],
         }
 
         if not self._visualize:

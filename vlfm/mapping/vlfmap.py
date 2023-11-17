@@ -160,9 +160,10 @@ class VLFMap(VLMap):
         markers: Optional[List[Tuple[np.ndarray, Dict[str, Any]]]] = None,
         obstacle_map: Optional["ObstacleMap"] = None,  # type: ignore # noqa: F821
         gt_traj: Optional[np.ndarray] = None,
+        instruction: str = "",
     ) -> np.ndarray:
         """Return an image representation of the map"""
-        map_img = super().visualize(markers, obstacle_map, gt_traj)
+        map_img = super().visualize(markers, obstacle_map, gt_traj, instruction)
 
         # draw the candidate paths
         # (info about these is a property of the clas not an input)

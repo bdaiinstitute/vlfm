@@ -276,7 +276,9 @@ class PathPolicyMix(BasePathPolicy):
                     )
                     < self.args.replanning.goal_stop_dist
                 ):
-                    # TODO: switch this to go to best goal instead?
+                    if self._best_val_so_far > 0:
+                        self._stop_at_goal = True
+                        return self._best_goal, False
                     print("STOPPING (in planner) because goal is current location")
                     self.why_stop = "Planner chose current location as goal"
                     return robot_xy, True
