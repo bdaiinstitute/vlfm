@@ -57,16 +57,43 @@ class PathPolicyMR(BasePathPolicy):
         print("OUPUT: ", parsed_instruct)
         return parsed_instruct
 
-    def _plan(self) -> Tuple[np.ndarray, bool]:
+    def _plan(self) -> Tuple[np.ndarray, bool, bool]:
         ###Stair logic, just for working out if we need to switch the level on the map
         if self._vl_map.enable_stairs:
             self._stair_preplan_step()
 
-        replan, force_dont_stop, idx_path = self._pre_plan_logic()
-
         robot_xy = self._observations_cache["robot_xy"]
 
         self._pos_since_last += [robot_xy]
+
+        if self._look_at_frontiers:
+            if not (
+                np.array_equal(self.frontiers_at_plan, np.zeros((1, 2)))
+                or len(self.frontiers_at_plan) == 0
+            ):
+                dist = np.sqrt(
+                    np.sum(
+                        np.square(
+                            self.frontiers_at_plan
+                            - np.tile(
+                                robot_xy.reshape(1, 2),
+                                (self.frontiers_at_plan.shape[0], 1),
+                            )
+                        ),
+                        axis=1,
+                    )
+                )
+                if np.min(dist) <= self._frontier_dist_thresh:
+                    # Reached a frontier. Stop and look around!
+                    self._path_to_follow = []
+                    return robot_xy, False, True
+
+        if self._look_at_goal and self._reached_goal:
+            self._path_to_follow = []
+            self._reached_goal = False
+            return robot_xy, False, True
+
+        replan, force_dont_stop, idx_path = self._pre_plan_logic()
 
         ###Path planning
         if replan:
@@ -76,7 +103,7 @@ class PathPolicyMR(BasePathPolicy):
             if np.array_equal(frontiers, np.zeros((1, 2))) or len(frontiers) == 0:
                 print("No frontiers found during exploration, stopping.")
                 self.why_stop = "No frontiers found"
-                return robot_xy, True
+                return robot_xy, True, False
 
             path, path_vals, stop = self._path_selector.get_goal_for_instruction(
                 robot_xy,
@@ -96,7 +123,7 @@ class PathPolicyMR(BasePathPolicy):
                         self._cur_path_idx += 1
                     else:
                         self._cur_path_idx = len(self._path_to_follow) - 1
-                    return self._path_to_follow[self._cur_path_idx], False
+                    return self._path_to_follow[self._cur_path_idx], False, False
                 else:
                     self.times_no_paths += 1
                 if self.times_no_paths > 10:
@@ -105,9 +132,9 @@ class PathPolicyMR(BasePathPolicy):
                         f" {self.times_no_paths} times"
                     )
                     self.why_stop = f"No paths found {self.times_no_paths} times"
-                    return None, True
+                    return None, True, False
                 else:
-                    return None, False
+                    return None, False, False
             else:
                 self.times_no_paths = 0
 
@@ -127,23 +154,23 @@ class PathPolicyMR(BasePathPolicy):
                 ):
                     print("STOPPING (in planner)")
                     self.why_stop = "Path value didn't increase enough"
-                    return robot_xy, True  # stop
+                    return robot_xy, True, False
                 else:
                     print("Forced not to stop!")
 
-            elif (
-                np.sqrt(
-                    np.sum(
-                        np.square(
-                            self._path_to_follow[len(self._path_to_follow) - 1]
-                            - robot_xy
-                        )
-                    )
-                )
-                < self.args.replanning.goal_stop_dist
-            ):
-                print("STOPPING (in planner) because goal is current location")
-                self.why_stop = "Planner chose current location as goal"
-                return robot_xy, True
+            # elif (
+            #     np.sqrt(
+            #         np.sum(
+            #             np.square(
+            #                 self._path_to_follow[len(self._path_to_follow) - 1]
+            #                 - robot_xy
+            #             )
+            #         )
+            #     )
+            #     < self.args.replanning.goal_stop_dist
+            # ):
+            #     print("STOPPING (in planner) because goal is current location")
+            #     self.why_stop = "Planner chose current location as goal"
+            #     return robot_xy, True, False
 
-        return self._path_to_follow[self._cur_path_idx], False
+        return self._path_to_follow[self._cur_path_idx], False, False

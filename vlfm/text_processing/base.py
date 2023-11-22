@@ -30,6 +30,9 @@ class VLPathSelector:
             options.similarity_calc.enable_directional_waypoints
         )
 
+        self._two_stage = options.similarity_calc.two_stage
+        self._two_stage_mode = options.similarity_calc.two_stage_mode
+
         self._cur_path_val = 0.0
         self._cur_path_len = 0
         self.min_dist_goal = min_dist_goal
@@ -61,12 +64,16 @@ class VLPathSelector:
         text_embed: torch.tensor,
         denom: np.ndarray,
         thresh: float = -1.0,
+        use_sum: bool = False,
     ) -> Tuple[float, np.ndarray, int]:
         similarity = self._vl_map._vl_model.get_similarity_batch(
             image_embeddings=image_embeddings, txt_embedding=text_embed
         )
 
-        c_similarity = np.cumsum(similarity) / denom
+        if use_sum:
+            c_similarity = np.cumsum(similarity) / denom
+        else:
+            c_similarity = similarity
         peak_i = np.argmax(c_similarity)
         value = c_similarity[peak_i]
 
@@ -95,7 +102,7 @@ class VLPathSelector:
             obstacle_map_path, path
         )
 
-        img_embed = self._vl_map._vl_model.get_image_embedding(obstacle_map)
+        img_embed = self._vl_map._vl_model.get_image_embedding(obstacle_map, head="img")
 
         return self._vl_map._vl_model.get_similarity(img_embed, text_embed)
 
@@ -138,13 +145,15 @@ class VLPathSelector:
         ]
 
         # Denom that ignores the original zeros
-        denom_l = []
-        denom_i = 1
-        for j in range(image_embeddings.shape[0]):
-            if orig_nz[j]:
-                denom_i += 1
-            denom_l += [denom_i]
-        denom = np.array(denom_l)
+        # denom_l = []
+        # denom_i = 1
+        # for j in range(image_embeddings.shape[0]):
+        #     if orig_nz[j]:
+        #         denom_i += 1
+        #     denom_l += [denom_i]
+        # denom = np.array(denom_l)
+
+        denom = np.arange(image_embeddings.shape[0]) + 1
 
         if method == "":
             method = self.args.similarity_calc.path_similarity_method
@@ -154,12 +163,25 @@ class VLPathSelector:
 
         if method == "average sim":
             return self.similarity_main_loop(
-                image_embeddings, text_embed, denom, thresh=thresh
+                image_embeddings, text_embed, denom, thresh=thresh, use_sum=True
             )
         elif method == "average embeddings":
-            image_embeddings = torch.cumsum(image_embeddings, dim=0) / denom
+            image_embeddings = torch.cumsum(
+                image_embeddings.reshape([-1, self._vl_map._feat_channels]), dim=0
+            ) / torch.tensor(denom, device=image_embeddings.device).reshape(
+                -1, 1
+            ).repeat(
+                1, self._vl_map._feat_channels
+            )
+            image_embeddings = image_embeddings.reshape(
+                [-1] + list(self._vl_map._feats_sz)
+            )
             return self.similarity_main_loop(
-                image_embeddings, text_embed, np.ones(denom.shape), thresh=thresh
+                image_embeddings,
+                text_embed,
+                np.ones(denom.shape),
+                thresh=thresh,
+                use_sum=False,
             )
         elif method == "weighted average embeddings":
             tau = 0.1  # CLIP-Hitchhiker found optimal between 0.05-0.15
@@ -180,10 +202,14 @@ class VLPathSelector:
 
             image_embeddings = image_embeddings * torch.movedim(w.repeat(rep), -1, 0)
 
-            image_embeddings = torch.cumsum(image_embeddings, dim=0)
+            image_embeddings = torch.cumsum(image_embeddings, dim=0) / denom
 
             return self.similarity_main_loop(
-                image_embeddings, text_embed, np.ones(denom.shape), thresh=thresh
+                image_embeddings,
+                text_embed,
+                np.ones(denom.shape),
+                thresh=thresh,
+                use_sum=False,
             )
 
         else:
@@ -201,6 +227,7 @@ class VLPathSelector:
         path_to_curr_loc: np.ndarray,
         obstacle_map_clean: Optional[np.ndarray] = None,
         text_embed_shape: Optional[torch.tensor] = None,
+        stage: int = 1,
     ) -> Tuple[np.ndarray, np.ndarray, float, float]:
         """Returns best path, goal, waypoint for local planner, value for path"""
         # Get value for previous part
@@ -213,13 +240,19 @@ class VLPathSelector:
         best_path = None
         best_path_vals = None
 
+        if self._two_stage:
+            top_vals = np.array([])
+            top_paths = np.array([])
+            top_peak_i = np.array([])
+            total_value_all = 0.0
+
         for i in range(len(paths)):
             path = paths[i]
 
-            full_path = np.append(path_to_curr_loc, path, axis=0)
+            # full_path = np.append(path_to_curr_loc, path, axis=0)
 
             value, total_value, peak_i = self.get_path_value_main_loop(
-                full_path, instruction
+                path, instruction
             )
 
             if self._enable_shape_sim:
@@ -244,11 +277,76 @@ class VLPathSelector:
                     + value_s * self._shape_sim_weight
                 )
 
+            if self._two_stage and (stage == 2):
+                total_value_all += value
+
+            if self._two_stage and (stage == 1) and (value >= 0.8 * max_value):
+                top_vals = np.append(top_vals, [value])
+                top_paths = np.append(
+                    top_paths.reshape(-1, 2), path[-1, :].reshape(-1, 2), axis=0
+                )
+                top_peak_i = np.append(top_peak_i, [peak_i])
+
             # Update
             if value > max_value:
                 max_value = value
                 best_path = path[: peak_i + 1, :]
                 best_path_vals = total_value[: peak_i + 1]
+
+        if self._two_stage and (stage == 2):
+            return (
+                best_path,
+                np.array([total_value_all / len(paths)]),
+                max_value / len(paths),
+                value_prev_path,
+            )
+
+        if self._two_stage and (stage == 1):
+            # get all endpoints above thresh of final max_value, with no repeats
+            waypoints = top_paths[top_vals >= 0.8 * max_value, :]
+            waypoints, counts = np.unique(waypoints, axis=0, return_counts=True)
+
+            max_av_val = 0.0
+            best_path = np.array([])
+
+            if self._two_stage_mode == "a_average_val":
+                # generate new paths to endpoints
+                agent_pos = path_to_curr_loc[-1, :]  # path here should end in agent_pos
+
+                for i in range(waypoints.shape[0]):
+                    new_paths = self.generate_paths(
+                        agent_pos, waypoints[i, :].reshape(1, 2), n_paths=10
+                    )
+                    best_path_wp, _, val_wp, _ = self.get_best_path_instruction(
+                        instruction,
+                        new_paths,
+                        path_to_curr_loc,
+                        obstacle_map_clean,
+                        text_embed_shape,
+                        stage=2,
+                    )
+
+                    if val_wp > max_av_val:
+                        max_av_val = val_wp
+                        best_path = best_path_wp
+
+            elif self._two_stage_mode == "b_most_paths":
+                max_count = np.max(counts)
+                idx = np.nonzero(counts == max_count)[0]
+
+                for i in idx:
+                    wp = waypoints[i].reshape(1, 2)
+                    idx_orig = np.nonzero(
+                        (top_paths[:, 0] == wp[0, 0]) + (top_paths[:, 1] == wp[0, 1])
+                    )[0]
+                    vals_wp = top_vals[idx_orig]
+
+                    if np.mean(vals_wp) > max_av_val:
+                        max_av_val = np.mean(vals_wp)
+                        best_i = np.argmax(vals_wp)
+                        best_path = top_paths[: top_peak_i[best_i] + 1, :]
+
+            return best_path, np.array([max_av_val]), max_av_val, value_prev_path
 
         return best_path, best_path_vals, max_value, value_prev_path
 
@@ -298,7 +396,11 @@ class VLPathSelector:
         return path_to_best, best_path_vals_curr
 
     def generate_paths(
-        self, agent_pos: np.ndarray, waypoints: np.ndarray, one_path: bool = False
+        self,
+        agent_pos: np.ndarray,
+        waypoints: np.ndarray,
+        one_path: bool = False,
+        n_paths: int = 4,
     ) -> List[np.ndarray]:
         # Only use waypoints that are inside the radius limit
         if self._limit_waypoint_radius and (not one_path):
@@ -342,6 +444,7 @@ class VLPathSelector:
             robot_radius_px,
             method="both",
             one_path=one_path,
+            n_paths=n_paths,
         )
 
         if len(paths_px) == 0:

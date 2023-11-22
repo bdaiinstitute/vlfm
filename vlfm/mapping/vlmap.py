@@ -61,6 +61,7 @@ class VLMap(BaseMap):
         obstacle_map: Optional["ObstacleMap"] = None,
         device: Optional[Any] = None,
         enable_stairs: bool = True,
+        use_adapter: bool = False,
     ) -> None:
         """
         Args:
@@ -107,6 +108,7 @@ class VLMap(BaseMap):
         if os.environ.get("MAP_FUSION_TYPE", "") != "":
             self._fusion_type = os.environ["MAP_FUSION_TYPE"]
 
+        self.use_adapter = use_adapter
         self.vl_model = BaseVL()
         self.set_vl_model()  # seperate function to make easier to try different versions
 
@@ -126,9 +128,9 @@ class VLMap(BaseMap):
         # ) #Server not currently working properly because of the datatypes
 
         if self.vl_model_type == "BLIP2" or self.vl_model_type == "BLIP2_withcrop":
-            self._vl_model: BaseVL = BLIP2unimodal()
+            self._vl_model: BaseVL = BLIP2unimodal(use_adapter=self.use_adapter)
         elif self.vl_model_type == "CLIP" or self.vl_model_type == "CLIP_withcrop":
-            self._vl_model = CLIP()
+            self._vl_model = CLIP(use_adapter=self.use_adapter)
         else:
             raise Exception(f"Invalid VL model type {self.vl_model_type}")
 
@@ -149,7 +151,7 @@ class VLMap(BaseMap):
             self._current_floor = 0
 
     def get_value_map(self, text: str) -> np.ndarray:
-        text_embed = self._vl_model.get_text_embedding(text)
+        text_embed = self._vl_model.get_text_embedding(text, head="embed")
         return self._vl_model.get_similarity_batch(
             self._vl_map.reshape(
                 [self._vl_map.shape[0] * self._vl_map.shape[1]] + list(self._feats_sz)
@@ -167,7 +169,7 @@ class VLMap(BaseMap):
         if len(self.stair_text_cache) == 0:
             self.stair_text_cache = []
             for lb in labels:
-                text_embed = self._vl_model.get_text_embedding(lb)
+                text_embed = self._vl_model.get_text_embedding(lb, head="embed")
                 self.stair_text_cache += [text_embed]
 
         similarities = np.array(
@@ -194,7 +196,7 @@ class VLMap(BaseMap):
         if len(self.upstair_text_cache) == 0:
             self.upstair_text_cache = []
             for lb in labels:
-                text_embed = self._vl_model.get_text_embedding(lb)
+                text_embed = self._vl_model.get_text_embedding(lb, head="embed")
                 self.upstair_text_cache += [text_embed]
 
         similarities = np.array(
@@ -264,7 +266,9 @@ class VLMap(BaseMap):
 
         for i in range(len(lefts)):
             image_crop = image[tops[i] : bottoms[i], lefts[i] : rights[i], :]
-            image_embedding = self._vl_model.get_image_embedding(image_crop)
+            image_embedding = self._vl_model.get_image_embedding(
+                image_crop, head="embed"
+            )
 
             curr_map = self._localize_new_data_crop(
                 depth,
@@ -314,7 +318,7 @@ class VLMap(BaseMap):
             max_depth: The maximum depth value in meters.
             fov: The field of view of the camera in RADIANS.
         """
-        image_embedding = self._vl_model.get_image_embedding(image)
+        image_embedding = self._vl_model.get_image_embedding(image, head="embed")
 
         assert image_embedding.shape == self._feats_sz, (
             "Incorrect size of image embedding "

@@ -37,6 +37,7 @@ class TestingPolicy(BaseVLNPolicy):
             size=self.args.map.map_size,
             obstacle_map=self._obstacle_map,
             enable_stairs=self.args.map.enable_stairs,
+            use_adapter=self.args.map.use_adapter,
         )
 
         if self._vl_map.enable_stairs:
@@ -100,7 +101,7 @@ class TestingPolicy(BaseVLNPolicy):
         print("OUPUT: ", parsed_instruct)
         return parsed_instruct
 
-    def _plan(self) -> Tuple[np.ndarray, bool]:
+    def _plan(self) -> Tuple[np.ndarray, bool, bool]:
         assert (
             self.gt_path_for_viz is not None
         ), "Need to set gt_path_for_viz for collecting data!"
@@ -112,7 +113,7 @@ class TestingPolicy(BaseVLNPolicy):
                 # text_embed = self._vl_map._vl_model.get_text_embedding
                 # (start_str + '"' + self._instruction_parts[i] + '"')
                 text_embed = self._vl_map._vl_model.get_text_embedding(
-                    self._instruction_parts[i]
+                    self._instruction_parts[i], head="embed"
                 )
                 self._text_embed_cache += [text_embed]
 
@@ -187,12 +188,23 @@ class TestingPolicy(BaseVLNPolicy):
                 best_val = val
                 self._curr_instruction_idx = i
 
+        if not ((self._num_steps - 24) % 10):
+            ###Evaluate value of chosen_path compared to GT path
+            embeddings_along_path = self._vl_map.get_embeddings_path(chosen_path)
+            val_chosen = np.mean(
+                self._vl_map._vl_model.get_similarity_batch(
+                    embeddings_along_path, text_embed
+                ),
+                axis=0,
+            )
+            print(f"GT path val: {val} ({best_val}), Chosen path val: {val_chosen}")
+
         if self._reached_goal:
             self._reached_goal = False
             self._cur_path_idx += 1
             if self._cur_path_idx >= self.gt_path_for_viz.shape[0]:
-                return self.gt_path_for_viz[-1, :], True
-        return self.gt_path_for_viz[self._cur_path_idx, :], False
+                return self.gt_path_for_viz[-1, :], True, False
+        return self.gt_path_for_viz[self._cur_path_idx, :], False, False
 
     def _update_vl_map(self) -> None:
         for rgb, depth, tf, min_depth, max_depth, fov in self._observations_cache[

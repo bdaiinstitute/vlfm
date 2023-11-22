@@ -37,6 +37,7 @@ class BasePathPolicy(BaseVLNPolicy):
             size=self.args.map.map_size,
             obstacle_map=self._obstacle_map,
             enable_stairs=self.args.map.enable_stairs,
+            use_adapter=self.args.map.use_adapter,
         )
 
         if self._vl_map.enable_stairs:
@@ -57,6 +58,12 @@ class BasePathPolicy(BaseVLNPolicy):
         self.force_dont_stop_after_stuck = (
             self.args.replanning.force_dont_stop_after_stuck
         )
+
+        self._look_at_frontiers = self.args.replanning.look_at_frontiers
+        self._frontier_dist_thresh = self.args.replanning.frontier_dist_thresh
+        self.frontiers_at_plan = np.array([])
+
+        self._look_at_goal = self.args.replanning.look_at_goal
 
     def _reset(self) -> None:
         super()._reset()
@@ -79,6 +86,8 @@ class BasePathPolicy(BaseVLNPolicy):
         self.n_steps_goal = 0
         self.times_no_paths = 0
         self.why_stop = "no stop"
+
+        self.frontiers_at_plan = np.array([])
 
     def act(
         self,
@@ -149,7 +158,7 @@ class BasePathPolicy(BaseVLNPolicy):
         if self.args.use_path_waypoints:
             if self._reached_goal:
                 self._cur_path_idx += 1
-                self._reached_goal = False
+                # self._reached_goal = False
                 self.n_steps_goal = 0
             else:
                 self.n_steps_goal += 1
@@ -188,7 +197,7 @@ class BasePathPolicy(BaseVLNPolicy):
             if self._reached_goal:
                 print("REPLAN because reached goal")
                 replan = True
-                self._reached_goal = False
+                # self._reached_goal = False
 
         if self.args.replanning.enable_replan_at_steps:
             if self._num_steps > (self._last_plan_step + self._replan_interval):
@@ -219,9 +228,17 @@ class BasePathPolicy(BaseVLNPolicy):
 
             self.last_xy = xy
 
+        if self._look_at_frontiers and replan:
+            self.frontiers_at_plan = self._observations_cache["frontier_sensor"]
+            if self.should_turn and not (self._reached_goal):
+                self.should_turn = False
+                force_dont_stop = True
+
+        self._reached_goal = False
+
         return replan, force_dont_stop, idx_path
 
-    def _plan(self) -> Tuple[np.ndarray, bool]:
+    def _plan(self) -> Tuple[np.ndarray, bool, bool]:
         raise NotImplementedError
 
     def _update_vl_map(self) -> None:

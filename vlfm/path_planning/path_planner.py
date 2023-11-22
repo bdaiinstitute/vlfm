@@ -8,8 +8,6 @@ import numpy as np
 
 from .rrt import RRT, RRTStar
 
-N_PATHS = 4
-
 
 def get_paths(
     agent_pos: Tuple[float, float],
@@ -19,6 +17,7 @@ def get_paths(
     robot_radius: int,
     method: str = "both",
     one_path: bool = False,
+    n_paths: int = 4,
 ) -> List[np.ndarray]:
     paths = []
 
@@ -67,7 +66,7 @@ def get_paths(
 
         else:
             if method == "rrt":
-                for j in range(N_PATHS):
+                for j in range(n_paths):
                     rrt = RRT(
                         start=agent_pos,
                         goal=waypoints[i, :],
@@ -85,7 +84,7 @@ def get_paths(
                         paths += [np.flip(np.array(path)[:-1], 0)]
 
             if method == "rrt_star":
-                for j in range(N_PATHS):
+                for j in range(n_paths):
                     rrt_star = RRTStar(
                         start=agent_pos,
                         goal=waypoints[i, :],
@@ -103,7 +102,7 @@ def get_paths(
                         paths += [np.flip(np.array(path)[:-1], 0)]
 
             if method == "both":
-                for j in range(N_PATHS // 2):
+                for j in range(n_paths // 2):
                     rrt = RRT(
                         start=agent_pos,
                         goal=waypoints[i, :],
@@ -120,7 +119,7 @@ def get_paths(
                         # print("SUCCESS!")
                         paths += [np.flip(np.array(path)[:-1], 0)]
 
-                for j in range(N_PATHS - N_PATHS // 2):
+                for j in range(n_paths - n_paths // 2):
                     rrt_star = RRTStar(
                         start=agent_pos,
                         goal=waypoints[i, :],

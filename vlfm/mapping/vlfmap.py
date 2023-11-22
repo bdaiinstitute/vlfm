@@ -34,6 +34,7 @@ class VLFMap(VLMap):
         obstacle_map: Optional["ObstacleMap"] = None,
         device: Optional[Any] = None,
         enable_stairs: bool = True,
+        use_adapter: bool = False,
     ) -> None:
         """
         Args:
@@ -54,6 +55,7 @@ class VLFMap(VLMap):
             obstacle_map,
             device,
             enable_stairs,
+            use_adapter,
         )
 
         self.viz_counter: int = 0
@@ -146,6 +148,9 @@ class VLFMap(VLMap):
 
         else:
             image_embeddings = self._vl_map[px[:, 1], px[:, 0], :]
+
+        # if self._vl_model.use_adapter:
+        #     image_embeddings = self._vl_model.embed_head(image_embeddings)
 
         return image_embeddings.reshape([px.shape[0]] + list(self._feats_sz))
 

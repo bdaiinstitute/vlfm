@@ -25,7 +25,9 @@ class VLPathSelectorSR(VLPathSelector):
         if instruction in self._cached_text_embeddings.keys():
             text_embed = self._cached_text_embeddings[instruction]
         else:
-            text_embed = self._vl_map._vl_model.get_text_embedding(instruction)
+            text_embed = self._vl_map._vl_model.get_text_embedding(
+                instruction, head="embed"
+            )
             self._cached_text_embeddings[instruction] = text_embed
 
         return self.get_similarity(path, image_embeddings, text_embed)
@@ -77,7 +79,9 @@ class VLPathSelectorSR(VLPathSelector):
             if caption in self._cached_text_embeddings.keys():
                 text_embed_shape = self._cached_text_embeddings[caption]
             else:
-                text_embed_shape = self._vl_map._vl_model.get_text_embedding(caption)
+                text_embed_shape = self._vl_map._vl_model.get_text_embedding(
+                    caption, head="img"
+                )
                 self._cached_text_embeddings[caption] = text_embed_shape
             obstacle_map_clean = self.get_obstacle_map_clean()
         else:
@@ -167,7 +171,7 @@ class VLPathSelectorSR(VLPathSelector):
                     text_embed_shape = self._cached_text_embeddings[caption]
                 else:
                     text_embed_shape = self._vl_map._vl_model.get_text_embedding(
-                        caption
+                        caption, head="img"
                     )
                     self._cached_text_embeddings[caption] = text_embed_shape
 

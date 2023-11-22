@@ -7,6 +7,8 @@ import torch
 from lavis.models import load_model_and_preprocess
 from PIL import Image
 
+from vlfm.adapter.adapter import Adapter
+
 from .vl_model import BaseVL
 
 
@@ -20,6 +22,7 @@ class CLIP(BaseVL):
         name: str = "clip_feature_extractor",
         model_type: str = "ViT-B-16",
         device: Optional[Any] = None,
+        use_adapter: bool = False,
     ) -> None:
         if device is None:
             device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
@@ -34,7 +37,28 @@ class CLIP(BaseVL):
         )
         self.device = device
 
-    def get_image_embedding(self, image: np.ndarray) -> torch.tensor:  # np.ndarray:
+        self.use_adapter = use_adapter
+
+        if self.use_adapter:
+            self.img_head = Adapter(512, orig_weight=0.2, blip=False).to(device)
+            self.embed_head = Adapter(512, orig_weight=0.2, blip=False).to(device)
+
+            self.text_embed_head = Adapter(512, orig_weight=0.8, blip=False).to(device)
+            self.text_img_head = Adapter(512, orig_weight=0.8, blip=False).to(device)
+
+            self.img_head.load_state_dict(torch.load("data/img_head.pth"))
+            self.embed_head.load_state_dict(torch.load("data/embed_head.pth"))
+            self.text_img_head.load_state_dict(torch.load("data/text_img_head.pth"))
+            self.text_embed_head.load_state_dict(torch.load("data/text_embed_head.pth"))
+
+            self.img_head.eval()
+            self.embed_head.eval()
+            self.text_img_head.eval()
+            self.text_embed_head.eval()
+
+    def get_image_embedding(
+        self, image: np.ndarray, head: str = ""
+    ) -> torch.tensor:  # np.ndarray:
         pil_img = Image.fromarray(image)
         img = self.vis_processors["eval"](pil_img).unsqueeze(0).to(self.device)
 
@@ -42,14 +66,41 @@ class CLIP(BaseVL):
 
         image_features = self.model.extract_features(sample)
 
-        return image_features.squeeze()  # .cpu().numpy()
+        if self.use_adapter:
+            if head == "img":
+                return self.img_head(image_features).squeeze()
+            elif head == "embed":
+                # return self.embed_head(image_features).squeeze()
+                return image_features.squeeze()  # should do on path not single images!
+            else:
+                assert False, (
+                    "If using adapter need to specify head when extracting img features"
+                    " (img or embed)"
+                )
 
-    def get_text_embedding(self, txt: str) -> torch.tensor:  # np.ndarray:
+        else:
+            return image_features.squeeze()  # .cpu().numpy()
+
+    def get_text_embedding(
+        self, txt: str, head: str = ""
+    ) -> torch.tensor:  # np.ndarray:
         sample = {"image": None, "text_input": txt}
 
         text_features = self.model.extract_features(sample)
 
-        return text_features.squeeze()  # .cpu().numpy()
+        if self.use_adapter:
+            if head == "img":
+                return self.text_img_head(text_features).squeeze()
+            elif head == "embed":
+                return self.text_embed_head(text_features).squeeze()
+            else:
+                assert False, (
+                    "If using adapter need to specify head when extracting text"
+                    " features (img or embed)"
+                )
+
+        else:
+            return text_features.squeeze()  # .cpu().numpy()
 
     def get_similarity(
         self, image_embedding: torch.tensor, txt_embedding: torch.tensor

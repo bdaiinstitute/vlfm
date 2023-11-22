@@ -6,19 +6,12 @@ import numpy as np
 import torch
 from PIL import Image
 
-from vlfm.vlm.server_wrapper import (
-    ServerMixin,
-    host_model,
-    np_to_str,
-    send_request,
-    str_to_image,
-    str_to_np,
-)
-
 try:
     from lavis.models import load_model_and_preprocess
 except ModuleNotFoundError:
     print("Could not import lavis. This is OK if you are only using the client.")
+
+from vlfm.adapter.adapter import Adapter
 
 from .vl_model import BaseVL
 
@@ -33,6 +26,7 @@ class BLIP2unimodal(BaseVL):
         name: str = "blip2_feature_extractor",
         model_type: str = "pretrain",
         device: Optional[Any] = None,
+        use_adapter: bool = False,
     ) -> None:
         if device is None:
             device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
@@ -47,7 +41,28 @@ class BLIP2unimodal(BaseVL):
         )
         self.device = device
 
-    def get_image_embedding(self, image: np.ndarray) -> torch.tensor:  # np.ndarray:
+        self.use_adapter = use_adapter
+
+        if self.use_adapter:
+            self.img_head = Adapter(32 * 256, orig_weight=0.2, blip=True).to(device)
+            self.embed_head = Adapter(32 * 256, orig_weight=0.2, blip=True).to(device)
+
+            self.text_embed_head = Adapter(256, orig_weight=0.8, blip=True).to(device)
+            self.text_img_head = Adapter(256, orig_weight=0.8, blip=True).to(device)
+
+            self.img_head.load_state_dict(torch.load("data/img_head.pth"))
+            self.embed_head.load_state_dict(torch.load("data/embed_head.pth"))
+            self.text_img_head.load_state_dict(torch.load("data/text_img_head.pth"))
+            self.text_embed_head.load_state_dict(torch.load("data/text_embed_head.pth"))
+
+            self.img_head.eval()
+            self.embed_head.eval()
+            self.text_img_head.eval()
+            self.text_embed_head.eval()
+
+    def get_image_embedding(
+        self, image: np.ndarray, head: str = ""
+    ) -> torch.tensor:  # np.ndarray:
         pil_img = Image.fromarray(image)
         img = self.vis_processors["eval"](pil_img).unsqueeze(0).to(self.device)
 
@@ -55,14 +70,51 @@ class BLIP2unimodal(BaseVL):
 
         image_features = self.model.extract_features(sample, mode="image")
 
-        return image_features.image_embeds_proj.squeeze()  # .cpu().numpy()
+        if self.use_adapter:
+            if head == "img":
+                return (
+                    self.img_head(
+                        image_features.image_embeds_proj.reshape(-1, 32 * 256)
+                    )
+                    .reshape(-1, 32, 256)
+                    .squeeze()
+                )
+            elif head == "embed":
+                # return
+                # self.embed_head(image_features.image_embeds_proj.reshape(-1,32*256)).reshape(-1,32,256).squeeze()
+                return (
+                    image_features.image_embeds_proj.squeeze()
+                )  # should do on path not single images!
+            else:
+                assert False, (
+                    "If using adapter need to specify head when extracting img features"
+                    " (img or embed)"
+                )
 
-    def get_text_embedding(self, txt: str) -> torch.tensor:  # np.ndarray:
+        else:
+            return image_features.image_embeds_proj.squeeze()  # .cpu().numpy()
+
+    def get_text_embedding(
+        self, txt: str, head: str = ""
+    ) -> torch.tensor:  # np.ndarray:
         sample = {"image": np.array([0]), "text_input": txt}
 
         text_features = self.model.extract_features(sample, mode="text")
 
-        return text_features.text_embeds_proj.squeeze()  # .cpu().numpy()
+        if self.use_adapter:
+            if head == "img":
+                return self.text_img_head(text_features.text_embeds_proj[:, 0, :])
+            elif head == "embed":
+                # return self.text_embed_head(text_features.text_embeds_proj[:,0,:])
+                return text_features.text_embeds_proj[:, 0, :].squeeze()
+            else:
+                assert False, (
+                    "If using adapter need to specify head when extracting img features"
+                    " (img or embed)"
+                )
+
+        else:
+            return text_features.text_embeds_proj[:, 0, :].squeeze()  # .cpu().numpy()
 
     def get_similarity(
         self, image_embedding: torch.tensor, txt_embedding: torch.tensor
@@ -79,7 +131,7 @@ class BLIP2unimodal(BaseVL):
         """
 
         # cosine = (image_embedding @ txt_embedding[0, :].T).max()
-        cosine = (image_embedding @ txt_embedding[0, :].t()).max().item()
+        cosine = (image_embedding @ txt_embedding.t()).max().item()
 
         return cosine
 
@@ -88,104 +140,6 @@ class BLIP2unimodal(BaseVL):
     ) -> np.ndarray:
         # cosine = (image_embeddings @ txt_embedding[0, :].T).max(axis=1)
 
-        cosine = (image_embeddings @ txt_embedding[0, :].t()).max(dim=1)
+        cosine = (image_embeddings @ txt_embedding.t()).max(dim=1)
 
         return cosine[0].cpu().numpy()
-
-
-class BLIP2unimodalClient(BaseVL):
-    def __init__(self, port: int = 12182):
-        self.url = f"http://localhost:{port}/VLmodel"
-
-    def get_image_embedding(self, image: np.ndarray) -> np.ndarray:
-        print(f" BLIP2unimodalClient.get_image_embedding: {image.shape}")
-        response = send_request(self.url, funct="image_embed", image=image)
-        return np.array(response["response"])
-
-    def get_text_embedding(self, txt: str) -> np.ndarray:
-        print(f" BLIP2unimodalClient.get_text_embedding: {txt}")
-        response = send_request(self.url, funct="text_embed", txt=txt)
-        return np.array(response["response"])
-
-    def get_similarity(
-        self, image_embedding: np.ndarray, txt_embedding: np.ndarray
-    ) -> float:
-        print(
-            f" BLIP2unimodalClient.get_similarity: {image_embedding.shape},"
-            f" {txt_embedding.shape}"
-        )
-        response = send_request(
-            self.url,
-            funct="similarity",
-            image_embed=np_to_str(image_embedding),
-            txt_embed=np_to_str(txt_embedding),
-            embed_dtype=image_embedding.dtype,
-            embed_image_shape=image_embedding.shape,
-            embed_txt_shape=txt_embedding.shape,
-        )
-        return float(response["response"])
-
-    def get_similarity_batch(
-        self, image_embeddings: np.ndarray, txt_embedding: np.ndarray
-    ) -> float:
-        print(
-            f" BLIP2unimodalClient.get_similarity_batch: {image_embeddings.shape},"
-            f" {txt_embedding.shape}"
-        )
-        response = send_request(
-            self.url,
-            funct="similarity_batch",
-            image_embed=np_to_str(image_embeddings),
-            txt_embed=np_to_str(txt_embedding),
-            embed_dtype=image_embeddings.dtype,
-            embed_image_shape=image_embeddings.shape,
-            embed_txt_shape=txt_embedding.shape,
-        )
-        return str_to_np(
-            response["response"], arr_type=response["dtype"], shape=response["shape"]
-        )
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=12182)
-    args = parser.parse_args()
-
-    print("Loading model...")
-
-    class BLIP2unimodalServer(ServerMixin, BLIP2unimodal):
-        def process_payload(self, payload: dict) -> dict:
-            funct = payload["funct"]
-            if funct == "image_embed":
-                image = str_to_image(payload["image"])
-                return {"response": self.get_image_embedding(image)}
-            elif funct == "text_embed":
-                return {"response": self.get_text_embedding(payload["txt"])}
-            elif funct == "similarity" or funct == "similarity_batch":
-                image_embed = str_to_np(
-                    payload["image_embed"],
-                    arr_type=payload["embed_dtype"],
-                    shape=payload["embed_image_shape"],
-                )
-                text_embed = str_to_np(
-                    payload["txt_embed"],
-                    arr_type=payload["embed_dtype"],
-                    shape=payload["embed_text_shape"],
-                )
-                if funct == "similarity":
-                    return {"response": self.get_similarity(image_embed, text_embed)}
-                elif funct == "similarity_batch":
-                    res = self.get_similarity_batch(image_embed, text_embed)
-                    return {
-                        "response": np_to_str(res),
-                        "shape": res.shape,
-                        "dtype": res.dtype,
-                    }
-            raise Exception("Invalid function string for BLIP2unimodal")
-
-    blip = BLIP2unimodalServer()
-    print("Model loaded!")
-    print(f"Hosting on port {args.port}...")
-    host_model(blip, name="VLmodel", port=args.port)

@@ -16,10 +16,10 @@ class BaseVL:
     ) -> None:
         pass
 
-    def get_image_embedding(self, image: np.ndarray) -> torch.tensor:
+    def get_image_embedding(self, image: np.ndarray, head: str = "") -> torch.tensor:
         raise NotImplementedError
 
-    def get_text_embedding(self, txt: str) -> torch.tensor:
+    def get_text_embedding(self, txt: str, head: str = "") -> torch.tensor:
         raise NotImplementedError
 
     def get_similarity(

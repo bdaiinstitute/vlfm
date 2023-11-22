@@ -88,7 +88,7 @@ class DataCollectionPolicy(BaseVLNPolicy):
     def _parse_instruction(self, instruction: str) -> List[str]:
         return [instruction]
 
-    def _plan(self) -> Tuple[np.ndarray, bool]:
+    def _plan(self) -> Tuple[np.ndarray, bool, bool]:
         if not (self._num_steps % self.save_freq):
             self.save_data()
 
@@ -99,8 +99,8 @@ class DataCollectionPolicy(BaseVLNPolicy):
             self._reached_goal = False
             self._cur_path_idx += 1
             if self._cur_path_idx >= self.gt_path_for_viz.shape[0]:
-                return self.gt_path_for_viz[-1, :], True
-        return self.gt_path_for_viz[self._cur_path_idx, :], False
+                return self.gt_path_for_viz[-1, :], True, False
+        return self.gt_path_for_viz[self._cur_path_idx, :], False, False
 
     def save_data(self) -> None:
         assert self._vl_map._obstacle_map is not None

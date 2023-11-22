@@ -87,6 +87,9 @@ class BaseVLNPolicy(BasePolicy):
 
         self.envs: Optional[habitat.core.vector_env.VectorEnv] = None
 
+        self.should_turn: bool = False
+        self.n_turn: int = 0
+
     def _reset(self) -> None:
         self._curr_instruction_idx = 0
         self._instruction_parts = []
@@ -101,6 +104,9 @@ class BaseVLNPolicy(BasePolicy):
         self._reached_goal = False
 
         self.envs = None
+
+        self.should_turn = False
+        self.n_turn = 0
 
     def set_gt_path_for_viz(
         self, gt_path_for_viz: np.ndarray, gt_path_world_coord: np.ndarray
@@ -143,15 +149,25 @@ class BaseVLNPolicy(BasePolicy):
             pointnav_action = self._initialize()
         else:
             mode = "navigate"
-            goal, should_stop = self._plan()
+            goal, should_stop, stop_and_turn = self._plan()
 
             if should_stop:
                 print("STOPPING (should_stop)")
                 self._called_stop = True
                 return self._stop_action, rnn_hidden_states
-            if goal is None:
+
+            if stop_and_turn:
+                self.should_turn = True
+                print(
+                    "Reached a frontier so stopping to look around (initializing mode)"
+                )
+                self.frontiers_at_plan = np.array([])
+                self.n_turn = 0
+                pointnav_action = self._initialize()
+
+            elif goal is None:
                 print("No goal found so choosing random action!")
-                pointnav_action = torch.tensor([[np.random.randint(1, 4)]])
+                pointnav_action = self._choose_random_nonstop_action()
 
             else:
                 if self._use_gt_path:
@@ -197,7 +213,7 @@ class BaseVLNPolicy(BasePolicy):
     def _initialize(self) -> Tensor:
         raise NotImplementedError
 
-    def _plan(self) -> Tuple[np.ndarray, bool]:
+    def _plan(self) -> Tuple[np.ndarray, bool, bool]:
         raise NotImplementedError
 
     def _parse_instruction(self, instruction: str) -> List[str]:

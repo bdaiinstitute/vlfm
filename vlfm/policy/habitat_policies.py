@@ -71,6 +71,9 @@ class HabitatMixin:
 
         # self._compute_frontiers = super()._compute_frontiers  # type: ignore
 
+        self._done_initializing: bool = False
+        self.n_turn: int = 0
+
     @classmethod
     def from_config(
         cls, config: DictConfig, *args_unused: Any, **kwargs_unused: Any
@@ -135,7 +138,10 @@ class HabitatMixin:
 
     def _initialize(self) -> Tensor:
         """Turn left 15 degrees 24 times to get a 360 view at the beginning"""
-        self._done_initializing = not self._num_steps < 23  # type: ignore
+        self._done_initializing = not self.n_turn < 23  # type: ignore
+        if self._done_initializing:
+            self.n_turn = 0
+        self.n_turn += 1
         return TorchActionIDs.TURN_LEFT
 
     def _reset(self) -> None:
