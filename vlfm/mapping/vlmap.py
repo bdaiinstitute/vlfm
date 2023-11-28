@@ -20,6 +20,7 @@ from vlfm.utils.img_utils import (
 )
 from vlfm.vlm.blip2_unimodal import BLIP2unimodal
 from vlfm.vlm.clip import CLIP
+from vlfm.vlm.lseg import LSeg
 from vlfm.vlm.vl_model import BaseVL
 
 
@@ -84,6 +85,8 @@ class VLMap(BaseMap):
             feats_sz = [32, 256]
         elif vl_model_type == "CLIP" or vl_model_type == "CLIP_withcrop":
             feats_sz = [512]
+        elif vl_model_type == "LSeg":
+            feats_sz = [512]
         else:
             raise Exception(f"Invalid VL model type {vl_model_type}")
 
@@ -131,6 +134,8 @@ class VLMap(BaseMap):
             self._vl_model: BaseVL = BLIP2unimodal(use_adapter=self.use_adapter)
         elif self.vl_model_type == "CLIP" or self.vl_model_type == "CLIP_withcrop":
             self._vl_model = CLIP(use_adapter=self.use_adapter)
+        elif self.vl_model_type == "LSeg":
+            self._vl_model = LSeg(use_adapter=self.use_adapter)
         else:
             raise Exception(f"Invalid VL model type {self.vl_model_type}")
 
@@ -158,6 +163,90 @@ class VLMap(BaseMap):
             ),
             text_embed,
         ).reshape([self._vl_map.shape[0], self._vl_map.shape[1]])
+
+        # words = text.strip().split(" ")
+
+        # chunks = []
+
+        # # for i in range(len(words)):
+        # #     chunks += [" ".join(words[0:i+1])]
+
+        # for i in range(len(words)-3):
+        #     chunks += [words[i], " ".join(words[i:i+2]), " ".join(words[i:i+3]), " ".join(words[i:i+4])]
+
+        # for i in range(len(words)-3, len(words)):
+        #     chunks += [words[i]]
+        #     for j in range(2, len(words)-i+1):
+        #         chunks += [" ".join(words[i:i+j])]
+
+        # value_map = np.zeros([self._vl_map.shape[0], self._vl_map.shape[1]])
+        # prefixes = [""] #["A photo of a ", "A photo of ", "A photo showing ", "I ", "I went ", "To get there ", ""]
+        # for word in chunks:
+        #     for prefix in prefixes:
+
+        #         text_embed = self._vl_model.get_text_embedding(prefix + word, head="embed")
+
+        #         m = self._vl_model.get_similarity_batch(
+        #             self._vl_map.reshape(
+        #                 [self._vl_map.shape[0] * self._vl_map.shape[1]] + list(self._feats_sz)
+        #             ),
+        #             text_embed,
+        #         ).reshape([self._vl_map.shape[0], self._vl_map.shape[1]])
+
+        #         maxv = np.max(m.flatten())
+
+        #         idx = value_map<m
+        #         print(f"WORD: {prefix + word}, N: {np.sum(idx)}")
+
+        #         print(f"MAX VM: {np.max(value_map.flatten())}, MAX M: {np.max(m.flatten())}")
+
+        #         print(f"TOP 80: {np.sum(m>= (maxv*0.80))}, {np.sum(m>= (maxv*0.80))/np.sum(m!=0)}")
+
+        #         if (np.sum(m>= (maxv*0.80))/np.sum(m!=0)) < 0.5:
+        #             m[m<maxv*0.80] = 0
+        #             idx = value_map<m
+        #             value_map[idx] = m[idx]
+        #             print(f"ADDED! {np.sum(idx)}")
+        #     print("----")
+
+        # for word in words:
+        #     prefix = "The "
+        #     text_embed = self._vl_model.get_text_embedding(prefix + word, head="embed")
+
+        #     m = self._vl_model.get_similarity_batch(
+        #         self._vl_map.reshape(
+        #             [self._vl_map.shape[0] * self._vl_map.shape[1]] + list(self._feats_sz)
+        #         ),
+        #         text_embed,
+        #     ).reshape([self._vl_map.shape[0], self._vl_map.shape[1]])
+
+        #     prefix2 = "Go "
+        #     text_embed = self._vl_model.get_text_embedding(prefix2 + word, head="embed")
+
+        #     m2 = self._vl_model.get_similarity_batch(
+        #         self._vl_map.reshape(
+        #             [self._vl_map.shape[0] * self._vl_map.shape[1]] + list(self._feats_sz)
+        #         ),
+        #         text_embed,
+        #     ).reshape([self._vl_map.shape[0], self._vl_map.shape[1]])
+
+        #     m[m2>m] = 0
+
+        #     maxv = np.max(m.flatten())
+        #     m[m<maxv*0.95] = 0
+
+        #     idx = value_map*0.8<m
+        #     print(f"WORD: {prefix + word}, N: {np.sum(idx)}")
+
+        #     print(f"MAX VM: {np.max(value_map.flatten())},
+        #       MAX M: {np.max(m.flatten())}, , MAX M2: {np.max(m2.flatten())}")
+
+        #     # print(f"TOP 95: {np.sum(m>= maxv*0.95)}, {np.sum(m>= maxv*0.95)/np.sum(m!=0)}")
+
+        #     value_map[idx] = m[idx]
+        #     print("----")
+
+        # return value_map
 
     def has_stairs(
         self,
@@ -297,6 +386,166 @@ class VLMap(BaseMap):
                     total_iter,
                 )
 
+    def update_pixelwise(
+        self,
+        image_embedding: np.ndarray,
+        depth: np.ndarray,
+        tf_camera_to_episodic: np.ndarray,
+        min_depth: float,
+        max_depth: float,
+        fov: float,
+    ) -> None:
+        # Squeeze out the channel dimension if depth is a 3D array
+        if len(depth.shape) == 3:
+            depth = depth.squeeze(2)
+        # Squash depth image into one row with the max depth value for each column
+        depth_row = np.max(depth, axis=0) * (max_depth - min_depth) + min_depth
+
+        # Create a linspace of the same length as the depth row from -fov/2 to fov/2
+        angles = np.linspace(-fov / 2, fov / 2, len(depth_row))
+
+        # Assign each value in the row with an x, y coordinate depending on 'angles'
+        # and the max depth value for that column
+        x = depth_row
+        y = depth_row * np.tan(angles)
+
+        # Get blank cone mask
+        cone_mask = self._get_confidence_mask(fov, max_depth)
+
+        # Convert the x, y coordinates to pixel coordinates
+        x = (x * self.pixels_per_meter + cone_mask.shape[0] / 2).astype(int)
+        y = (y * self.pixels_per_meter + cone_mask.shape[1] / 2).astype(int)
+
+        # Create a contour from the x, y coordinates, with the top left and right
+        # corners of the image as the first two points
+        last_row = cone_mask.shape[0] - 1
+        last_col = cone_mask.shape[1] - 1
+        start = np.array([[0, last_col]])
+        end = np.array([[last_row, last_col]])
+        contour = np.concatenate((start, np.stack((y, x), axis=1), end), axis=0)
+
+        # Draw the contour onto the cone mask, in filled-in black
+        visible_mask = cv2.drawContours(cone_mask, [contour], -1, 0, -1)  # type: ignore
+
+        curr_data = visible_mask
+
+        image_embedding = image_embedding.float().cpu().numpy()
+
+        depth_gp = np.zeros(
+            (visible_mask.shape[0], visible_mask.shape[1], image_embedding.shape[0])
+        )
+
+        x = depth.flatten() * (max_depth - min_depth) + min_depth
+        y = x * np.tile(np.tan(angles).reshape(-1, 1), (depth.shape[0], 1)).flatten()
+
+        x = (x * self.pixels_per_meter + depth_gp.shape[0] / 2).astype(int)
+        y = (y * self.pixels_per_meter + depth_gp.shape[1] / 2).astype(int)
+
+        depth_gp[x, y] = image_embedding.reshape(image_embedding.shape[0], -1).T
+
+        # Rotate this new data to match the camera's orientation
+        yaw = extract_yaw(tf_camera_to_episodic)
+        curr_data = rotate_image(curr_data, -yaw)
+
+        depth_gp = rotate_image(depth_gp, -yaw)
+
+        # Determine where this mask should be overlaid
+        cam_x, cam_y = tf_camera_to_episodic[:2, 3] / tf_camera_to_episodic[3, 3]
+
+        # Convert to pixel units
+        px = int(cam_x * self.pixels_per_meter) + self._episode_pixel_origin[0]
+        py = int(-cam_y * self.pixels_per_meter) + self._episode_pixel_origin[1]
+
+        # Overlay the new data onto the map
+        if 0 <= px < self._map.shape[0] and 0 <= py < self._map.shape[1]:
+            curr_map = np.zeros_like(self._map)
+            curr_map = place_img_in_img(curr_map, curr_data, px, py)
+
+            curr_map_fo = np.zeros_like(self._vl_map.cpu().numpy())
+            curr_map_f = place_img_in_img(curr_map_fo, depth_gp, px, py)
+        else:
+            print("Update would be outside map! Not updating!")
+            curr_map = self._map
+
+        new_map = curr_map
+
+        if self._obstacle_map is not None:
+            # If an obstacle map is provided, we will use it to mask out the
+            # new map
+            explored_area = self._obstacle_map.explored_area
+            new_map[explored_area == 0] = 0
+            self._map[explored_area == 0] = 0
+            self._vl_map[explored_area == 0] = 0
+
+        if self._fusion_type == "replace":
+            # Ablation. The values from the current observation will overwrite any
+            # existing values
+            print("VALUE MAP ABLATION:", self._fusion_type)
+            new_vl_map = np.zeros_like(self._vl_map)
+            new_vl_map[new_map > 0] = torch.tensor(
+                curr_map_f[new_map > 0], device=self.device
+            )
+            self._map[new_map > 0] = new_map[new_map > 0]
+            self._vl_map[new_map > 0] = new_vl_map[new_map > 0]
+            return
+        elif self._fusion_type == "equal_weighting":
+            # Ablation. Updated values will always be the mean of the current and
+            # new values, meaning that confidence scores are forced to be the same.
+            print("VALUE MAP ABLATION:", self._fusion_type)
+            self._map[self._map > 0] = 1
+            new_map[new_map > 0] = 1
+        else:
+            assert (
+                self._fusion_type == "default"
+            ), f"Unknown fusion type {self._fusion_type}"
+
+        # Any values in the given map that are less confident than
+        # self._decision_threshold AND less than the new_map in the existing map
+        # will be silenced into 0s
+        new_map_mask = np.logical_and(
+            new_map < self._decision_threshold, new_map < self._map
+        )
+        new_map[new_map_mask] = 0
+
+        if self._use_max_confidence:
+            # For every pixel that has a higher new_map in the new map than the
+            # existing value map, replace the value in the existing value map with
+            # the new value
+            higher_new_map_mask = new_map > self._map
+            self._vl_map[higher_new_map_mask] = torch.tensor(
+                curr_map_f[higher_new_map_mask], device=self.device
+            )
+            # Update the new_map map with the new new_map values
+            self._map[higher_new_map_mask] = new_map[higher_new_map_mask]
+        else:
+            # Each pixel in the existing value map will be updated with a weighted
+            # average of the existing value and the new value. The weight of each value
+            # is determined by the current and new new_map values. The new_map map
+            # will also be updated with using a weighted average in a similar manner.
+            confidence_denominator = self._map + new_map
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+                weight_1 = self._map / confidence_denominator
+                weight_2 = new_map / confidence_denominator
+
+            weight_1_channeled = np.repeat(
+                np.expand_dims(weight_1, axis=2), self._feat_channels, axis=2
+            )
+            weight_2_channeled = np.repeat(
+                np.expand_dims(weight_2, axis=2), self._feat_channels, axis=2
+            )
+
+            self._vl_map = (
+                self._vl_map * weight_1_channeled
+                + torch.tensor(curr_map_f, device=self.device) * weight_2_channeled
+            )
+            self._map = self._map * weight_1 + new_map * weight_2
+
+            # Because confidence_denominator can have 0 values, any nans in either the
+            # value or confidence maps will be replaced with 0
+            self._vl_map = np.nan_to_num(self._vl_map)
+            self._map = np.nan_to_num(self._map)
+
     def update_map(
         self,
         image: np.ndarray,
@@ -320,46 +569,52 @@ class VLMap(BaseMap):
         """
         image_embedding = self._vl_model.get_image_embedding(image, head="embed")
 
-        assert image_embedding.shape == self._feats_sz, (
-            "Incorrect size of image embedding "
-            f"({image_embedding.shape}). Expected {self._feats_sz}."
-        )
-
-        curr_map = self._localize_new_data(
-            depth, tf_camera_to_episodic, min_depth, max_depth, fov
-        )
-
-        # Fuse the new data with the existing data
-        self._fuse_new_data(curr_map, image_embedding.flatten())
-
-        if "withcrop" in self.vl_model_type:
-            # Repeat for each crop, but need to keep the confidence from original depth image
-            self.update_with_crop(
-                image, depth, tf_camera_to_episodic, min_depth, max_depth, fov
+        if self.vl_model_type == "LSeg":
+            self.update_pixelwise(
+                image_embedding, depth, tf_camera_to_episodic, min_depth, max_depth, fov
             )
 
-        if self.enable_stairs:
-            # Stairs check
-            if self.has_stairs(image_embedding):
-                locs = np.nonzero(curr_map != 0)
-                for i in range(len(locs[0])):
-                    px = (locs[0][i], locs[1][i])
-                    if px in self._stair_dict.keys():
-                        self._stair_dict[px].add_observation(image_embedding)
-                    else:
-                        if self.stairs_going_up(image_embedding):
-                            stair = Stair(
-                                lower_floor=self._current_floor,
-                                higher_floor=self._current_floor + 1,
-                                image_embedding=image_embedding,
-                            )
+        else:
+            assert image_embedding.shape == self._feats_sz, (
+                "Incorrect size of image embedding "
+                f"({image_embedding.shape}). Expected {self._feats_sz}."
+            )
+
+            curr_map = self._localize_new_data(
+                depth, tf_camera_to_episodic, min_depth, max_depth, fov
+            )
+
+            # Fuse the new data with the existing data
+            self._fuse_new_data(curr_map, image_embedding.flatten())
+
+            if "withcrop" in self.vl_model_type:
+                # Repeat for each crop, but need to keep the confidence from original depth image
+                self.update_with_crop(
+                    image, depth, tf_camera_to_episodic, min_depth, max_depth, fov
+                )
+
+            if self.enable_stairs:
+                # Stairs check
+                if self.has_stairs(image_embedding):
+                    locs = np.nonzero(curr_map != 0)
+                    for i in range(len(locs[0])):
+                        px = (locs[0][i], locs[1][i])
+                        if px in self._stair_dict.keys():
+                            self._stair_dict[px].add_observation(image_embedding)
                         else:
-                            stair = Stair(
-                                lower_floor=self._current_floor - 1,
-                                higher_floor=self._current_floor,
-                                image_embedding=image_embedding,
-                            )
-                        self._stair_dict[px] = stair
+                            if self.stairs_going_up(image_embedding):
+                                stair = Stair(
+                                    lower_floor=self._current_floor,
+                                    higher_floor=self._current_floor + 1,
+                                    image_embedding=image_embedding,
+                                )
+                            else:
+                                stair = Stair(
+                                    lower_floor=self._current_floor - 1,
+                                    higher_floor=self._current_floor,
+                                    image_embedding=image_embedding,
+                                )
+                            self._stair_dict[px] = stair
 
     def visualize(
         self,

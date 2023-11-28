@@ -145,15 +145,15 @@ class VLPathSelector:
         ]
 
         # Denom that ignores the original zeros
-        # denom_l = []
-        # denom_i = 1
-        # for j in range(image_embeddings.shape[0]):
-        #     if orig_nz[j]:
-        #         denom_i += 1
-        #     denom_l += [denom_i]
-        # denom = np.array(denom_l)
+        denom_l = []
+        denom_i = 1
+        for j in range(image_embeddings.shape[0]):
+            if orig_nz[j]:
+                denom_i += 1
+            denom_l += [denom_i]
+        denom = np.array(denom_l)
 
-        denom = np.arange(image_embeddings.shape[0]) + 1
+        # denom = np.arange(image_embeddings.shape[0]) + 1
 
         if method == "":
             method = self.args.similarity_calc.path_similarity_method

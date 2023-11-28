@@ -15,7 +15,7 @@ habitat_baselines:
 
   rl:
     policy:
-      name: "HabitatPathPolicyMR" #"HabitatPathPolicyMix" #"HabitatDataCollectionPolicy"
+      name: "HabitatTestingPolicy" #"HabitatPathPolicySR" #"HabitatPathPolicyMix" #"HabitatDataCollectionPolicy" #"HabitatTestingPolicy"
       pointnav_stop_radius: 0.4
       use_gt_path: False #True
 
@@ -25,6 +25,7 @@ habitat_baselines:
         use_path_waypoints: False
 
         logging:
+          log_dir: results/
           enable_log_success_if_oracle_stop: True
           analysis_save_location: failure_analysis/
           enable_log_success_thresh: False #Must change to false if using single resolution!
@@ -37,10 +38,10 @@ habitat_baselines:
           force_dont_stop_after_stuck: True
           goal_stop_dist: 0.4
 
-          look_at_frontiers: True
+          look_at_frontiers: False #True
           frontier_dist_thresh: 0.4
 
-          look_at_goal: True
+          look_at_goal: False #True
 
         mixpolicy:
           close_thresh: 0.05
@@ -64,10 +65,10 @@ habitat_baselines:
 
           #SINGLE RESOLUTION
           #Uncomment for one method
-          # path_similarity_method: average sim
-          # path_thresh_switch: 0.0
-          # path_thresh_stop: -0.5 #0.0
-          # path_thresh_stop_abs: 20.0
+          path_similarity_method: average sim
+          path_thresh_switch: 0.0
+          path_thresh_stop: -0.5 #0.0
+          path_thresh_stop_abs: 20.0
 
           # path_similarity_method: weighted average embeddings
           # path_thresh_switch: 5.0
@@ -81,10 +82,10 @@ habitat_baselines:
 
           #MULTIRESOLUTION
           # #Uncomment for one method
-          path_similarity_method: average sim
-          path_thresh_stop: 0.0
-          path_thresh_stop_abs: 0.0
-          path_thresh_switch: 0.5
+          # path_similarity_method: average sim
+          # path_thresh_stop: 0.0
+          # path_thresh_stop_abs: 0.0
+          # path_thresh_switch: 0.5
 
           # path_similarity_method: weighted average embeddings
           # path_thresh_stop: 0.5 #1.5
@@ -120,6 +121,6 @@ habitat_baselines:
 
         map:
           enable_stairs: False #True
-          vl_feature_type: BLIP2
+          vl_feature_type: LSeg
           map_size: 1000
           use_adapter: False #True

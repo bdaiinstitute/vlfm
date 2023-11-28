@@ -65,16 +65,19 @@ class VLNTrainer(PPOTrainer):
         # get args
         args = self.config.habitat_baselines.rl.policy.options
 
+        log_dir = args.logging.log_dir
+        os.makedirs(log_dir, exist_ok=True)
+
         ORACLE_STOP = args.enable_oracle_stop
         LOG_SUCCES_IF_ORACLE_STOP = args.logging.enable_log_success_if_oracle_stop
         LOG_THRESH = args.logging.enable_log_success_thresh
 
         # set-up failure analysis
-        os.makedirs(args.logging.analysis_save_location, exist_ok=True)
+        os.makedirs(log_dir + args.logging.analysis_save_location, exist_ok=True)
         file_success = open(args.logging.analysis_save_location + "successes.txt", "w")
         file_fail = open(args.logging.analysis_save_location + "failures.txt", "w")
 
-        file_log = open("logging_info.txt", "w")
+        file_log = open(log_dir + "logging_info.txt", "w")
 
         if ORACLE_STOP or LOG_SUCCES_IF_ORACLE_STOP:
             self.should_stop = False
@@ -173,7 +176,9 @@ class VLNTrainer(PPOTrainer):
             [] for _ in range(self.config.habitat_baselines.num_environments)
         ]
         if len(self.config.habitat_baselines.eval.video_option) > 0:
-            os.makedirs(self.config.habitat_baselines.video_dir, exist_ok=True)
+            os.makedirs(
+                log_dir + self.config.habitat_baselines.video_dir, exist_ok=True
+            )
 
         number_of_eval_episodes = self.config.habitat_baselines.test_episode_count
         evals_per_ep = self.config.habitat_baselines.eval.evals_per_ep
@@ -471,7 +476,7 @@ class VLNTrainer(PPOTrainer):
                         rgb_frames[i] = hab_vis.flush_frames(failure_cause)
                         generate_video(
                             video_option=self.config.habitat_baselines.eval.video_option,
-                            video_dir=self.config.habitat_baselines.video_dir,
+                            video_dir=log_dir + self.config.habitat_baselines.video_dir,
                             images=rgb_frames[i],
                             episode_id=current_episodes_info[i].episode_id,
                             checkpoint_idx=checkpoint_index,
