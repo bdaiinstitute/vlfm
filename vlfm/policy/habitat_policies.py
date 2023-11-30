@@ -6,8 +6,6 @@ from typing import Any, Dict, Union
 import numpy as np
 import torch
 from depth_camera_filtering import filter_depth
-from frontier_exploration.base_explorer import BaseExplorer
-from habitat.tasks.nav.object_nav_task import ObjectGoalSensor
 from habitat_baselines.common.baseline_registry import baseline_registry
 from habitat_baselines.common.tensor_dict import TensorDict
 from habitat_baselines.config.default_structured_configs import (
@@ -18,37 +16,16 @@ from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 from torch import Tensor
 
+from vlfm.mapping.obstacle_map import ObstacleMap
 from vlfm.utils.geometry_utils import xyz_yaw_to_tf_matrix
-from vlfm.vlm.grounding_dino import ObjectDetections
 
-from ..mapping.obstacle_map import ObstacleMap
-from .base_objectnav_policy import BaseObjectNavPolicy, ZSOSConfig
-from .itm_policy import ITMPolicy, ITMPolicyV2, ITMPolicyV3
-
-HM3D_ID_TO_NAME = ["chair", "bed", "potted plant", "toilet", "tv", "couch"]
-MP3D_ID_TO_NAME = [
-    "chair",
-    "table|dining table|coffee table|side table|desk",  # "table",
-    "framed photograph",  # "picture",
-    "cabinet",
-    "pillow",  # "cushion",
-    "couch",  # "sofa",
-    "bed",
-    "nightstand",  # "chest of drawers",
-    "potted plant",  # "plant",
-    "sink",
-    "toilet",
-    "stool",
-    "towel",
-    "tv",  # "tv monitor",
-    "shower",
-    "bathtub",
-    "counter",
-    "fireplace",
-    "gym equipment",
-    "seating",
-    "clothes",
-]
+from .base_vln_policy import BaseVLNPolicy, ZSOSConfig
+from .data_collection_policy import DataCollectionPolicy
+from .path_policy import BasePathPolicy
+from .path_policy_mix import PathPolicyMix
+from .path_policy_mr import PathPolicyMR
+from .path_policy_sr import PathPolicySR
+from .testing_policy import TestingPolicy
 
 
 class TorchActionIDs:
@@ -59,9 +36,9 @@ class TorchActionIDs:
 
 
 class HabitatMixin:
-    """This Python mixin only contains code relevant for running a BaseObjectNavPolicy
+    """This Python mixin only contains code relevant for running a BaseVLNPolicy
     explicitly within Habitat (vs. the real world, etc.) and will endow any parent class
-    (that is a subclass of BaseObjectNavPolicy) with the necessary methods to run in
+    (that is a subclass of BaseVLNPolicy) with the necessary methods to run in
     Habitat.
     """
 
@@ -90,6 +67,12 @@ class HabitatMixin:
         self._camera_fov = camera_fov_rad
         self._fx = self._fy = image_width / (2 * np.tan(camera_fov_rad / 2))
         self._dataset_type = dataset_type
+        self._non_coco_threshold = 0.4  # 0.4
+
+        # self._compute_frontiers = super()._compute_frontiers  # type: ignore
+
+        self._done_initializing: bool = False
+        self.n_turn: int = 0
 
     @classmethod
     def from_config(
@@ -117,13 +100,17 @@ class HabitatMixin:
             kwargs["dataset_type"] = "hm3d"
         elif "mp3d" in config.habitat.dataset.data_path:
             kwargs["dataset_type"] = "mp3d"
+        elif ("R2R" in config.habitat.dataset.data_path) or (
+            "RxR" in config.habitat.dataset.data_path
+        ):
+            kwargs["dataset_type"] = "mp3d"
         else:
             raise ValueError("Dataset type could not be inferred from habitat config")
 
         return cls(**kwargs)
 
     def act(
-        self: Union["HabitatMixin", BaseObjectNavPolicy],
+        self: Union["HabitatMixin", BaseVLNPolicy],
         observations: TensorDict,
         rnn_hidden_states: Any,
         prev_actions: Any,
@@ -131,21 +118,15 @@ class HabitatMixin:
         deterministic: bool = False,
     ) -> PolicyActionData:
         """Converts object ID to string name, returns action as PolicyActionData"""
-        object_id: int = observations[ObjectGoalSensor.cls_uuid][0].item()
         obs_dict = observations.to_tree()
-        if self._dataset_type == "hm3d":
-            obs_dict[ObjectGoalSensor.cls_uuid] = HM3D_ID_TO_NAME[object_id]
-        elif self._dataset_type == "mp3d":
-            obs_dict[ObjectGoalSensor.cls_uuid] = MP3D_ID_TO_NAME[object_id]
-            self._non_coco_caption = (
-                " . ".join(MP3D_ID_TO_NAME).replace("|", " . ") + " ."
-            )
-        else:
-            raise ValueError(f"Dataset type {self._dataset_type} not recognized")
-        parent_cls: BaseObjectNavPolicy = super()  # type: ignore
+        parent_cls: BaseVLNPolicy = super()  # type: ignore
         try:
             action, rnn_hidden_states = parent_cls.act(
-                obs_dict, rnn_hidden_states, prev_actions, masks, deterministic
+                obs_dict,
+                rnn_hidden_states,
+                prev_actions,
+                masks,
+                deterministic,
             )
         except StopIteration:
             action = self._stop_action
@@ -156,19 +137,22 @@ class HabitatMixin:
         )
 
     def _initialize(self) -> Tensor:
-        """Turn left 30 degrees 12 times to get a 360 view at the beginning"""
-        self._done_initializing = not self._num_steps < 11  # type: ignore
+        """Turn left 15 degrees 24 times to get a 360 view at the beginning"""
+        self._done_initializing = not self.n_turn < 23  # type: ignore
+        if self._done_initializing:
+            self.n_turn = 0
+        self.n_turn += 1
         return TorchActionIDs.TURN_LEFT
 
     def _reset(self) -> None:
-        parent_cls: BaseObjectNavPolicy = super()  # type: ignore
+        parent_cls: BaseVLNPolicy = super()  # type: ignore
         parent_cls._reset()
         self._start_yaw = None
 
-    def _get_policy_info(self, detections: ObjectDetections) -> Dict[str, Any]:
+    def _get_policy_info(self) -> Dict[str, Any]:
         """Get policy info for logging"""
-        parent_cls: BaseObjectNavPolicy = super()  # type: ignore
-        info = parent_cls._get_policy_info(detections)
+        parent_cls: BaseVLNPolicy = super()  # type: ignore
+        info = parent_cls._get_policy_info()
 
         if not self._visualize:  # type: ignore
             return info
@@ -178,8 +162,11 @@ class HabitatMixin:
         info["start_yaw"] = self._start_yaw
         return info
 
+    def _choose_random_nonstop_action(self) -> torch.tensor:
+        return torch.tensor([[np.random.randint(1, 4)]])
+
     def _cache_observations(
-        self: Union["HabitatMixin", BaseObjectNavPolicy], observations: TensorDict
+        self: Union["HabitatMixin", BaseVLNPolicy], observations: TensorDict
     ) -> None:
         """Caches the rgb, depth, and camera transform from the observations.
 
@@ -233,7 +220,7 @@ class HabitatMixin:
                     self._fy,
                 )
             ],
-            "value_map_rgbd": [
+            "vl_map_rgbd": [
                 (
                     rgb,
                     depth,
@@ -247,47 +234,38 @@ class HabitatMixin:
         }
 
 
-@baseline_registry.register_policy
-class OracleFBEPolicy(HabitatMixin, BaseObjectNavPolicy):
-    def _explore(self, observations: TensorDict) -> Tensor:
-        explorer_key = [k for k in observations.keys() if k.endswith("_explorer")][0]
-        pointnav_action = observations[explorer_key]
-        return pointnav_action
-
-
-@baseline_registry.register_policy
-class SuperOracleFBEPolicy(HabitatMixin, BaseObjectNavPolicy):
-    def act(
-        self,
-        observations: TensorDict,
-        rnn_hidden_states: Any,  # can be anything because it is not used
-        *args: Any,
-        **kwargs: Any,
-    ) -> PolicyActionData:
-        return PolicyActionData(
-            actions=observations[BaseExplorer.cls_uuid],
-            rnn_hidden_states=rnn_hidden_states,
-            policy_info=[self._policy_info],
-        )
-
-
-@baseline_registry.register_policy
-class HabitatITMPolicy(HabitatMixin, ITMPolicy):
-    pass
-
-
-@baseline_registry.register_policy
-class HabitatITMPolicyV2(HabitatMixin, ITMPolicyV2):
-    pass
-
-
-@baseline_registry.register_policy
-class HabitatITMPolicyV3(HabitatMixin, ITMPolicyV3):
-    pass
-
-
 @dataclass
 class ZSOSPolicyConfig(ZSOSConfig, PolicyConfig):
+    pass
+
+
+@baseline_registry.register_policy
+class HabitatBasePathPolicy(HabitatMixin, BasePathPolicy):
+    pass
+
+
+@baseline_registry.register_policy
+class HabitatPathPolicySR(HabitatMixin, PathPolicySR):
+    pass
+
+
+@baseline_registry.register_policy
+class HabitatPathPolicyMR(HabitatMixin, PathPolicyMR):
+    pass
+
+
+@baseline_registry.register_policy
+class HabitatPathPolicyMix(HabitatMixin, PathPolicyMix):
+    pass
+
+
+@baseline_registry.register_policy
+class HabitatDataCollectionPolicy(HabitatMixin, DataCollectionPolicy):
+    pass
+
+
+@baseline_registry.register_policy
+class HabitatTestingPolicy(HabitatMixin, TestingPolicy):
     pass
 
 

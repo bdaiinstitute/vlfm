@@ -1,0 +1,126 @@
+# @package _global_
+
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+
+habitat:
+  env_task: PrivEnv
+
+habitat_baselines:
+  test_episode_count: 260 #Set to -1 to use all episodes
+  eval:
+    split: "val_seen"
+    video_option: ['disk'] #[] or ["disk"] or ["tensorboard"]
+
+  rl:
+    policy:
+      name: "HabitatTestingPolicy" #"HabitatPathPolicySR" #"HabitatPathPolicyMix" #"HabitatDataCollectionPolicy" #"HabitatTestingPolicy"
+      pointnav_stop_radius: 0.4
+      use_gt_path: False #True
+
+
+      options:
+        enable_oracle_stop: False
+        use_path_waypoints: False
+
+        logging:
+          log_dir: results/
+          enable_log_success_if_oracle_stop: True
+          analysis_save_location: failure_analysis/
+          enable_log_success_thresh: False #Must change to false if using single resolution!
+
+        replanning:
+          enable_replan_at_steps: False
+          replan_interval: 50
+          enable_replan_when_stuck: True
+          force_dont_stop_until: 33
+          force_dont_stop_after_stuck: True
+          goal_stop_dist: 0.4
+
+          look_at_frontiers: False #True
+          frontier_dist_thresh: 0.4
+
+          look_at_goal: False #True
+
+        mixpolicy:
+          close_thresh: 0.05
+          far_thresh: 0.3
+          n_times_worse: 2
+          n_steps_goto_goal: 400 #425
+
+
+        similarity_calc:
+          two_stage: False #True
+          two_stage_mode: "b_most_paths" #"a_average_val" or "b_most_paths"
+
+          limit_waypoint_radius: False #True
+          waypoints_radius_limit: 10.0
+
+          #Thresholds for logging thresh:
+          # path_thresh_switch: 0.5
+          # path_similarity_method: average sim
+          # path_thresh_stop: -1.0 
+          # path_thresh_stop_abs: -20.0 
+
+          #SINGLE RESOLUTION
+          #Uncomment for one method
+          path_similarity_method: average sim
+          path_thresh_switch: 0.0
+          path_thresh_stop: -0.5 #0.0
+          path_thresh_stop_abs: 20.0
+
+          # path_similarity_method: weighted average embeddings
+          # path_thresh_switch: 5.0
+          # path_thresh_stop: 20.0
+          # path_thresh_stop_abs: 20.0
+
+          # path_similarity_method: average embeddings
+          # path_thresh_switch: 0.5
+          # path_thresh_stop: 0.5
+          # path_thresh_stop_abs: 20.0
+
+          #MULTIRESOLUTION
+          # #Uncomment for one method
+          # path_similarity_method: average sim
+          # path_thresh_stop: 0.0
+          # path_thresh_stop_abs: 0.0
+          # path_thresh_switch: 0.5
+
+          # path_similarity_method: weighted average embeddings
+          # path_thresh_stop: 0.5 #1.5
+          # path_thresh_stop_abs: 10.0 #20.0
+          # path_thresh_switch: 0.5
+
+          # path_similarity_method: average embeddings
+          # path_thresh_stop: 0.0
+          # path_thresh_stop_abs: 0.0
+          # path_thresh_switch: 0.5
+          
+          enable_peak_threshold: False #True
+          path_thresh_peak: 0.9
+          enable_directional_waypoints: False #True
+          direction_waypoints_dist: 1.0
+          direction_waypoints_n: 8
+
+          enable_shape_sim: False #True
+          shape_sim_weight: 0.3
+
+        multiresolution:
+          path_weight_path: 1.0
+          path_weight_sentence: 0.3 #0.6
+          path_weight_parts: 0.0 #0.3
+          path_weight_words: 0.1 #0.6
+
+          path_thresh_peak_parts_val: 1.0 #0.9
+          path_thresh_peak_parts_switch: 0.3
+
+          store_prev_points: True
+          n_points_store: 2 #5
+
+
+        map:
+          enable_stairs: False #True
+          vl_feature_type: LSeg
+          map_size: 1000
+          use_adapter: False #True

@@ -1,0 +1,514 @@
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+
+from argparse import Namespace
+from typing import Dict, List, Optional, Tuple
+
+import cv2
+import numpy as np
+import torch
+from scipy.ndimage import binary_dilation
+
+from vlfm.mapping.vlfmap import VLFMap
+from vlfm.path_planning.path_planner import get_paths
+from vlfm.path_planning.utils import get_agent_radius_in_px
+
+
+class VLPathSelector:
+    def __init__(self, options: Namespace, vl_map: VLFMap, min_dist_goal: float = 0.4):
+        self.args = options
+        self._vl_map = vl_map
+
+        self._thresh_switch = options.similarity_calc.path_thresh_switch
+        self._thresh_stop = options.similarity_calc.path_thresh_stop
+
+        self._path_thresh_stop_abs = options.similarity_calc.path_thresh_stop_abs
+
+        self._use_peak_threshold = options.similarity_calc.enable_peak_threshold
+        self._thresh_peak = options.similarity_calc.path_thresh_peak
+
+        self._add_directional_waypoints = (
+            options.similarity_calc.enable_directional_waypoints
+        )
+
+        self._two_stage = options.similarity_calc.two_stage
+        self._two_stage_mode = options.similarity_calc.two_stage_mode
+
+        self._cur_path_val = 0.0
+        self._cur_path_len = 0
+        self.min_dist_goal = min_dist_goal
+        # When the agent started following
+        # each instruction part, used for backtracking
+        self._points_started_instructions: Dict[str, np.ndarray] = {}
+        self._cached_text_embeddings: Dict[str, np.ndarray] = {}
+
+        self.prev_path_value = 1.0
+
+        self._limit_waypoint_radius = options.similarity_calc.limit_waypoint_radius
+        self._waypoints_radius_limit = options.similarity_calc.waypoints_radius_limit
+
+        self._enable_shape_sim = options.similarity_calc.enable_shape_sim
+        self._shape_sim_weight = options.similarity_calc.shape_sim_weight
+
+    def reset(self) -> None:
+        self._cur_path_val = 0.0
+        self._cur_path_len = 0
+
+        self._points_started_instructions = {}
+        self._cached_text_embeddings = {}
+
+        self.prev_path_value = 1.0
+
+    def similarity_main_loop(
+        self,
+        image_embeddings: torch.tensor,
+        text_embed: torch.tensor,
+        denom: np.ndarray,
+        thresh: float = -1.0,
+        use_sum: bool = False,
+    ) -> Tuple[float, np.ndarray, int]:
+        similarity = self._vl_map._vl_model.get_similarity_batch(
+            image_embeddings=image_embeddings, txt_embedding=text_embed
+        )
+
+        if use_sum:
+            c_similarity = np.cumsum(similarity) / denom
+        else:
+            c_similarity = similarity
+        peak_i = np.argmax(c_similarity)
+        value = c_similarity[peak_i]
+
+        if self._use_peak_threshold:
+            if thresh == -1.0:
+                thresh = self._thresh_peak
+            if c_similarity.size > 0:
+                # Get first idx where it is over the threshold
+                where_over = c_similarity > value * thresh
+                if np.any(where_over):
+                    peak_i = np.where(where_over)[0][0]
+                    value = c_similarity[peak_i]
+
+        return value, c_similarity, peak_i
+
+    def get_similarity_shape(
+        self, path: np.ndarray, text_embed: torch.tensor, obstacle_map_clean: np.ndarray
+    ) -> float:
+        obstacle_map_path = obstacle_map_clean.copy()
+
+        assert (
+            self._vl_map._obstacle_map is not None
+        ), "Obstacle map cannot be None while using the shape similarity!"
+
+        obstacle_map = self._vl_map._obstacle_map._traj_vis.draw_gt_trajectory(
+            obstacle_map_path, path
+        )
+
+        img_embed = self._vl_map._vl_model.get_image_embedding(obstacle_map, head="img")
+
+        return self._vl_map._vl_model.get_similarity(img_embed, text_embed)
+
+    def get_obstacle_map_clean(self) -> np.ndarray:
+        assert (
+            self._vl_map._obstacle_map is not None
+        ), "Obstacle map cannot be None while getting the obstacle map!"
+
+        obstacle_map_clean = (
+            np.ones((*self._vl_map._obstacle_map._map.shape[:2], 3), dtype=np.uint8)
+            * 255
+        )
+        # Draw explored area in light green
+        obstacle_map_clean[self._vl_map._obstacle_map.explored_area == 1] = (
+            200,
+            255,
+            200,
+        )
+        # Draw unnavigable areas in gray
+        obstacle_map_clean[self._vl_map._obstacle_map._navigable_map == 0] = (
+            self._vl_map._obstacle_map.radius_padding_color
+        )
+        # Draw obstacles in black
+        obstacle_map_clean[self._vl_map._obstacle_map._map == 1] = (0, 0, 0)
+        obstacle_map_clean = cv2.flip(obstacle_map_clean, 0)
+        return obstacle_map_clean
+
+    def get_similarity(
+        self,
+        path: np.ndarray,
+        image_embeddings: torch.tensor,
+        text_embed: torch.tensor,
+        method: str = "",
+        thresh: float = -1.0,
+    ) -> Tuple[float, np.ndarray, int]:
+        # Get original indices of zeros
+        orig_nz = [
+            torch.any(image_embeddings[i, ...] != 0)
+            for i in range(image_embeddings.shape[0])
+        ]
+
+        # Denom that ignores the original zeros
+        denom_l = []
+        denom_i = 1
+        for j in range(image_embeddings.shape[0]):
+            if orig_nz[j]:
+                denom_i += 1
+            denom_l += [denom_i]
+        denom = np.array(denom_l)
+
+        # denom = np.arange(image_embeddings.shape[0]) + 1
+
+        if method == "":
+            method = self.args.similarity_calc.path_similarity_method
+
+        if thresh == -1.0:
+            thresh = self._thresh_peak
+
+        if method == "average sim":
+            return self.similarity_main_loop(
+                image_embeddings, text_embed, denom, thresh=thresh, use_sum=True
+            )
+        elif method == "average embeddings":
+            image_embeddings = torch.cumsum(
+                image_embeddings.reshape([-1, self._vl_map._feat_channels]), dim=0
+            ) / torch.tensor(denom, device=image_embeddings.device).reshape(
+                -1, 1
+            ).repeat(
+                1, self._vl_map._feat_channels
+            )
+            image_embeddings = image_embeddings.reshape(
+                [-1] + list(self._vl_map._feats_sz)
+            )
+            return self.similarity_main_loop(
+                image_embeddings,
+                text_embed,
+                np.ones(denom.shape),
+                thresh=thresh,
+                use_sum=False,
+            )
+        elif method == "weighted average embeddings":
+            tau = 0.1  # CLIP-Hitchhiker found optimal between 0.05-0.15
+
+            similarity = self._vl_map._vl_model.get_similarity_batch(
+                image_embeddings=image_embeddings, txt_embedding=text_embed
+            )
+
+            exp_sim = np.exp(similarity / tau)
+            exp_sim[not orig_nz] = (
+                0  # Set similarity to 0 for ones with no embedding to not mess up denom2
+            )
+            denom2 = np.cumsum(exp_sim)
+            denom2[denom2 == 0] = 1  # Prevent divide by 0
+            w = torch.tensor(exp_sim / denom2, device=image_embeddings.device)
+
+            rep = list(image_embeddings.shape)[1:] + [1]
+
+            image_embeddings = image_embeddings * torch.movedim(w.repeat(rep), -1, 0)
+
+            image_embeddings = torch.cumsum(image_embeddings, dim=0) / denom
+
+            return self.similarity_main_loop(
+                image_embeddings,
+                text_embed,
+                np.ones(denom.shape),
+                thresh=thresh,
+                use_sum=False,
+            )
+
+        else:
+            raise Exception(f"Invalid method {method} for get_similarity")
+
+    def get_path_value_main_loop(
+        self, path: np.ndarray, instruction: str
+    ) -> Tuple[float, np.ndarray, np.ndarray]:
+        raise NotImplementedError
+
+    def get_best_path_instruction(
+        self,
+        instruction: str,
+        paths: List[np.ndarray],
+        path_to_curr_loc: np.ndarray,
+        obstacle_map_clean: Optional[np.ndarray] = None,
+        text_embed_shape: Optional[torch.tensor] = None,
+        stage: int = 1,
+    ) -> Tuple[np.ndarray, np.ndarray, float, float]:
+        """Returns best path, goal, waypoint for local planner, value for path"""
+        # Get value for previous part
+        value_prev_path, _, _ = self.get_path_value_main_loop(
+            path_to_curr_loc, instruction
+        )
+
+        # Note cannot easily vectorize across paths as the paths can have different numbers of points...
+        max_value = 0.0
+        best_path = None
+        best_path_vals = None
+
+        if self._two_stage:
+            top_vals = np.array([])
+            top_paths = np.array([])
+            top_peak_i = np.array([])
+            total_value_all = 0.0
+
+        for i in range(len(paths)):
+            path = paths[i]
+
+            # full_path = np.append(path_to_curr_loc, path, axis=0)
+
+            value, total_value, peak_i = self.get_path_value_main_loop(
+                path, instruction
+            )
+
+            if self._enable_shape_sim:
+                assert not (
+                    (obstacle_map_clean is None) or (text_embed_shape is None)
+                ), (
+                    "Need to pass obstacle_map_clean and text_embed_shape into"
+                    " get_best_path_instruction when using shape similarity!"
+                )
+                value_s = self.get_similarity_shape(
+                    path, text_embed_shape, obstacle_map_clean
+                )
+
+                # print("VALUE COMP: ", value, value_s)
+
+                value = (
+                    value * (1 - self._shape_sim_weight)
+                    + value_s * self._shape_sim_weight
+                )
+                total_value = (
+                    total_value * (1 - self._shape_sim_weight)
+                    + value_s * self._shape_sim_weight
+                )
+
+            if self._two_stage and (stage == 2):
+                total_value_all += value
+
+            if self._two_stage and (stage == 1) and (value >= 0.8 * max_value):
+                top_vals = np.append(top_vals, [value])
+                top_paths = np.append(
+                    top_paths.reshape(-1, 2), path[-1, :].reshape(-1, 2), axis=0
+                )
+                top_peak_i = np.append(top_peak_i, [peak_i])
+
+            # Update
+            if value > max_value:
+                max_value = value
+                best_path = path[: peak_i + 1, :]
+                best_path_vals = total_value[: peak_i + 1]
+
+        if self._two_stage and (stage == 2):
+            return (
+                best_path,
+                np.array([total_value_all / len(paths)]),
+                max_value / len(paths),
+                value_prev_path,
+            )
+
+        if self._two_stage and (stage == 1):
+            # get all endpoints above thresh of final max_value, with no repeats
+            waypoints = top_paths[top_vals >= 0.8 * max_value, :]
+            waypoints, counts = np.unique(waypoints, axis=0, return_counts=True)
+
+            max_av_val = 0.0
+            best_path = np.array([])
+
+            if self._two_stage_mode == "a_average_val":
+                # generate new paths to endpoints
+                agent_pos = path_to_curr_loc[-1, :]  # path here should end in agent_pos
+
+                for i in range(waypoints.shape[0]):
+                    new_paths = self.generate_paths(
+                        agent_pos, waypoints[i, :].reshape(1, 2), n_paths=10
+                    )
+                    best_path_wp, _, val_wp, _ = self.get_best_path_instruction(
+                        instruction,
+                        new_paths,
+                        path_to_curr_loc,
+                        obstacle_map_clean,
+                        text_embed_shape,
+                        stage=2,
+                    )
+
+                    if val_wp > max_av_val:
+                        max_av_val = val_wp
+                        best_path = best_path_wp
+
+            elif self._two_stage_mode == "b_most_paths":
+                max_count = np.max(counts)
+                idx = np.nonzero(counts == max_count)[0]
+
+                for i in idx:
+                    wp = waypoints[i].reshape(1, 2)
+                    idx_orig = np.nonzero(
+                        (top_paths[:, 0] == wp[0, 0]) + (top_paths[:, 1] == wp[0, 1])
+                    )[0]
+                    vals_wp = top_vals[idx_orig]
+
+                    if np.mean(vals_wp) > max_av_val:
+                        max_av_val = np.mean(vals_wp)
+                        best_i = np.argmax(vals_wp)
+                        best_path = top_paths[: top_peak_i[best_i] + 1, :]
+
+            return best_path, np.array([max_av_val]), max_av_val, value_prev_path
+
+        return best_path, best_path_vals, max_value, value_prev_path
+
+    def get_path_to_return(
+        self,
+        agent_pos: np.ndarray,
+        best_path_curr: np.ndarray,
+        best_path_vals_curr: np.ndarray,
+        path_to_curr_loc: np.ndarray,
+        return_full_path: bool,
+        vis_path: bool,
+        return_chosen_path: bool = False,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        if return_full_path:
+            path_to_best_list = self.generate_paths(
+                agent_pos, best_path_curr[-1, :].reshape(1, 2), one_path=True
+            )
+            if len(path_to_best_list) > 0:
+                path_to_best = path_to_best_list[0]
+                if path_to_best.shape[0] > 1:
+                    path_to_best = (path_to_best[1:]).reshape(-1, 2)
+            else:
+                if len(path_to_curr_loc) > 0:
+                    path_to_best = np.append(
+                        np.flip(path_to_curr_loc[0], 0), best_path_curr[1:, :], axis=0
+                    )
+                else:
+                    path_to_best = best_path_curr[-1, :].reshape(1, 2)
+            if vis_path:
+                self._vl_map.set_paths_for_viz(
+                    [best_path_curr, path_to_best], [(255, 0, 0), (0, 0, 255)]
+                )
+        else:
+            path_to_best = best_path_curr[-1, :].reshape(1, 2)
+            best_path_vals_curr = best_path_vals_curr[-1]
+            if vis_path:
+                self._vl_map.set_paths_for_viz([best_path_curr], [(255, 0, 0)])
+
+        if return_chosen_path:
+            if len(path_to_curr_loc) > 0:
+                path_to_best = np.append(
+                    path_to_curr_loc[0], best_path_curr[1:, :], axis=0
+                )
+            else:
+                path_to_best = best_path_curr
+
+        return path_to_best, best_path_vals_curr
+
+    def generate_paths(
+        self,
+        agent_pos: np.ndarray,
+        waypoints: np.ndarray,
+        one_path: bool = False,
+        n_paths: int = 4,
+    ) -> List[np.ndarray]:
+        # Only use waypoints that are inside the radius limit
+        if self._limit_waypoint_radius and (not one_path):
+            dists = np.sqrt(
+                np.sum(np.square(waypoints - agent_pos.reshape(1, 2)), axis=1)
+            )
+            print("N waypoints before radius enforcement: ", waypoints.shape[0])
+            waypoints = waypoints[dists <= self._waypoints_radius_limit]
+            print("N waypoints after radius enforcement: ", waypoints.shape[0])
+
+        # Make paths to the waypoints
+        robot_radius_px = get_agent_radius_in_px(self._vl_map.pixels_per_meter)
+        agent_pos_px = self._vl_map._xy_to_cvpx(agent_pos.reshape(1, 2))[0, :]
+
+        # Only go in explored areas that are navigable
+        # Everything else is assumed occupied
+        # We increase the explorea area by a bit,
+        # otherwise we wouldn't be able to go to the frontiers
+        if self._vl_map._obstacle_map is not None:
+            explored_area = binary_dilation(
+                self._vl_map._obstacle_map.explored_area, iterations=10
+            )
+            occ_map = 1 - (self._vl_map._obstacle_map._navigable_map * explored_area)
+
+            occ_map = np.flipud(occ_map)
+        else:
+            raise Exception("ObstacleMap for VLFMap cannot be none when using paths!")
+
+        # Get bounds of unoccupied area
+        nz = np.nonzero(1 - occ_map)
+        rand_area = [min(min(nz[0]), min(nz[1])), max(max(nz[0]), max(nz[1]))]
+
+        # convert to (x,y) in pixel space
+        waypoints_px = self._vl_map._xy_to_cvpx(waypoints)
+
+        paths_px = get_paths(
+            agent_pos_px,
+            waypoints_px,
+            occ_map,
+            rand_area,
+            robot_radius_px,
+            method="both",
+            one_path=one_path,
+            n_paths=n_paths,
+        )
+
+        if len(paths_px) == 0:
+            print(f"No valid paths found! One_path: {one_path}")
+            return []
+
+        # print("PX: ", paths_px)
+
+        paths = []
+
+        for path_px in paths_px:
+            # convert back to (x,y) in metric space
+            path = self._vl_map._cvpx_to_xy(np.rint(path_px).astype(int))
+
+            # print("PX: ", path_px, "MET: ", path)
+
+            if path.shape[0] > 1:
+                if np.all(path[-1, :] == path[-2, :]):
+                    path = path[:-1, :]
+
+            if one_path or (
+                np.sqrt(np.sum(np.square(path[-1, :] - agent_pos)))
+                >= self.min_dist_goal
+            ):
+                paths += [path]
+
+        return paths
+
+    def get_directional_waypoints(
+        self, agent_pos: np.ndarray, agent_yaw: float
+    ) -> np.ndarray:
+        # Get point above agent
+        up_p = agent_pos.copy()
+        up_p[1] -= self.args.similarity_calc.direction_waypoints_dist
+
+        waypoints = []
+        ax = agent_pos[0]
+        ay = agent_pos[1]
+        # Rotate into appropriate yaw:
+        for i in range(self.args.similarity_calc.direction_waypoints_n):
+            yaw = (
+                agent_yaw
+                + np.pi * 2 * i / self.args.similarity_calc.direction_waypoints_n
+            )
+            s = np.sin(yaw)
+            c = np.cos(yaw)
+
+            pt = np.array(
+                [
+                    ax + c * (up_p[0] - ax) - s * (up_p[1] - ay),
+                    ay + s * (up_p[0] - ax) + c * (up_p[1] - ay),
+                ]
+            )
+
+            # Check if in bounds
+            pt_px = self._vl_map._xy_to_px(pt.reshape(1, 2))[0]
+            if (
+                0 <= pt_px[0]
+                and pt_px[0] < self._vl_map.size
+                and 0 <= pt_px[1]
+                and pt_px[1] < self._vl_map.size
+            ):
+                # Check that not on obstacle
+                if not self._vl_map.is_on_obstacle(pt):
+                    waypoints += [pt]
+
+        return np.array(waypoints)

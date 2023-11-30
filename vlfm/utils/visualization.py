@@ -6,7 +6,9 @@ import cv2
 import numpy as np
 
 
-def add_text_to_image(image: np.ndarray, text: str, top: bool = False) -> np.ndarray:
+def add_text_to_image(
+    image: np.ndarray, text: str, top: bool = False, highlight: str = ""
+) -> np.ndarray:
     """
     Adds text to the given image.
 
@@ -19,7 +21,7 @@ def add_text_to_image(image: np.ndarray, text: str, top: bool = False) -> np.nda
         np.ndarray: Image with text added.
     """
     width = image.shape[1]
-    text_image = generate_text_image(width, text)
+    text_image = generate_text_image(width, text, highlight)
     if top:
         combined_image = np.vstack([text_image, image])
     else:
@@ -28,7 +30,7 @@ def add_text_to_image(image: np.ndarray, text: str, top: bool = False) -> np.nda
     return combined_image
 
 
-def generate_text_image(width: int, text: str) -> np.ndarray:
+def generate_text_image(width: int, text: str, highlight: str = "") -> np.ndarray:
     """
     Generates an image of the given text with line breaks, honoring given width.
 
@@ -78,9 +80,34 @@ def generate_text_image(width: int, text: str) -> np.ndarray:
         # Update the position for the next word
         x += word_size[0] + 5  # Add some spacing between words
 
+    # get highlighted parts
+    if highlight != "":
+        idx_h_s = text.find(highlight)
+        idx_h_e = idx_h_s + len(highlight.split(" "))
+        # print(f"HIGHLIGHT: {highlight}, {idx_h_s}, {idx_h_e}, {len(to_draw)}")
+    else:
+        idx_h_s = -1
+        idx_h_e = -1
+
     # Create a blank white image with the calculated dimensions
     image = 255 * np.ones((max_height * num_rows, width, 3), dtype=np.uint8)
-    for word, x, y in to_draw:
+    for i in range(len(to_draw)):
+        # for word, x, y in to_draw:
+        word, x, y = to_draw[i]
+        if idx_h_s != -1:
+            if (i >= idx_h_s) and (i <= idx_h_e):
+                cv2.putText(
+                    image,
+                    word,
+                    (x, y),
+                    font,
+                    font_scale,
+                    (0, 0, 255),
+                    font_thickness,
+                    cv2.LINE_AA,
+                )
+                continue
+
         cv2.putText(
             image,
             word,

@@ -1,6 +1,6 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
-from typing import Any, List, Union
+from typing import Any, List, Tuple, Union
 
 import cv2
 import numpy as np
@@ -34,6 +34,13 @@ class TrajectoryVisualizer:
         """Draws the trajectory on the image and returns it"""
         img = self._draw_path(img, camera_positions)
         img = self._draw_agent(img, camera_positions[-1], camera_yaw)
+        return img
+
+    def draw_gt_trajectory(
+        self, img: np.ndarray, camera_positions: Union[np.ndarray, List[np.ndarray]]
+    ) -> np.ndarray:
+        """Draws the trajectory on the image and returns it"""
+        img = self._draw_future_path(img, camera_positions, (255, 0, 255))
         return img
 
     def _draw_path(self, img: np.ndarray, camera_positions: np.ndarray) -> np.ndarray:
@@ -121,8 +128,31 @@ class TrajectoryVisualizer:
 
     def _metric_to_pixel(self, pt: np.ndarray) -> np.ndarray:
         """Converts a metric coordinate to a pixel coordinate"""
-        # Need to flip y-axis because pixel coordinates start from top left
+        # Need to flip axes because pixel coordinates start from top left
         px = pt * self._pixels_per_meter * np.array([-1, -1]) + self._origin_in_img
         # px = pt * self._pixels_per_meter + self._origin_in_img
         px = px.astype(np.int32)
         return px
+
+    def _draw_future_path(
+        self,
+        img: np.ndarray,
+        camera_positions: np.ndarray,
+        path_color: Tuple[int, int, int],
+    ) -> np.ndarray:
+        """Draws the path on the image and returns it"""
+        if camera_positions is None:
+            return img
+        if len(camera_positions) < 2:
+            return img
+
+        path_mask = np.zeros(img.shape[:2], dtype=np.uint8)
+
+        for i in range(0, len(camera_positions) - 1):
+            path_mask = self._draw_line(
+                path_mask, camera_positions[i], camera_positions[i + 1]
+            )
+
+        img[path_mask == 255] = path_color
+
+        return img
