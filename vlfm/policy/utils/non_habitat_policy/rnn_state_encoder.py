@@ -141,7 +141,10 @@ def build_rnn_inputs(
     rnn_states: torch.Tensor,
     not_dones: torch.Tensor,
     rnn_build_seq_info: Dict[str, torch.Tensor],
-) -> Tuple[PackedSequence, torch.Tensor,]:
+) -> Tuple[
+    PackedSequence,
+    torch.Tensor,
+]:
     r"""Create a PackedSequence input for an RNN such that each
     set of steps that are part of the same episode are all part of
     a batch in the PackedSequence.

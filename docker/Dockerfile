@@ -22,9 +22,9 @@ RUN pip install torch>=1.10.1 \
     open3d>=0.17.0 \
     transformers==4.26.0 \
     salesforce-lavis>=1.0.2 \
-    pre-commit>=3.1.1 \
-    pytest>=7.2.1 \
-    pytest-cov>=4.0.0 \
+    pre-commit>=3.5.0 \
+    pytest>=7.3.1 \
+    pytest-cov>=4.1.0 \
     habitat-baselines==0.2.420230405 \
     habitat-lab==0.2.420230405 \
     bosdyn-client>=3.3.2 \

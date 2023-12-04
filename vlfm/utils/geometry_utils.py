@@ -83,8 +83,7 @@ def calculate_vfov(hfov: float, width: int, height: int) -> float:
     """
     # Calculate the diagonal field of view (DFOV)
     dfov = 2 * math.atan(
-        math.tan(hfov / 2)
-        * math.sqrt((width**2 + height**2) / (width**2 + height**2))
+        math.tan(hfov / 2) * math.sqrt((width**2 + height**2) / (width**2 + height**2))
     )
 
     # Calculate the vertical field of view (VFOV)
