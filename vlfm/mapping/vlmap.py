@@ -134,7 +134,7 @@ class VLMap(BaseMap):
         self.viz_embedding_cache: Dict[str, torch.tensor] = {}
 
         self.use_direction_embedding = True
-        self.direction_weight = 1.0  # 0.5
+        self.direction_weight = 0.1
         self.prev_masks: List[np.ndarray] = []
 
         if self.use_direction_embedding:
@@ -578,12 +578,23 @@ class VLMap(BaseMap):
         else:
             text_embed = self._vl_model.get_text_embedding(text, head="embed")
             self.viz_embedding_cache[text] = text_embed
-        return self._vl_model.get_similarity_batch(
+        vm = self._vl_model.get_similarity_batch(
             self._vl_map.reshape(
                 [self._vl_map.shape[0] * self._vl_map.shape[1]] + list(self._feats_sz)
             ),
             text_embed,
         ).reshape([self._vl_map.shape[0], self._vl_map.shape[1]])
+
+        cv2.imwrite(
+            f"map_viz/{self._texting_viz_idx:05}_valuemap_{text}.png",
+            cv2.applyColorMap(
+                (vm / (np.max(vm[:])) * 255).astype("uint8"), cv2.COLORMAP_PLASMA
+            ),
+        )
+
+        self._texting_viz_idx += 1
+
+        return vm
 
         # words = text.strip().split(" ")
 
