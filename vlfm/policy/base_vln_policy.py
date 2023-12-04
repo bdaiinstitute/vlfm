@@ -140,14 +140,14 @@ class BaseVLNPolicy(BasePolicy):
 
         self._observations_cache["robot_xy"]
 
-        if self._num_steps == 0:
-            # Update VL Map
-            if self._vl_map.use_direction_embedding:
-                agent_pos_m = self._observations_cache["robot_xy"]
-                yaw = self._observations_cache["robot_heading"]
-                self._vl_map.update_direction_embeddings(
-                    agent_pos_m, yaw, update_masks=True
-                )
+        # if self._num_steps == 0:
+        #     # Update VL Map
+        #     if self._vl_map.use_direction_embedding:
+        #         agent_pos_m = self._observations_cache["robot_xy"]
+        #         yaw = self._observations_cache["robot_heading"]
+        #         self._vl_map.update_direction_embeddings(
+        #             agent_pos_m, yaw, update_masks=True
+        #         )
 
         if self._num_steps > self._max_iters - 2:
             print("STOPPING (end iter)")

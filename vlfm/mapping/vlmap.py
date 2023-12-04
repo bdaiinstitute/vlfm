@@ -6,6 +6,7 @@ import warnings
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import cv2
+import matplotlib.colors as mcolors
 import numpy as np
 import torch
 from scipy.ndimage import binary_dilation
@@ -139,12 +140,14 @@ class VLMap(BaseMap):
         if self.use_direction_embedding:
             self.direction_embeddings = self.get_direction_embeddings()
 
-        # TODO: need to test the ground projection!!!
         # For single image segment, assign colours and then ground project
-        # self._testing_segmentation_map = np.zeros((size, size, 3))
-        # self._testing_current_c = 0
-        # import matplotlib.colors as mcolors
-        # self._testing_cols = mcolors.XKCD_COLORS
+        self._testing_enable = False
+        self._testing_segmentation_map = np.zeros((size, size, 3))
+        self._testing_map = np.zeros((size, size))
+        self._testing_current_c: int = 0
+        self._testing_cols = mcolors.XKCD_COLORS
+        self._testing_cols_keys = [k for k in self._testing_cols.keys()]
+        self._texting_viz_idx = 0
 
     def set_vl_model(self) -> None:
         # self._vl_model = BLIP2unimodalClient(
@@ -197,6 +200,8 @@ class VLMap(BaseMap):
 
         self.prev_masks = []
 
+        self._testing_current_c = 0
+
     def get_direction_embeddings(self) -> List[torch.tensor]:
         # Just return the embeddings and then get a mask seperately
         # Making something the size of the map will be use too much memory
@@ -208,22 +213,22 @@ class VLMap(BaseMap):
         le = self._vl_model.get_text_embedding(left_words[0], head="embed")
         for i in range(1, len(left_words)):
             le += self._vl_model.get_text_embedding(left_words[i], head="embed")
-        le /= len(left_words)
+        le /= 2  # torch.norm(le)
 
         re = self._vl_model.get_text_embedding(right_words[0], head="embed")
         for i in range(1, len(right_words)):
             re += self._vl_model.get_text_embedding(right_words[i], head="embed")
-        re /= len(right_words)
+        re /= 2  # torch.norm(re)
 
         fe = self._vl_model.get_text_embedding(front_words[0], head="embed")
         for i in range(1, len(front_words)):
             fe += self._vl_model.get_text_embedding(front_words[i], head="embed")
-        fe /= len(front_words)
+        fe /= 2  # torch.norm(fe)
 
         be = self._vl_model.get_text_embedding(back_words[0], head="embed")
         for i in range(1, len(back_words)):
             be += self._vl_model.get_text_embedding(back_words[0], head="embed")
-        be /= len(back_words)
+        be /= 2  # torch.norm(be)
 
         return [le, re, fe, be]
 
@@ -272,14 +277,14 @@ class VLMap(BaseMap):
         ret += [np.vstack([i, j])]
 
         # forward
-        idx = yr <= agent_pos[0]
+        idx = yr >= agent_pos[0]
 
         i = y.flatten()[idx]
         j = x.flatten()[idx]
         ret += [np.vstack([i, j])]
 
         # back
-        idx = yr >= agent_pos[0]
+        idx = yr <= agent_pos[0]
 
         i = y.flatten()[idx]
         j = x.flatten()[idx]
@@ -310,7 +315,7 @@ class VLMap(BaseMap):
             self._vl_map[masks[i][0], masks[i][1], :] /= 1 + self.direction_weight
 
         if update_masks:
-            self._vl_map.prev_masks = masks
+            self.prev_masks = masks
             return None
         else:
             return masks
@@ -318,6 +323,7 @@ class VLMap(BaseMap):
     def revert_direction_embeddings(
         self, agent_pos_m: np.ndarray, yaw: float, masks: List[np.ndarray]
     ) -> None:
+        # remove current mask
         for i in range(len(masks)):
             self._vl_map[masks[i][0], masks[i][1], :] *= 1 + self.direction_weight
             self._vl_map[masks[i][0], masks[i][1], :] -= (
@@ -325,7 +331,7 @@ class VLMap(BaseMap):
             )
 
         if len(self.prev_masks) > 0:
-            # remove previous direction embedding
+            # add back previous direction embedding
             for i in range(len(self.prev_masks)):
                 self._vl_map[self.prev_masks[i][0], self.prev_masks[i][1], :] += (
                     self.direction_embeddings[i] * self.direction_weight
@@ -334,9 +340,239 @@ class VLMap(BaseMap):
                     1 + self.direction_weight
                 )
 
-    def get_value_map(self, text: str) -> np.ndarray:
-        text = "turn left"
+    def update_testmap(
+        self,
+        image: np.ndarray,
+        depth: np.ndarray,
+        tf_camera_to_episodic: np.ndarray,
+        min_depth: float,
+        max_depth: float,
+        fov: float,
+    ) -> None:
+        if self.use_direction_embedding:
+            # left, right, forward, back
+            map_dir = np.zeros((self._vl_map.shape[0], self._vl_map.shape[1], 3))
+            cols = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [0, 0, 0]]
+            agent_pos_m = tf_camera_to_episodic[0:2, 3]
+            yaw = extract_yaw(tf_camera_to_episodic)
+            masks = self.get_direction_masks(agent_pos_m, yaw)
 
+        for i in range(len(masks)):
+            map_dir[masks[i][0], masks[i][1], :] += cols[i]
+        map_dir /= 2
+        cv2.imwrite(f"map_viz/{self._texting_viz_idx:05}_dir.png", map_dir)
+
+        img_seg = np.zeros([image.shape[0], image.shape[1], 3])
+
+        img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+        from vlfm.vlm.sam_crop import SAM_crop
+
+        assert type(self._vl_model) == SAM_crop, "Testing only for SAM_crop right now"
+        masks = self._vl_model.mask_generator.generate(img)
+
+        for mask_data in masks:
+            mask = mask_data["segmentation"]
+            col = mcolors.to_rgb(
+                self._testing_cols[self._testing_cols_keys[self._testing_current_c]]
+            )
+            img_seg[mask, :] = [int(c * 255) for c in col]
+            self._testing_current_c += 1
+
+            if self._testing_current_c >= len(self._testing_cols_keys):
+                self._testing_current_c = 0
+
+        cv2.imwrite(f"map_viz/{self._texting_viz_idx:05}_rgb.png", image)
+
+        cv2.imwrite(f"map_viz/{self._texting_viz_idx:05}_seg.png", img_seg)
+
+        # Squeeze out the channel dimension if depth is a 3D array
+        if len(depth.shape) == 3:
+            depth = depth.squeeze(2)
+        # Squash depth image into one row with the max depth value for each column
+        depth_row = np.max(depth, axis=0) * (max_depth - min_depth) + min_depth
+
+        # Create a linspace of the same length as the depth row from -fov/2 to fov/2
+        angles = np.linspace(-fov / 2, fov / 2, len(depth_row))
+
+        # Assign each value in the row with an x, y coordinate depending on 'angles'
+        # and the max depth value for that column
+        x = depth_row
+        y = depth_row * np.tan(angles)
+
+        # Get blank cone mask
+        cone_mask = self._get_confidence_mask(fov, max_depth)
+
+        # Convert the x, y coordinates to pixel coordinates
+        x = (x * self.pixels_per_meter + cone_mask.shape[0] / 2).astype(int)
+        y = (y * self.pixels_per_meter + cone_mask.shape[1] / 2).astype(int)
+
+        # Create a contour from the x, y coordinates, with the top left and right
+        # corners of the image as the first two points
+        last_row = cone_mask.shape[0] - 1
+        last_col = cone_mask.shape[1] - 1
+        start = np.array([[0, last_col]])
+        end = np.array([[last_row, last_col]])
+        contour = np.concatenate((start, np.stack((y, x), axis=1), end), axis=0)
+
+        # Draw the contour onto the cone mask, in filled-in black
+        visible_mask = cv2.drawContours(cone_mask, [contour], -1, 0, -1)  # type: ignore
+
+        curr_data = visible_mask
+
+        depth_gp = np.zeros((visible_mask.shape[0], visible_mask.shape[1], 3))
+
+        sx, sy = depth.shape
+
+        x, y = np.meshgrid(np.arange(sx), np.flip(np.arange(sy)), indexing="xy")
+        z = depth.flatten()
+
+        height = tf_camera_to_episodic[2, 3]
+
+        zm = z * (max_depth - min_depth) + min_depth
+        xm = ((x / sx) * (fov) - fov / 2).flatten() * zm
+        ym = (
+            (y / sy) * (fov) - fov / 2 + height
+        ).flatten() * zm  # assume square pixels? Also add agent height
+
+        cutoff = 1 + height
+
+        xm2 = xm[ym < cutoff]
+        zm2 = zm[ym < cutoff]
+        ym[ym < cutoff]
+
+        i = x.flatten()[
+            ym < cutoff
+        ]  # (np.clip((xm2 + fov/2)/fov, 0.0, 1.0)*(sx-1)).astype(int)
+        j = (np.clip(depth.flatten()[ym < cutoff], 0.0, 1.0) * (sy - 1)).astype(int)
+
+        mx = (zm2 * self.pixels_per_meter + depth_gp.shape[0] / 2).astype(int)
+        my = (xm2 * self.pixels_per_meter + depth_gp.shape[1] / 2).astype(int)
+
+        depth_gp[mx, my] = np.flip(img_seg, axis=0)[j, i]
+
+        # Rotate this new data to match the camera's orientation
+        yaw = extract_yaw(tf_camera_to_episodic)
+        curr_data = rotate_image(curr_data, -yaw)
+
+        depth_gp = rotate_image(depth_gp, -yaw)
+
+        # Determine where this mask should be overlaid
+        cam_x, cam_y = tf_camera_to_episodic[:2, 3] / tf_camera_to_episodic[3, 3]
+
+        # Convert to pixel units
+        px = int(cam_x * self.pixels_per_meter) + self._episode_pixel_origin[0]
+        py = int(-cam_y * self.pixels_per_meter) + self._episode_pixel_origin[1]
+
+        # Overlay the new data onto the map
+        if (
+            0 <= px < self._testing_map.shape[0]
+            and 0 <= py < self._testing_map.shape[1]
+        ):
+            curr_map = np.zeros_like(self._testing_map)
+            curr_map = place_img_in_img(curr_map, curr_data, px, py)
+
+            curr_map_fo = np.zeros_like(self._testing_segmentation_map)
+            curr_map_f = place_img_in_img(curr_map_fo, depth_gp, px, py)
+        else:
+            print("Update would be outside map! Not updating!")
+            curr_map = self._testing_map
+            return
+
+        new_map = curr_map
+
+        cv2.imwrite(f"map_viz/{self._texting_viz_idx:05}_new_map.png", curr_map_f)
+
+        if self._obstacle_map is not None:
+            # If an obstacle map is provided, we will use it to mask out the
+            # new map
+            explored_area = self._obstacle_map.explored_area
+            new_map[explored_area == 0] = 0
+            self._testing_map[explored_area == 0] = 0
+            self._testing_segmentation_map[explored_area == 0] = 0
+
+        if self._fusion_type == "replace":
+            # Ablation. The values from the current observation will overwrite any
+            # existing values
+            print("VALUE MAP ABLATION:", self._fusion_type)
+            new_vl_map = np.zeros_like(self._testing_segmentation_map)
+            new_vl_map[new_map > 0] = curr_map_f[new_map > 0]
+            self._testing_map[new_map > 0] = new_map[new_map > 0]
+            self._testing_segmentation_map[new_map > 0] = new_vl_map[new_map > 0]
+            return
+        elif self._fusion_type == "equal_weighting":
+            # Ablation. Updated values will always be the mean of the current and
+            # new values, meaning that confidence scores are forced to be the same.
+            print("VALUE MAP ABLATION:", self._fusion_type)
+            self._testing_map[self._testing_map > 0] = 1
+            new_map[new_map > 0] = 1
+        else:
+            assert (
+                self._fusion_type == "default"
+            ), f"Unknown fusion type {self._fusion_type}"
+
+        # Any values in the given map that are less confident than
+        # self._decision_threshold AND less than the new_map in the existing map
+        # will be silenced into 0s
+        new_map_mask = np.logical_and(
+            new_map < self._decision_threshold, new_map < self._testing_map
+        )
+        new_map[new_map_mask] = 0
+
+        # print("USE MAX C: ", self._use_max_confidence)
+
+        if self._use_max_confidence:
+            # For every pixel that has a higher new_map in the new map than the
+            # existing value map, replace the value in the existing value map with
+            # the new value
+            higher_new_map_mask = new_map > self._testing_map
+            self._testing_segmentation_map[higher_new_map_mask] = curr_map_f[
+                higher_new_map_mask
+            ]
+            # Update the new_map map with the new new_map values
+            self._testing_map[higher_new_map_mask] = new_map[higher_new_map_mask]
+        else:
+            # Each pixel in the existing value map will be updated with a weighted
+            # average of the existing value and the new value. The weight of each value
+            # is determined by the current and new new_map values. The new_map map
+            # will also be updated with using a weighted average in a similar manner.
+            new_map *= np.sum(curr_map_f != 0, axis=2) > 0
+            self._testing_map *= np.sum(self._testing_segmentation_map != 0, axis=2) > 0
+
+            confidence_denominator = self._testing_map + new_map
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+                weight_1 = self._testing_map / confidence_denominator
+                weight_2 = new_map / confidence_denominator
+
+            weight_1_channeled = np.repeat(
+                np.expand_dims(weight_1, axis=2), self._feat_channels, axis=2
+            )
+            weight_2_channeled = np.repeat(
+                np.expand_dims(weight_2, axis=2), self._feat_channels, axis=2
+            )
+
+            self._testing_segmentation_map = (
+                self._testing_segmentation_map * weight_1_channeled
+                + curr_map_f * weight_2_channeled
+            )
+            self._testing_map = self._testing_map * weight_1 + new_map * weight_2
+
+            # Because confidence_denominator can have 0 values, any nans in either the
+            # value or confidence maps will be replaced with 0
+            self._testing_segmentation_map = np.nan_to_num(
+                self._testing_segmentation_map
+            )
+            self._testing_map = np.nan_to_num(self._testing_map)
+
+        cv2.imwrite(
+            f"map_viz/{self._texting_viz_idx:05}_map.png",
+            self._testing_segmentation_map,
+        )
+
+        self._texting_viz_idx += 1
+
+    def get_value_map(self, text: str) -> np.ndarray:
         if text in self.viz_embedding_cache.keys():
             text_embed = self.viz_embedding_cache[text]
         else:
@@ -647,7 +883,7 @@ class VLMap(BaseMap):
         mx = (zm2 * self.pixels_per_meter + depth_gp.shape[0] / 2).astype(int)
         my = (xm2 * self.pixels_per_meter + depth_gp.shape[1] / 2).astype(int)
 
-        depth_gp[mx, my] = np.flip(np.flip(image_embedding, axis=0), axis=1)[i, j]
+        depth_gp[mx, my] = np.flip(image_embedding, axis=0)[j, i]
 
         ###Old version -- cone
         # x = depth.flatten() * (max_depth - min_depth) + min_depth
@@ -794,15 +1030,17 @@ class VLMap(BaseMap):
             fov: The field of view of the camera in RADIANS.
         """
         if self.use_direction_embedding:
-            if len(self.prev_masks) > 0:
-                # remove direction embedding before fusing
-                for i in range(len(self.prev_masks)):
-                    self._vl_map[self.prev_masks[i][0], self.prev_masks[i][1], :] *= (
-                        1 + self.direction_weight
-                    )
-                    self._vl_map[self.prev_masks[i][0], self.prev_masks[i][1], :] -= (
-                        self.direction_embeddings[i] * self.direction_weight
-                    )
+            if len(self.prev_masks) == 0:
+                agent_pos_m = tf_camera_to_episodic[0:2, 3]
+                yaw = extract_yaw(tf_camera_to_episodic)
+                self.update_direction_embeddings(agent_pos_m, yaw, update_masks=True)
+
+            # remove direction embedding before fusing
+            self._vl_map *= 1.0 + self.direction_weight * len(self.prev_masks)
+            for i in range(len(self.prev_masks)):
+                self._vl_map[self.prev_masks[i][0], self.prev_masks[i][1], :] -= (
+                    self.direction_embeddings[i] * self.direction_weight
+                )
 
         if "SAM" in self.vl_model_type:
             image = cv2.resize(image, (depth.shape[0], depth.shape[1]))
@@ -856,6 +1094,14 @@ class VLMap(BaseMap):
                                 )
                             self._stair_dict[px] = stair
 
+        # for i in range(len(self.prev_masks)):
+        #     self._vl_map[self.prev_masks[i][0], self.prev_masks[i][1], :] *= (
+        #         1 + self.direction_weight
+        #     )
+        #     self._vl_map[self.prev_masks[i][0], self.prev_masks[i][1], :] -= (
+        #         self.direction_embeddings[i] * self.direction_weight
+        #     )
+
         if self.use_direction_embedding:
             if len(self.prev_masks) > 0:
                 # Add back in direction embedding after fusing
@@ -863,9 +1109,7 @@ class VLMap(BaseMap):
                     self._vl_map[self.prev_masks[i][0], self.prev_masks[i][1], :] += (
                         self.direction_embeddings[i] * self.direction_weight
                     )
-                    self._vl_map[self.prev_masks[i][0], self.prev_masks[i][1], :] /= (
-                        1 + self.direction_weight
-                    )
+                self._vl_map /= 1.0 + self.direction_weight * len(self.prev_masks)
 
         # if self.use_direction_embedding:
         #     agent_pos_m = tf_camera_to_episodic[0:2,3]
@@ -881,6 +1125,16 @@ class VLMap(BaseMap):
 
         #     #debug only
         #     # self._vl_map[masks[0][0],masks[0][1],:] = 0 #set left to 0
+
+        if self._testing_enable:
+            self.update_testmap(
+                image,
+                depth,
+                tf_camera_to_episodic,
+                min_depth,
+                max_depth,
+                fov,
+            )
 
     def visualize(
         self,

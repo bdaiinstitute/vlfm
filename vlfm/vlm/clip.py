@@ -62,11 +62,13 @@ class CLIP(BaseVL):
         pil_img = Image.fromarray(image)
         img = self.vis_processors["eval"](pil_img).unsqueeze(0).to(self.device)
 
-        sample = {"image": img, "text_input": None}
+        sample = {"image": img, "text_input": [""]}
 
         image_features = self.model.extract_features(sample)
 
-        image_features = image_features / torch.norm(image_features)
+        image_features = (
+            image_features.image_embeds_proj
+        )  # / torch.norm(image_features, dim=1)
 
         if self.use_adapter:
             if head == "img":
@@ -86,11 +88,14 @@ class CLIP(BaseVL):
     def get_text_embedding(
         self, txt: str, head: str = ""
     ) -> torch.tensor:  # np.ndarray:
-        sample = {"image": None, "text_input": txt}
+        sample = {
+            "image": torch.zeros(1, 3, 224, 224, device=self.device),
+            "text_input": txt,
+        }
 
         text_features = self.model.extract_features(sample)
 
-        text_features = text_features / torch.norm(text_features)
+        text_features = text_features.text_embeds_proj  # / torch.norm(text_features)
 
         if self.use_adapter:
             if head == "img":
