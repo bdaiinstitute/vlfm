@@ -222,8 +222,9 @@ class VLPathSelectorSR(VLPathSelector):
             ):
                 self._points_started_instructions[next_instruct] = agent_pos
 
-                assert masks is not None, "Returned masks is None!"
-                self._vl_map.prev_masks = masks
+                if self._vl_map.use_direction_embedding:
+                    assert masks is not None, "Returned masks is None!"
+                    self._vl_map.prev_masks = masks
 
                 path_to_best, best_path_vals_next = self.get_path_to_return(
                     agent_pos,
