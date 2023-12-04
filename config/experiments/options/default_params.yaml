@@ -15,7 +15,7 @@ habitat_baselines:
 
   rl:
     policy:
-      name: "HabitatTestingPolicy" #"HabitatPathPolicySR" #"HabitatPathPolicyMix" #"HabitatDataCollectionPolicy" #"HabitatTestingPolicy"
+      name: "HabitatPathPolicySR" #"HabitatPathPolicyMix" #"HabitatDataCollectionPolicy" #"HabitatTestingPolicy"
       pointnav_stop_radius: 0.4
       use_gt_path: False #True
 
@@ -67,7 +67,7 @@ habitat_baselines:
           #Uncomment for one method
           path_similarity_method: average sim
           path_thresh_switch: 0.0
-          path_thresh_stop: -0.5 #0.0
+          path_thresh_stop: 0.0 #0.0
           path_thresh_stop_abs: 20.0
 
           # path_similarity_method: weighted average embeddings
@@ -100,7 +100,7 @@ habitat_baselines:
           enable_peak_threshold: False #True
           path_thresh_peak: 0.9
           enable_directional_waypoints: False #True
-          direction_waypoints_dist: 1.0
+          direction_waypoints_dist: 3.0
           direction_waypoints_n: 8
 
           enable_shape_sim: False #True
@@ -121,6 +121,6 @@ habitat_baselines:
 
         map:
           enable_stairs: False #True
-          vl_feature_type: LSeg
+          vl_feature_type: SAM+CLIP #LSeg
           map_size: 1000
           use_adapter: False #True

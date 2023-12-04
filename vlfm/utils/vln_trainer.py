@@ -74,8 +74,12 @@ class VLNTrainer(PPOTrainer):
 
         # set-up failure analysis
         os.makedirs(log_dir + args.logging.analysis_save_location, exist_ok=True)
-        file_success = open(args.logging.analysis_save_location + "successes.txt", "w")
-        file_fail = open(args.logging.analysis_save_location + "failures.txt", "w")
+        file_success = open(
+            log_dir + args.logging.analysis_save_location + "successes.txt", "w"
+        )
+        file_fail = open(
+            log_dir + args.logging.analysis_save_location + "failures.txt", "w"
+        )
 
         file_log = open(log_dir + "logging_info.txt", "w")
 

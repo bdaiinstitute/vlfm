@@ -30,7 +30,9 @@ class PathPolicySR(BasePathPolicy):
         self._path_selector.reset()
 
     def _parse_instruction(self, instruction: str) -> List[str]:
-        parsed_instruct = parse_instruction(instruction, split_strs=["\r\n", "\n", "."])
+        parsed_instruct = parse_instruction(
+            instruction, split_strs=["\r\n", "\n", ".", ",", " and ", " then "]
+        )
 
         print("PARSING: ", instruction)
         print("OUPUT: ", parsed_instruct)
@@ -98,6 +100,7 @@ class PathPolicySR(BasePathPolicy):
                     cur_instruct,
                     next_instruct,
                     return_full_path=self.args.use_path_waypoints,
+                    yaw=yaw,
                 )
             )
 

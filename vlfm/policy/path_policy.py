@@ -38,6 +38,7 @@ class BasePathPolicy(BaseVLNPolicy):
             obstacle_map=self._obstacle_map,
             enable_stairs=self.args.map.enable_stairs,
             use_adapter=self.args.map.use_adapter,
+            use_max_confidence=True,  # False
         )
 
         if self._vl_map.enable_stairs:
@@ -285,10 +286,14 @@ class BasePathPolicy(BaseVLNPolicy):
 
         policy_info["vl_map"] = cv2.cvtColor(
             self._vl_map.visualize(
-                markers, gt_traj=self.gt_path_for_viz, instruction=self._instruction
+                markers,
+                gt_traj=self.gt_path_for_viz,
+                instruction=self._instruction_parts[self._curr_instruction_idx],
             ),
             cv2.COLOR_BGR2RGB,
         )
+
+        # cv2.imwrite(f"map_viz/valuemap_{self._num_steps}.png", policy_info["vl_map"])
 
         policy_info["render_below_images"] += ["current instruction part"]
         policy_info["current instruction part"] = self._instruction_parts[

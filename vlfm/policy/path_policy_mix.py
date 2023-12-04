@@ -243,6 +243,7 @@ class PathPolicyMix(BasePathPolicy):
                     cur_instruct,
                     next_instruct,
                     return_chosen_path=True,
+                    yaw=yaw,
                 )
             )
 

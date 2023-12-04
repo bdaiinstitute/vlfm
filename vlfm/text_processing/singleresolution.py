@@ -41,6 +41,7 @@ class VLPathSelectorSR(VLPathSelector):
         next_instruct: str,
         return_full_path: bool = False,
         return_chosen_path: bool = False,
+        yaw: float = 0.0,
     ) -> Tuple[np.ndarray, np.ndarray, bool]:
         """Selects the best waypoint from the given list of waypoints.
 
@@ -60,7 +61,7 @@ class VLPathSelectorSR(VLPathSelector):
         # Add waypoints
         if self._add_directional_waypoints:
             dir_waypoints = self.get_directional_waypoints(agent_pos, agent_yaw)
-            waypoints = np.append(waypoints, dir_waypoints, axis=0)
+            waypoints = np.append(waypoints, dir_waypoints.reshape(-1, 2), axis=0)
 
             # Visualize
             self._vl_map.set_extra_waypoints(dir_waypoints.reshape(-1, 2))
@@ -175,6 +176,12 @@ class VLPathSelectorSR(VLPathSelector):
                     )
                     self._cached_text_embeddings[caption] = text_embed_shape
 
+            # Update VL Map
+            if self._vl_map.use_direction_embedding:
+                masks = self._vl_map.update_direction_embeddings(
+                    agent_pos, yaw, update_masks=False
+                )
+
             best_path_next, best_path_vals_next, max_value_next, _ = (
                 self.get_best_path_instruction(
                     next_instruct,
@@ -208,8 +215,15 @@ class VLPathSelectorSR(VLPathSelector):
                         self._thresh_switch,
                     )
 
-            if switch:
+            if (
+                switch
+                and (best_path_next is not None)
+                and (not (best_path_next.size == 0))
+            ):
                 self._points_started_instructions[next_instruct] = agent_pos
+
+                assert masks is not None, "Returned masks is None!"
+                self._vl_map.prev_masks = masks
 
                 path_to_best, best_path_vals_next = self.get_path_to_return(
                     agent_pos,
@@ -222,6 +236,11 @@ class VLPathSelectorSR(VLPathSelector):
                 )
                 return path_to_best, best_path_vals_next, True
             else:
+                if self._vl_map.use_direction_embedding:
+                    # Put old embedding back
+                    assert masks is not None, "Returned masks is None!"
+                    self._vl_map.revert_direction_embeddings(agent_pos, yaw, masks)
+
                 path_to_best, best_path_vals_curr = self.get_path_to_return(
                     agent_pos,
                     best_path_curr,

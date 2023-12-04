@@ -66,6 +66,8 @@ class CLIP(BaseVL):
 
         image_features = self.model.extract_features(sample)
 
+        image_features = image_features / torch.norm(image_features)
+
         if self.use_adapter:
             if head == "img":
                 return self.img_head(image_features).squeeze()
@@ -87,6 +89,8 @@ class CLIP(BaseVL):
         sample = {"image": None, "text_input": txt}
 
         text_features = self.model.extract_features(sample)
+
+        text_features = text_features / torch.norm(text_features)
 
         if self.use_adapter:
             if head == "img":

@@ -31,3 +31,10 @@ class BaseVL:
         self, image_embeddings: torch.tensor, txt_embedding: torch.tensor
     ) -> np.ndarray:
         raise NotImplementedError
+
+    def get_similarity_from_inputs(
+        self, image: np.ndarray, txt: str, head: str = ""
+    ) -> float:
+        imge = self.get_image_embedding(image, head)
+        txte = self.get_text_embedding(txt, head)
+        return self.get_similarity(imge, txte)
