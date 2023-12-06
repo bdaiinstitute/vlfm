@@ -14,7 +14,7 @@ defaults:
   - /habitat/task/measurements:
     - frontier_exploration_map
     - traveled_stairs
-  - /habitat_baselines/rl/policy: zsos_policy
+  - /habitat_baselines/rl/policy: vlfm_policy
   - _self_
 
 habitat:

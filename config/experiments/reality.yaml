@@ -3,7 +3,7 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
 defaults:
-  - /policy: zsos_config_base
+  - /policy: vlfm_config_base
   - _self_
 
 policy:

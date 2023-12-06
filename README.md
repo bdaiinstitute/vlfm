@@ -18,10 +18,12 @@ pip install -e .[reality]
 ```
 Install all the dependencies:
 ```bash
-git clone git@github.com:WongKinYiu/yolov7.git  # if using YOLOv7
 git clone git@github.com:IDEA-Research/GroundingDINO.git
+git clone git@github.com:WongKinYiu/yolov7.git  # if using YOLOv7
 ```
-Follow the install directions for GroundingDINO. Nothing needs to be done for YOLOv7, but it needs to be cloned into the repo.
+Follow the original install directions for GroundingDINO, which can be found here: https://github.com/IDEA-Research/GroundingDINO.
+
+Nothing needs to be done for YOLOv7, but it needs to be cloned into the repo.
 
 ### Installing GroundingDINO (Only if using conda-installed CUDA)
 Only attempt if the installation instructions in the GroundingDINO repo do not work.

@@ -406,7 +406,7 @@ class BaseObjectNavPolicy(BasePolicy):
 
 
 @dataclass
-class ZSOSConfig:
+class VLFMConfig:
     name: str = "HabitatITMPolicy"
     text_prompt: str = "Seems like there is a target_object ahead."
     pointnav_policy_path: str = "data/pointnav_weights.pth"
@@ -421,7 +421,7 @@ class ZSOSConfig:
     hole_area_thresh: int = 100000
     use_vqa: bool = False
     vqa_prompt: str = "Is this "
-    coco_threshold: float = 0.6
+    coco_threshold: float = 0.8
     non_coco_threshold: float = 0.4
     agent_radius: float = 0.18
 
@@ -429,8 +429,8 @@ class ZSOSConfig:
     @property
     def kwaarg_names(cls) -> List[str]:
         # This returns all the fields listed above, except the name field
-        return [f.name for f in fields(ZSOSConfig) if f.name != "name"]
+        return [f.name for f in fields(VLFMConfig) if f.name != "name"]
 
 
 cs = ConfigStore.instance()
-cs.store(group="policy", name="zsos_config_base", node=ZSOSConfig())
+cs.store(group="policy", name="vlfm_config_base", node=VLFMConfig())

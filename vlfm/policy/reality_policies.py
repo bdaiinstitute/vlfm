@@ -10,7 +10,7 @@ from PIL import Image
 from torch import Tensor
 
 from vlfm.mapping.obstacle_map import ObstacleMap
-from vlfm.policy.base_objectnav_policy import ZSOSConfig
+from vlfm.policy.base_objectnav_policy import VLFMConfig
 from vlfm.policy.itm_policy import ITMPolicyV2
 
 INITIAL_ARM_YAWS = np.deg2rad([-90, -60, -30, 0, 30, 60, 90, 0]).tolist()
@@ -48,8 +48,8 @@ class RealityMixin:
     def from_config(
         cls, config: DictConfig, *args_unused: Any, **kwargs_unused: Any
     ) -> Any:
-        policy_config: ZSOSConfig = config.policy
-        kwargs = {k: policy_config[k] for k in ZSOSConfig.kwaarg_names}  # type: ignore
+        policy_config: VLFMConfig = config.policy
+        kwargs = {k: policy_config[k] for k in VLFMConfig.kwaarg_names}  # type: ignore
 
         return cls(**kwargs)
 
@@ -194,7 +194,7 @@ class RealityMixin:
 
 @dataclass
 class RealityConfig(DictConfig):
-    policy: ZSOSConfig = ZSOSConfig()
+    policy: VLFMConfig = VLFMConfig()
 
 
 class RealityITMPolicyV2(RealityMixin, ITMPolicyV2):

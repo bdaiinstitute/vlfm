@@ -22,7 +22,7 @@ from vlfm.utils.geometry_utils import xyz_yaw_to_tf_matrix
 from vlfm.vlm.grounding_dino import ObjectDetections
 
 from ..mapping.obstacle_map import ObstacleMap
-from .base_objectnav_policy import BaseObjectNavPolicy, ZSOSConfig
+from .base_objectnav_policy import BaseObjectNavPolicy, VLFMConfig
 from .itm_policy import ITMPolicy, ITMPolicyV2, ITMPolicyV3
 
 HM3D_ID_TO_NAME = ["chair", "bed", "potted plant", "toilet", "tv", "couch"]
@@ -95,9 +95,9 @@ class HabitatMixin:
     def from_config(
         cls, config: DictConfig, *args_unused: Any, **kwargs_unused: Any
     ) -> "HabitatMixin":
-        policy_config: ZSOSPolicyConfig = config.habitat_baselines.rl.policy
+        policy_config: VLFMPolicyConfig = config.habitat_baselines.rl.policy
         kwargs = {
-            k: policy_config[k] for k in ZSOSPolicyConfig.kwaarg_names  # type: ignore
+            k: policy_config[k] for k in VLFMPolicyConfig.kwaarg_names  # type: ignore
         }
 
         # In habitat, we need the height of the camera to generate the camera transform
@@ -287,9 +287,9 @@ class HabitatITMPolicyV3(HabitatMixin, ITMPolicyV3):
 
 
 @dataclass
-class ZSOSPolicyConfig(ZSOSConfig, PolicyConfig):
+class VLFMPolicyConfig(VLFMConfig, PolicyConfig):
     pass
 
 
 cs = ConfigStore.instance()
-cs.store(group="habitat_baselines/rl/policy", name="zsos_policy", node=ZSOSPolicyConfig)
+cs.store(group="habitat_baselines/rl/policy", name="vlfm_policy", node=VLFMPolicyConfig)

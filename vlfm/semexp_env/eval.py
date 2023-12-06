@@ -21,7 +21,7 @@ os.environ["OMP_NUM_THREADS"] = "1"
 args = get_args()
 args.agent = "vlfm"  # Doesn't really matter as long as it's not "sem_exp"
 args.split = "val"
-args.task_config = "objnav_gibson_zsos.yaml"
+args.task_config = "objnav_gibson_vlfm.yaml"
 # Ensure a random seed
 args.seed = int(time.time() * 1000) % 2**32
 
