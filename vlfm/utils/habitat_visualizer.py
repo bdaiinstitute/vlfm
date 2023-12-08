@@ -125,8 +125,8 @@ class HabitatVis:
                 frame, self.full_instructions[i], top=True, highlight=self.highlights[i]
             )
 
-            failure_cause_text = "Failure cause: " + failure_cause
-            frame = add_text_to_image(frame, failure_cause_text, top=True)
+            # failure_cause_text = "Failure cause: " + failure_cause
+            # frame = add_text_to_image(frame, failure_cause_text, top=True)
 
             frames.append(frame)
 

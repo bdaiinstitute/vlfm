@@ -8,7 +8,7 @@ habitat:
   env_task: PrivEnv
 
 habitat_baselines:
-  test_episode_count: 260 #Set to -1 to use all episodes
+  test_episode_count: -1 #260 #Set to -1 to use all episodes
   eval:
     split: "val_seen"
     video_option: ['disk'] #[] or ["disk"] or ["tensorboard"]
@@ -121,6 +121,6 @@ habitat_baselines:
 
         map:
           enable_stairs: False #True
-          vl_feature_type: SAM+CLIP #LSeg
+          vl_feature_type: CLIP #LSeg
           map_size: 1000
           use_adapter: False #True

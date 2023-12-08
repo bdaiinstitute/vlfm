@@ -198,7 +198,7 @@ class DataCollectionPolicy(BaseVLNPolicy):
             cv2.COLOR_BGR2RGB,
         )
 
-        policy_info["render_below_images"] += ["current instruction part"]
+        # policy_info["render_below_images"] += ["current instruction part"]
         policy_info["current instruction part"] = self._instruction_parts[
             self._curr_instruction_idx
         ]

@@ -357,10 +357,10 @@ class VLMap(BaseMap):
             yaw = extract_yaw(tf_camera_to_episodic)
             masks = self.get_direction_masks(agent_pos_m, yaw)
 
-        for i in range(len(masks)):
-            map_dir[masks[i][0], masks[i][1], :] += cols[i]
-        map_dir /= 2
-        cv2.imwrite(f"map_viz/{self._texting_viz_idx:05}_dir.png", map_dir)
+            for i in range(len(masks)):
+                map_dir[masks[i][0], masks[i][1], :] += cols[i]
+            map_dir /= 2
+            cv2.imwrite(f"map_viz/{self._texting_viz_idx:05}_dir.png", map_dir)
 
         img_seg = np.zeros([image.shape[0], image.shape[1], 3])
 
@@ -432,19 +432,16 @@ class VLMap(BaseMap):
         zm = z * (max_depth - min_depth) + min_depth
         xm = ((x / sx) * (fov) - fov / 2).flatten() * zm
         ym = (
-            (y / sy) * (fov) - fov / 2 + height
-        ).flatten() * zm  # assume square pixels? Also add agent height
+            (y / sy) * (fov) - fov / 2
+        ).flatten() * zm + height  # assume square pixels? Also add agent height
 
         cutoff = 1 + height
 
         xm2 = xm[ym < cutoff]
         zm2 = zm[ym < cutoff]
-        ym[ym < cutoff]
 
-        i = x.flatten()[
-            ym < cutoff
-        ]  # (np.clip((xm2 + fov/2)/fov, 0.0, 1.0)*(sx-1)).astype(int)
-        j = (np.clip(depth.flatten()[ym < cutoff], 0.0, 1.0) * (sy - 1)).astype(int)
+        i = x.flatten()[ym < cutoff]
+        j = y.flatten()[ym < cutoff]
 
         mx = (zm2 * self.pixels_per_meter + depth_gp.shape[0] / 2).astype(int)
         my = (xm2 * self.pixels_per_meter + depth_gp.shape[1] / 2).astype(int)
@@ -585,14 +582,14 @@ class VLMap(BaseMap):
             text_embed,
         ).reshape([self._vl_map.shape[0], self._vl_map.shape[1]])
 
-        cv2.imwrite(
-            f"map_viz/{self._texting_viz_idx:05}_valuemap_{text}.png",
-            cv2.applyColorMap(
-                (vm / (np.max(vm[:])) * 255).astype("uint8"), cv2.COLORMAP_PLASMA
-            ),
-        )
+        # cv2.imwrite(
+        #     f"map_viz/{self._texting_viz_idx:05}_valuemap_{text}.png",
+        #     cv2.applyColorMap(
+        #         (vm / (np.max(vm[:])) * 255).astype("uint8"), cv2.COLORMAP_PLASMA
+        #     ),
+        # )
 
-        self._texting_viz_idx += 1
+        # self._texting_viz_idx += 1
 
         return vm
 
@@ -877,19 +874,16 @@ class VLMap(BaseMap):
         zm = z * (max_depth - min_depth) + min_depth
         xm = ((x / sx) * (fov) - fov / 2).flatten() * zm
         ym = (
-            (y / sy) * (fov) - fov / 2 + height
-        ).flatten() * zm  # assume square pixels? Also add agent height
+            (y / sy) * (fov) - fov / 2
+        ).flatten() * zm + height  # assume square pixels? Also add agent height
 
         cutoff = 1 + height
 
         xm2 = xm[ym < cutoff]
         zm2 = zm[ym < cutoff]
-        ym[ym < cutoff]
 
-        i = x.flatten()[
-            ym < cutoff
-        ]  # (np.clip((xm2 + fov/2)/fov, 0.0, 1.0)*(sx-1)).astype(int)
-        j = (np.clip(depth.flatten()[ym < cutoff], 0.0, 1.0) * (sy - 1)).astype(int)
+        i = x.flatten()[ym < cutoff]
+        j = y.flatten()[ym < cutoff]
 
         mx = (zm2 * self.pixels_per_meter + depth_gp.shape[0] / 2).astype(int)
         my = (xm2 * self.pixels_per_meter + depth_gp.shape[1] / 2).astype(int)

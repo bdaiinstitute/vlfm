@@ -31,7 +31,9 @@ class PathPolicySR(BasePathPolicy):
 
     def _parse_instruction(self, instruction: str) -> List[str]:
         parsed_instruct = parse_instruction(
-            instruction, split_strs=["\r\n", "\n", ".", ",", " and ", " then "]
+            instruction,
+            split_strs=["\r\n", "\n", ".", ",", " and ", " then "],
+            # instruction, split_strs=["\r\n", "\n", ".", ",", " then "]
         )
 
         print("PARSING: ", instruction)

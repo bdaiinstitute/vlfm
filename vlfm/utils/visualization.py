@@ -43,7 +43,7 @@ def generate_text_image(width: int, text: str, highlight: str = "") -> np.ndarra
     """
     # Define the parameters for the text
     font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 0.8
+    font_scale = 2.0  # 0.8
     font_thickness = 2
     line_spacing = 10  # Spacing between lines in pixels
 
@@ -78,13 +78,14 @@ def generate_text_image(width: int, text: str, highlight: str = "") -> np.ndarra
         to_draw.append((word, x, y))
 
         # Update the position for the next word
-        x += word_size[0] + 5  # Add some spacing between words
+        x += word_size[0] + 15  # 5  # Add some spacing between words
 
     # get highlighted parts
     if highlight != "":
-        idx_h_s = text.find(highlight)
-        idx_h_e = idx_h_s + len(highlight.split(" "))
-        # print(f"HIGHLIGHT: {highlight}, {idx_h_s}, {idx_h_e}, {len(to_draw)}")
+        idx_h_s_l = text.find(highlight)
+        idx_h_s = len(text[:idx_h_s_l].split())
+        idx_h_e = idx_h_s + len(highlight.split(" ")) - 1
+        # print(f"HIGHLIGHT: {text}, {highlight}, {idx_h_s}, {idx_h_e}, {len(to_draw)}")
     else:
         idx_h_s = -1
         idx_h_e = -1

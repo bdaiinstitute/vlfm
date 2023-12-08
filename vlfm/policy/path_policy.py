@@ -295,7 +295,7 @@ class BasePathPolicy(BaseVLNPolicy):
 
         # cv2.imwrite(f"map_viz/valuemap_{self._num_steps}.png", policy_info["vl_map"])
 
-        policy_info["render_below_images"] += ["current instruction part"]
+        # policy_info["render_below_images"] += ["current instruction part"]
         policy_info["current instruction part"] = self._instruction_parts[
             self._curr_instruction_idx
         ]
