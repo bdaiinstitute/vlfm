@@ -26,6 +26,7 @@ from .path_policy_mix import PathPolicyMix
 from .path_policy_mr import PathPolicyMR
 from .path_policy_sr import PathPolicySR
 from .testing_policy import TestingPolicy
+from .transformer_policy import TransformerPolicy
 
 
 class TorchActionIDs:
@@ -266,6 +267,11 @@ class HabitatDataCollectionPolicy(HabitatMixin, DataCollectionPolicy):
 
 @baseline_registry.register_policy
 class HabitatTestingPolicy(HabitatMixin, TestingPolicy):
+    pass
+
+
+@baseline_registry.register_policy
+class HabitatTransformerPolicy(HabitatMixin, TransformerPolicy):
     pass
 
 
