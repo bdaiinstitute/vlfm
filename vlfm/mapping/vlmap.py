@@ -1536,6 +1536,37 @@ class VLMap(BaseMap):
 
         return occ_map[goal_px[0, 1], goal_px[0, 0]] > 0.5
 
+    def get_egomap(self, agent_pos: np.ndarray, yaw: float, crop_r: int) -> np.ndarray:
+        crop_r0 = 2 * crop_r
+
+        # agent location in pixels
+        pos_px = self._xy_to_px(agent_pos.reshape(1, 2))[0, :]
+
+        # crop around agent location, zero-padding where necessary
+        geo_map = np.zeros(
+            [crop_r0 * 2, crop_r0 * 2] + list(self._feats_sz), dtype=np.float32
+        )
+
+        i0 = max(0, pos_px[0] - crop_r0)
+        i1 = min(self._vl_map.shape[0], pos_px[0] + crop_r0)
+        j0 = max(0, pos_px[1] - crop_r0)
+        j1 = min(self._vl_map.shape[1], pos_px[1] + crop_r0)
+
+        im0 = i0 - (pos_px[0] - crop_r0)
+        im1 = im0 + crop_r0 * 2
+        jm0 = j0 - (pos_px[1] - crop_r0)
+        jm1 = jm0 + crop_r0 * 2
+
+        geo_map[im0:im1, jm0:jm1, :] = self._vl_map[i0:i1, j0:j1, :].cpu().numpy()
+
+        # rotate map (around agent location which is now center)
+        ego_map = torch.tensor(rotate_image(geo_map, -yaw, 0), device=self.device)
+
+        # crop again (two stage to avoid blank sections from rotating)
+        return ego_map[
+            crop_r0 - crop_r : crop_r0 + crop_r, crop_r0 - crop_r : crop_r0 + crop_r, :
+        ]
+
 
 def remap(
     value: float, from_low: float, from_high: float, to_low: float, to_high: float

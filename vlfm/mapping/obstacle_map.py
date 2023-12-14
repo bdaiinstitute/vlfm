@@ -1,10 +1,9 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
-from typing import Optional
+from typing import Any, Optional, Union
 
 import cv2
 import numpy as np
-from typing import Union, Any
 from frontier_exploration.frontier_detection import detect_frontier_waypoints
 from frontier_exploration.utils.fog_of_war import reveal_fog_of_war
 

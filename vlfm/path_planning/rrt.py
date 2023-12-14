@@ -5,13 +5,13 @@ from typing import List, Optional, Tuple
 # import matplotlib.pyplot as plt
 import cv2
 import numpy as np
-
 from external.python_robotics.PathPlanning.RRT.rrt import (
     RRT as RRT_PR,
 )
 from external.python_robotics.PathPlanning.RRTStar.rrt_star import (
     RRTStar as RRTStar_PR,
 )
+
 from vlfm.mapping.traj_visualizer import TrajectoryVisualizer
 
 # from vlfm.utils.img_utils import pixel_value_within_radius

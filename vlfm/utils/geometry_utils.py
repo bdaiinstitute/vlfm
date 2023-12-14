@@ -1,7 +1,7 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import math
-from typing import Tuple, Union
+from typing import Tuple
 
 import numpy as np
 
