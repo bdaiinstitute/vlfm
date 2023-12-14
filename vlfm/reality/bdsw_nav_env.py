@@ -16,8 +16,9 @@ def run_env(
     done = False
     mask = torch.zeros(1, 1, device=policy.device, dtype=torch.bool)
     action = policy.act(observations, mask)
+    action_dict = {"rho_theta": action}
     while not done:
-        observations, _, done, info = env.step(action)
+        observations, _, done, info = env.step(action_dict)
         action = policy.act(observations, mask, deterministic=True)
         mask = torch.ones_like(mask)
 

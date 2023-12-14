@@ -149,7 +149,6 @@ class ResNet(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         x = self.conv1(x)
         x = self.maxpool(x)
-        x = cast(Tensor, x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)

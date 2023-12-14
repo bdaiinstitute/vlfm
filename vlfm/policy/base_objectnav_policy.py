@@ -34,8 +34,8 @@ except Exception:
 class BaseObjectNavPolicy(BasePolicy):
     _target_object: str = ""
     _policy_info: Dict[str, Any] = {}
-    _object_masks: np.ndarray = None  # set by ._update_object_map()
-    _stop_action: Tensor = None  # MUST BE SET BY SUBCLASS
+    _object_masks: Union[np.ndarray, Any] = None  # set by ._update_object_map()
+    _stop_action: Union[Tensor, Any] = None  # MUST BE SET BY SUBCLASS
     _observations_cache: Dict[str, Any] = {}
     _non_coco_caption = ""
     _load_yolo: bool = True

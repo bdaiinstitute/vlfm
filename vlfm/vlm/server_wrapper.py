@@ -37,8 +37,7 @@ def host_model(model: Any, name: str, port: int = 5000) -> None:
 
 def bool_arr_to_str(arr: np.ndarray) -> str:
     """Converts a boolean array to a string."""
-    packed = np.packbits(arr)
-    packed_str = base64.b64encode(packed).decode()
+    packed_str = base64.b64encode(arr.tobytes()).decode()
     return packed_str
 
 
@@ -50,9 +49,8 @@ def str_to_bool_arr(s: str, shape: tuple) -> np.ndarray:
     # Convert bytes to np.uint8 array
     bytes_array = np.frombuffer(bytes_, dtype=np.uint8)
 
-    # Unpack the bytes back into a boolean array
-    unpacked = np.unpackbits(bytes_array)
-    unpacked = unpacked.reshape(shape)
+    # Reshape the data back into a boolean array
+    unpacked = bytes_array.reshape(shape)
     return unpacked
 
 

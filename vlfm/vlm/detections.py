@@ -23,7 +23,7 @@ class ObjectDetections:
         boxes: torch.Tensor,
         logits: torch.Tensor,
         phrases: List[str],
-        image_source: Optional[np.ndarray] = None,
+        image_source: Optional[np.ndarray],
         fmt: str = "cxcywh",
     ):
         self.image_source = image_source
@@ -36,8 +36,8 @@ class ObjectDetections:
         self._annotated_frame: Optional[np.ndarray] = None
 
     @property
-    def annotated_frame(self) -> np.ndarray:
-        if self._annotated_frame is None:
+    def annotated_frame(self) -> Optional[np.ndarray]:
+        if self._annotated_frame is None and self.image_source is not None:
             self._annotated_frame = annotate(
                 image_source=self.image_source,
                 boxes=self.boxes,
@@ -67,7 +67,7 @@ class ObjectDetections:
         Args:
             conf_thresh (float): Confidence threshold to filter detections.
         """
-        keep: torch.Tensor[bool] = torch.ge(self.logits, conf_thresh)  # >=
+        keep: torch.Tensor = torch.ge(self.logits, conf_thresh)  # >=
         self._filter(keep)
 
     def filter_by_class(self, classes: List[str]) -> None:
@@ -76,7 +76,7 @@ class ObjectDetections:
         Args:
             classes (List[str]): List of classes to keep.
         """
-        keep: torch.Tensor[bool] = torch.tensor(
+        keep: torch.Tensor = torch.tensor(
             [p in classes for p in self.phrases], dtype=torch.bool
         )
         self._filter(keep)
@@ -215,15 +215,16 @@ def draw_bounding_box(
 
     if color is None:
         # Randomly choose a color from the rainbow colormap (so boxes aren't black)
-        single_pixel = np.array([[np.random.randint(0, 256)]], dtype=np.uint8)
+        single_pixel = np.array([[np.random.randint(0, 256)]])
         single_pixel = cv2.applyColorMap(single_pixel, cv2.COLORMAP_RAINBOW)
 
         # reshape to a single dimensional array
-        color = single_pixel.reshape(3)
+        rand_color = single_pixel.reshape(3)
+        color = [int(c) for c in rand_color]  # type: ignore
     else:
         # Convert RGB to BGR
-        color = color[::-1]
-    color = [int(c) for c in color]  # type: ignore
+        bgr_color = color[::-1]
+        color = [int(c) for c in bgr_color]  # type: ignore
 
     # Draw bounding box on image
     box_thickness = 2
