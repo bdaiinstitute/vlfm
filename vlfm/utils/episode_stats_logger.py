@@ -77,7 +77,7 @@ def was_target_seen(infos: Dict[str, Any]) -> bool:
     explored_area = infos["top_down_map"]["fog_of_war_mask"]
     # Dilate the target_bboxes_mask by 10 pixels to add a margin of error
     target_bboxes_mask = cv2.dilate(target_bboxes_mask, np.ones((10, 10)))
-    target_explored = np.any(np.logical_and(explored_area, target_bboxes_mask))
+    target_explored = bool(np.any(np.logical_and(explored_area, target_bboxes_mask)))
     return target_explored
 
 

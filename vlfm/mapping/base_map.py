@@ -8,10 +8,9 @@ from vlfm.mapping.traj_visualizer import TrajectoryVisualizer
 
 
 class BaseMap:
-    _confidence_mask: np.ndarray = None
     _camera_positions: List[np.ndarray] = []
     _last_camera_yaw: float = 0.0
-    _map_dtype: np.dtype = np.float32
+    _map_dtype: np.dtype = np.dtype(np.float32)
 
     def __init__(
         self, size: int = 1000, pixels_per_meter: int = 20, *args: Any, **kwargs: Any

@@ -55,7 +55,7 @@ class ObjectPointCloudMap:
         else:
             # Mark all points of local_cloud whose distance from the camera is too far
             # as being out of range
-            within_range = local_cloud[:, 0] <= max_depth * 0.95  # 5% margin
+            within_range = (local_cloud[:, 0] <= max_depth * 0.95) * 1.0  # 5% margin
             # All values of 1 in within_range will be considered within range, and all
             # values of 0 will be considered out of range; these 0s need to be
             # assigned with a random number so that they can be identified later.
@@ -147,7 +147,7 @@ class ObjectPointCloudMap:
     def get_target_cloud(self, target_class: str) -> np.ndarray:
         target_cloud = self.clouds[target_class].copy()
         # Determine whether any points are within range
-        within_range_exists: bool = np.any(target_cloud[:, -1] == 1)
+        within_range_exists = np.any(target_cloud[:, -1] == 1)
         if within_range_exists:
             # Filter out all points that are not within range
             target_cloud = target_cloud[target_cloud[:, -1] == 1]

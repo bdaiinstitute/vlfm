@@ -59,7 +59,7 @@ class ObjectNavEnv(PointNavEnv):
         self._vis_dir = f"{date_string}"
         os.makedirs(f"vis/{self._vis_dir}", exist_ok=True)
 
-    def reset(self, goal: Any, *args: Any, **kwargs: Any) -> Dict[str, np.ndarray]:
+    def reset(self, goal: Any, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         assert isinstance(goal, str)
         self.target_object = goal
         # Transformation matrix from where the robot started to the global frame
@@ -69,7 +69,7 @@ class ObjectNavEnv(PointNavEnv):
         self.episodic_start_yaw = self.robot.xy_yaw[1]
         return self._get_obs()
 
-    def step(self, action: Dict[str, np.ndarray]) -> Tuple[Dict, float, bool, Dict]:
+    def step(self, action: Dict[str, Any]) -> Tuple[Dict, float, bool, Dict]:
         # Parent class only moves the base; if we want to move the gripper camera,
         # we need to do it here
         vis_imgs = []
@@ -117,7 +117,7 @@ class ObjectNavEnv(PointNavEnv):
 
         return self._get_obs(), 0.0, done, {}  # not using info dict yet
 
-    def _get_obs(self) -> Dict[str, np.ndarray]:
+    def _get_obs(self) -> Dict[str, Any]:
         robot_xy, robot_heading = self._get_gps(), self._get_compass()
         nav_depth, obstacle_map_depths, value_map_rgbd, object_map_rgbd = (
             self._get_camera_obs()

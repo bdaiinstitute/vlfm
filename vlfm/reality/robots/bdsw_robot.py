@@ -89,7 +89,7 @@ class BDSWRobot(BaseRobot):
         """Opens the gripper"""
         self.spot.open_gripper()
 
-    def get_camera_data(self, srcs: List[str]) -> Dict[str, np.ndarray]:
+    def get_camera_data(self, srcs: List[str]) -> Dict[str, Dict[str, Any]]:
         """Returns a dict that maps each camera id to its image, focal lengths, and
         transform matrix (from camera to global frame).
 
@@ -106,7 +106,7 @@ class BDSWRobot(BaseRobot):
         }
         return imgs
 
-    def _camera_response_to_data(self, response: Any) -> Dict[str, np.ndarray]:
+    def _camera_response_to_data(self, response: Any) -> Dict[str, Any]:
         image: np.ndarray = image_response_to_cv2(response, reorient=False)
         fx: float = response.source.pinhole.intrinsics.focal_length.x
         fy: float = response.source.pinhole.intrinsics.focal_length.y
