@@ -19,6 +19,7 @@ from habitat_baselines.common.obs_transformers import (
 )
 from habitat_baselines.common.tensorboard_utils import (
     TensorboardWriter,
+    get_writer,
 )
 from habitat_baselines.rl.ddppo.algo import DDPPO  # noqa: F401.
 from habitat_baselines.rl.ppo.single_agent_access_mgr import (  # noqa: F401.
@@ -46,11 +47,26 @@ def extract_scalars_from_info(info: Dict[str, Any]) -> Dict[str, float]:
 class VLNTrainer(PPOTrainer):
     envs: VectorEnv
 
+    def train(self) -> None:
+        self.device = (
+            torch.device("cuda", self.config.habitat_baselines.torch_gpu_id)
+            if torch.cuda.is_available()
+            else torch.device("cpu")
+        )
+
+        torch.autograd.set_detect_anomaly(True)
+
+        with get_writer(self.config, flush_secs=self.flush_secs) as writer:
+            self._eval_checkpoint(
+                self.config.habitat_baselines.eval_ckpt_path_dir, writer, is_eval=False
+            )
+
     def _eval_checkpoint(
         self,
         checkpoint_path: str,
         writer: TensorboardWriter,
         checkpoint_index: int = 0,
+        is_eval: bool = True,
     ) -> None:
         r"""Evaluates a single checkpoint.
 
@@ -221,7 +237,49 @@ class VLNTrainer(PPOTrainer):
         ):
             current_episodes_info = self.envs.current_episodes()
 
-            with inference_mode():
+            if is_eval:
+                with inference_mode():
+                    gt_path_for_viz, gt_path_for_viz_wc = self.envs.call(
+                        ["get_gt_path"]
+                    )[0]
+                    gt_path_for_viz = gt_path_for_viz[:, :2]
+                    gt_path_for_viz_wc = gt_path_for_viz_wc[:, :2]
+                    self._agent.actor_critic.set_envs(self.envs)
+                    self._agent.actor_critic.set_instruction(instructions[0])
+                    self._agent.actor_critic.set_gt_path_for_viz(
+                        gt_path_for_viz, gt_path_for_viz_wc
+                    )
+                    action_data = self._agent.actor_critic.act(
+                        batch,
+                        test_recurrent_hidden_states,
+                        prev_actions,
+                        not_done_masks,
+                        deterministic=False,
+                    )
+                    if "VLFM_RECORD_ACTIONS_DIR" in os.environ:
+                        action_id = action_data.actions.cpu()[0].item()
+                        filepath = os.path.join(
+                            os.environ["VLFM_RECORD_ACTIONS_DIR"],
+                            "actions.txt",
+                        )
+                        # If the file doesn't exist, create it
+                        if not os.path.exists(filepath):
+                            open(filepath, "w").close()
+                        with open(filepath, "a") as f:
+                            f.write(f"{action_id}\n")
+
+                    if action_data.should_inserts is None:
+                        test_recurrent_hidden_states = action_data.rnn_hidden_states
+                        prev_actions.copy_(action_data.actions)  # type: ignore
+                    else:
+                        for i, should_insert in enumerate(action_data.should_inserts):
+                            if should_insert.item():
+                                test_recurrent_hidden_states[i] = (
+                                    action_data.rnn_hidden_states[i]
+                                )
+                                prev_actions[i].copy_(action_data.actions[i])  # type: ignore
+
+            else:
                 gt_path_for_viz, gt_path_for_viz_wc = self.envs.call(["get_gt_path"])[0]
                 gt_path_for_viz = gt_path_for_viz[:, :2]
                 gt_path_for_viz_wc = gt_path_for_viz_wc[:, :2]
