@@ -68,6 +68,14 @@ def str_to_image(img_str: str) -> np.ndarray:
     return img_np
 
 
+def np_to_str(np_arr: np.ndarray) -> str:
+    return np_arr.tobytes()
+
+
+def str_to_np(np_str: str, arr_type: np.dtype, shape: tuple) -> np.ndarray:
+    return np.frombuffer(np_str, dtype=arr_type).reshape(shape)
+
+
 def send_request(url: str, **kwargs: Any) -> dict:
     response = {}
     for attempt in range(10):

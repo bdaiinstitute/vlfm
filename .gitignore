@@ -186,3 +186,13 @@ habitat-lab/
 GroundingDINO/
 __pycache__/
 *.pyc
+
+#External repos
+external/
+
+
+#Visualizations etc
+failure_analysis/
+video_dir/
+map_viz/
+rrt_debug/vendor/gitman

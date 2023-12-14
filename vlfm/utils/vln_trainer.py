@@ -2,7 +2,7 @@
 
 import os
 from collections import defaultdict
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import torch
@@ -42,8 +42,8 @@ def extract_scalars_from_info(info: Dict[str, Any]) -> Dict[str, float]:
     return extract_scalars_from_info_habitat(info_filtered)
 
 
-@baseline_registry.register_trainer(name="vlfm")
-class VLFMTrainer(PPOTrainer):
+@baseline_registry.register_trainer(name="vln")
+class VLNTrainer(PPOTrainer):
     envs: VectorEnv
 
     def _eval_checkpoint(
@@ -62,6 +62,39 @@ class VLFMTrainer(PPOTrainer):
         Returns:
             None
         """
+        # get args
+        args = self.config.habitat_baselines.rl.policy.options
+
+        log_dir = args.logging.log_dir
+        os.makedirs(log_dir, exist_ok=True)
+
+        ORACLE_STOP = args.enable_oracle_stop
+        LOG_SUCCES_IF_ORACLE_STOP = args.logging.enable_log_success_if_oracle_stop
+        LOG_THRESH = args.logging.enable_log_success_thresh
+
+        # set-up failure analysis
+        os.makedirs(log_dir + args.logging.analysis_save_location, exist_ok=True)
+        file_success = open(
+            log_dir + args.logging.analysis_save_location + "successes.txt", "w"
+        )
+        file_fail = open(
+            log_dir + args.logging.analysis_save_location + "failures.txt", "w"
+        )
+
+        file_log = open(log_dir + "logging_info.txt", "w")
+
+        if ORACLE_STOP or LOG_SUCCES_IF_ORACLE_STOP:
+            self.should_stop = False
+
+        if LOG_THRESH:
+            self.thresh_dict: Dict[Tuple[float, float], List[int]] = {}
+            for i in np.linspace(-1.0, 1.5, 26):
+                for j in np.linspace(-20.0, 40.0, 61):
+                    self.thresh_dict[(i, j)] = []
+            best_thresh = None
+
+        # gt_path_for_viz = None
+
         if self._is_distributed:
             raise RuntimeError("Evaluation does not support distributed mode")
 
@@ -107,6 +140,13 @@ class VLFMTrainer(PPOTrainer):
             self._agent.load_state_dict(ckpt_dict)
 
         observations = self.envs.reset()
+
+        # Split off instructions so it doesn't get messed up in the batching
+        instructions = []
+        for j in range(len(observations)):
+            instructions += [observations[j]["instruction"]["text"]]
+            del observations[j]["instruction"]
+
         batch = batch_obs(observations, device=self.device)
         batch = apply_obs_transforms_batch(batch, self.obs_transforms)  # type: ignore
 
@@ -140,7 +180,9 @@ class VLFMTrainer(PPOTrainer):
             [] for _ in range(self.config.habitat_baselines.num_environments)
         ]
         if len(self.config.habitat_baselines.eval.video_option) > 0:
-            os.makedirs(self.config.habitat_baselines.video_dir, exist_ok=True)
+            os.makedirs(
+                log_dir + self.config.habitat_baselines.video_dir, exist_ok=True
+            )
 
         number_of_eval_episodes = self.config.habitat_baselines.test_episode_count
         evals_per_ep = self.config.habitat_baselines.eval.evals_per_ep
@@ -169,6 +211,9 @@ class VLFMTrainer(PPOTrainer):
 
         num_successes = 0
         num_total = 0
+        if LOG_SUCCES_IF_ORACLE_STOP:
+            num_os_successes = 0
+
         hab_vis = HabitatVis()
         while (
             len(stats_episodes) < (number_of_eval_episodes * evals_per_ep)
@@ -177,6 +222,14 @@ class VLFMTrainer(PPOTrainer):
             current_episodes_info = self.envs.current_episodes()
 
             with inference_mode():
+                gt_path_for_viz, gt_path_for_viz_wc = self.envs.call(["get_gt_path"])[0]
+                gt_path_for_viz = gt_path_for_viz[:, :2]
+                gt_path_for_viz_wc = gt_path_for_viz_wc[:, :2]
+                self._agent.actor_critic.set_envs(self.envs)
+                self._agent.actor_critic.set_instruction(instructions[0])
+                self._agent.actor_critic.set_gt_path_for_viz(
+                    gt_path_for_viz, gt_path_for_viz_wc
+                )
                 action_data = self._agent.actor_critic.act(
                     batch,
                     test_recurrent_hidden_states,
@@ -222,12 +275,74 @@ class VLFMTrainer(PPOTrainer):
             else:
                 step_data = [a.item() for a in action_data.env_actions.cpu()]
 
+            if ORACLE_STOP:
+                if self.should_stop:
+                    step_data = [0]
+                elif step_data[0] == 0:
+                    step_data = [np.random.randint(1, 4)]
+
             outputs = self.envs.step(step_data)
 
             observations, rewards_l, dones, infos = [list(x) for x in zip(*outputs)]
             policy_infos = self._agent.actor_critic.get_extra(action_data, infos, dones)
             for i in range(len(policy_infos)):
                 infos[i].update(policy_infos[i])
+
+            if ORACLE_STOP:
+                self.should_stop = (
+                    infos[0]["distance_to_goal"]
+                ) <= self.config.habitat.task.measurements.success.success_distance
+
+            if LOG_SUCCES_IF_ORACLE_STOP:
+                if (
+                    infos[0]["distance_to_goal"]
+                ) <= self.config.habitat.task.measurements.success.success_distance:
+                    self.should_stop = True
+                    print("WITHIN GOAL DIST! ", infos[0]["distance_to_goal"])
+
+            if LOG_THRESH:
+                thresh = self._agent.actor_critic._path_selector.get_last_thresh()
+                if thresh is not None:
+                    in_dist = (
+                        (infos[0]["distance_to_goal"])
+                        <= self.config.habitat.task.measurements.success.success_distance
+                    )
+
+                    best_thresh = None
+                    best_val = 0
+
+                    for k in self.thresh_dict.keys():
+                        if in_dist:
+                            if thresh[0] <= k[0] and thresh[1] <= k[1]:
+                                if num_total not in self.thresh_dict[k]:
+                                    self.thresh_dict[k] += [num_total]
+
+                        if len(self.thresh_dict[k]) > best_val:
+                            best_thresh = k
+                            best_val = len(self.thresh_dict[k])
+
+                    if (
+                        best_thresh is not None
+                    ) and best_thresh in self.thresh_dict.keys():
+                        print(
+                            f"BEST THRESH SO FAR: {best_thresh}, gives"
+                            f" {len(self.thresh_dict[best_thresh])}/{num_total+1} ="
+                            f" {len(self.thresh_dict[best_thresh])/(num_total+1)}"
+                        )
+                    else:
+                        print("NO BEST THRESH")
+
+            # gt_path_for_viz = np.array(infos[0]["gt_path_vln"])
+            # gt_path_for_viz = gt_path_for_viz[:, :2]
+
+            # Split off instructions
+            instructions_curr = instructions.copy()
+
+            instructions = []
+            for j in range(len(observations)):
+                instructions += [observations[j]["instruction"]["text"]]
+                del observations[j]["instruction"]
+
             batch = batch_obs(  # type: ignore
                 observations,
                 device=self.device,
@@ -280,11 +395,73 @@ class VLFMTrainer(PPOTrainer):
 
                     if episode_stats["success"] == 1:
                         num_successes += 1
+                        file_success.write(instructions_curr[0])
+                        file_success.write("\n")
+                        file_success.flush()
+                    else:
+                        file_fail.write(instructions_curr[0])
+                        file_fail.write("\n")
+                        file_fail.flush()
                     num_total += 1
+                    print("\n", instructions_curr[0])
                     print(
                         f"Success rate: {num_successes / num_total * 100:.2f}% "
                         f"({num_successes} out of {num_total})"
                     )
+
+                    file_log.write(
+                        "Success rate:"
+                        f" {num_successes / num_total * 100:.2f} ({num_successes} out"
+                        f" of {num_total})"
+                    )
+                    file_log.write("\n")
+
+                    if LOG_SUCCES_IF_ORACLE_STOP:
+                        if self.should_stop:
+                            num_os_successes += 1
+                        print(
+                            "Success rate with OS:"
+                            f" {num_os_successes / num_total * 100:.2f}%"
+                            f" ({num_os_successes} out of {num_total})"
+                        )
+
+                        file_log.write(
+                            "Success rate with OS:"
+                            f" {num_os_successes / num_total * 100:.2f} ({num_os_successes} out"
+                            f" of {num_total})"
+                        )
+                        file_log.write("\n")
+
+                    if LOG_THRESH:
+                        if (
+                            best_thresh is not None
+                        ) and best_thresh in self.thresh_dict.keys():
+                            print(
+                                f"BEST THRESH SO FAR: {best_thresh}, gives"
+                                f" {len(self.thresh_dict[best_thresh])}/{num_total} ="
+                                f" {len(self.thresh_dict[best_thresh])/num_total}"
+                            )
+                            file_log.write(
+                                f"BEST THRESH SO FAR: {best_thresh}, gives"
+                                f" {len(self.thresh_dict[best_thresh])}/{num_total} ="
+                                f" {len(self.thresh_dict[best_thresh])/num_total}"
+                            )
+                            file_log.write("\n")
+                            close0 = 0.5
+                            close1 = 5.0
+                            # print("CLOSE THRESHOLD VALS")
+                            file_log.write("CLOSE THRESHOLD VALS")
+                            file_log.write("\n")
+                            for k in self.thresh_dict.keys():
+                                if (
+                                    np.abs(k[0] - best_thresh[0]) < close0
+                                    and np.abs(k[1] - best_thresh[1]) < close1
+                                ):
+                                    # print("* ", k, len(self.thresh_dict[k]))
+                                    file_log.write(f"* {k}: {len(self.thresh_dict[k])}")
+                                    file_log.write("\n")
+
+                    file_log.flush()
 
                     from vlfm.utils.episode_stats_logger import (
                         log_episode_stats,
@@ -303,7 +480,7 @@ class VLFMTrainer(PPOTrainer):
                         rgb_frames[i] = hab_vis.flush_frames(failure_cause)
                         generate_video(
                             video_option=self.config.habitat_baselines.eval.video_option,
-                            video_dir=self.config.habitat_baselines.video_dir,
+                            video_dir=log_dir + self.config.habitat_baselines.video_dir,
                             images=rgb_frames[i],
                             episode_id=current_episodes_info[i].episode_id,
                             checkpoint_idx=checkpoint_index,
@@ -322,6 +499,11 @@ class VLFMTrainer(PPOTrainer):
                             self.config.habitat.task,
                             current_episodes_info[i].episode_id,
                         )
+
+                    if ORACLE_STOP or LOG_SUCCES_IF_ORACLE_STOP:
+                        self.should_stop = False
+
+                    # gt_path_for_viz = None
 
             not_done_masks = not_done_masks.to(device=self.device)
             (
@@ -344,6 +526,10 @@ class VLFMTrainer(PPOTrainer):
             )
 
         pbar.close()
+
+        file_success.close()
+        file_fail.close()
+        file_log.close()
 
         if "ZSOS_DONE_PATH" in os.environ:
             # Create an empty file at ZSOS_DONE_PATH to signal that the

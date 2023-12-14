@@ -1,0 +1,16 @@
+location: external
+sources:
+  - repo: https://github.com/AtsushiSakai/PythonRobotics
+    name: python_robotics
+    rev: master
+    type: git
+    params:
+    sparse_paths:
+      -
+    links:
+      -
+    scripts:
+      -
+default_group: ''
+groups:
+  -
