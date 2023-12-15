@@ -10,7 +10,7 @@ policy:
     name: "RealityITMPolicyV2"
     pointnav_policy_path: "data/pointnav_weights.pth"
     depth_image_shape: [212, 240]  # height, width
-    pointnav_stop_radius: 1.2
+    pointnav_stop_radius: 0.9
     use_max_confidence: False
     object_map_erosion_size: 5
     exploration_thresh: 0.0
@@ -21,7 +21,7 @@ policy:
     agent_radius: 0.2
 
 env:
-  max_body_cam_depth: 3.5
+  max_body_cam_depth: 2.5
   max_gripper_cam_depth: 5.0
   max_lin_dist: 0.2
   max_ang_dist: 0.523599

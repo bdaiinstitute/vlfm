@@ -190,7 +190,14 @@ def load_pointnav_policy(file_path: str) -> PointNavResNetTensorOutputPolicy:
     else:
         ckpt_dict = torch.load(file_path, map_location="cpu")
         pointnav_policy = PointNavResNetTensorOutputPolicy()
-        current_state_dict = pointnav_policy.state_dict()
+        current_state_dict = pointnav_policy.state_dict()        
+        #Let old checkpoints work with new code
+        if 'net.prev_action_embedding_cont.bias' not in ckpt_dict.keys():
+        	ckpt_dict['net.prev_action_embedding_cont.bias'] = ckpt_dict['net.prev_action_embedding.bias']
+        if 'net.prev_action_embedding_cont.weights' not in ckpt_dict.keys():
+        	ckpt_dict['net.prev_action_embedding_cont.weight'] = ckpt_dict['net.prev_action_embedding.weight']
+        
+        
         pointnav_policy.load_state_dict(
             {k: v for k, v in ckpt_dict.items() if k in current_state_dict}
         )
