@@ -75,36 +75,32 @@ class RealityMixin:
         # convert this numpy array to a dictionary with keys "angular" and "linear" so
         # that it can be passed to the Spot robot.
         if self._done_initializing:
-            angular = action[0][0].item()
-            linear = action[0][1].item()
-            arm_yaw = -1.0
+            action_dict = {
+                "angular": action[0][0].item(),
+                "linear": action[0][1].item(),
+                "arm_yaw": -1,
+                "info": self._policy_info,
+            }
         else:
-            angular = 0.0
-            linear = 0.0
-            arm_yaw = action[0][0].item()
+            action_dict = {
+                "angular": 0,
+                "linear": 0,
+                "arm_yaw": action[0][0].item(),
+                "info": self._policy_info,
+            }
+
+        if "rho_theta" in self._policy_info:
+            action_dict["rho_theta"] = self._policy_info["rho_theta"]
 
         self._done_initializing = len(self._initial_yaws) == 0
 
-        action = torch.tensor([[angular, linear, arm_yaw]], dtype=torch.float32)
+        return action_dict
 
-        return action, rnn_hidden_states
 
     def get_action(
         self, observations: Dict[str, Any], masks: Tensor, deterministic: bool = True
     ) -> Dict[str, Any]:
-        actions, _ = self.act(
-            observations, None, None, masks, deterministic=deterministic
-        )
-        action_dict = {
-            "angular": actions[0],
-            "linear": actions[1],
-            "arm_yaw": actions[2],
-            "info": self._policy_info,
-        }
-        if "rho_theta" in self._policy_info:
-            action_dict["rho_theta"] = self._policy_info["rho_theta"]
-
-        return action_dict
+        return self.act(observations, None, None, masks, deterministic=deterministic)
 
     def _reset(self: Union["RealityMixin", ITMPolicyV2]) -> None:
         parent_cls: ITMPolicyV2 = super()  # type: ignore

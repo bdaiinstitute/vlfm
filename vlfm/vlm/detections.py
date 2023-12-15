@@ -215,16 +215,15 @@ def draw_bounding_box(
 
     if color is None:
         # Randomly choose a color from the rainbow colormap (so boxes aren't black)
-        single_pixel = np.array([[np.random.randint(0, 256)]])
+        single_pixel = np.array([[np.random.randint(0, 256)]], dtype=np.uint8)
         single_pixel = cv2.applyColorMap(single_pixel, cv2.COLORMAP_RAINBOW)
 
         # reshape to a single dimensional array
-        rand_color = single_pixel.reshape(3)
-        color = [int(c) for c in rand_color]  # type: ignore
+        color = single_pixel.reshape(3)
     else:
         # Convert RGB to BGR
-        bgr_color = color[::-1]
-        color = [int(c) for c in bgr_color]  # type: ignore
+        color = color[::-1]
+    color = [int(c) for c in color]
 
     # Draw bounding box on image
     box_thickness = 2
