@@ -265,7 +265,7 @@ class ITMPolicyV2(BaseITMPolicy):
         prev_actions: Any,
         masks: Tensor,
         deterministic: bool = False,
-    ) -> Tuple[Tensor, Tensor]:
+    ) -> Any:
         self._pre_step(observations, masks)
         self._update_value_map()
         return super().act(

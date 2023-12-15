@@ -118,7 +118,7 @@ class BaseObjectNavPolicy(BasePolicy):
         prev_actions: Any,
         masks: Tensor,
         deterministic: bool = False,
-    ) -> Tuple[Tensor, Tensor]:
+    ) -> Any:
         """
         Starts the episode by 'initializing' and allowing robot to get its bearings
         (e.g., spinning in place to get a good view of the scene).

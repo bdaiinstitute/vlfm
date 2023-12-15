@@ -81,17 +81,3 @@ repos:
   rev: 3.0.0
   hooks:
   -  id: forbid-binary
-     # Note: to exclude files, uncomment the next line and provide the regex to the associated file or files
-     exclude: >
-       (?x)^(
-          docker/ros/web/.*|
-          docker/ros/rootfs/.*
-       )$
-- repo: local
-  hooks:
-    - id: check-bdai-deps
-      name: check bdai dependency rules
-      entry: ./scripts/check_dependency_rules.sh
-      language: script
-      files: \.py$
-      require_serial: true

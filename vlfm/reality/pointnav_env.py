@@ -106,9 +106,7 @@ class PointNavEnv:
         lin_vel = lin_dist / self._time_step
         return ang_vel, lin_vel
 
-    def _compute_displacements(
-        self, action: Dict[str, Any]
-    ) -> Tuple[float, float]:
+    def _compute_displacements(self, action: Dict[str, Any]) -> Tuple[float, float]:
         displacements = []
         for action_key, max_dist in (
             ("angular", self._max_ang_dist),

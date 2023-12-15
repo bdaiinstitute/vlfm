@@ -6,7 +6,7 @@
 # https://github.com/facebookresearch/habitat-lab/blob/main/habitat-baselines/habitat_baselines/rl/models/rnn_state_encoder.py
 # This is a filtered down version that only supports LSTM
 
-from typing import Dict, Optional, Tuple, Any
+from typing import Any, Dict, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -20,6 +20,7 @@ class RNNStateEncoder(nn.Module):
     is that it takes an addition masks input that resets the hidden state between two adjacent
     timesteps to handle episodes ending in the middle of a rollout.
     """
+
     def __init__(
         self,
         input_size: int,
@@ -131,16 +132,16 @@ class LSTMStateEncoder(RNNStateEncoder):
     ):
         super().__init__(input_size, hidden_size, num_layers)
 
-    # Note: Type handling mypy errors in pytorch libraries prevent 
+    # Note: Type handling mypy errors in pytorch libraries prevent
     # directly setting hidden_states type
     def pack_hidden(
-        self, hidden_states: Any # type is Tuple[torch.Tensor, torch.Tensor]
+        self, hidden_states: Any  # type is Tuple[torch.Tensor, torch.Tensor]
     ) -> torch.Tensor:
         return torch.cat(hidden_states, 0)
 
     def unpack_hidden(
         self, hidden_states: torch.Tensor
-    ) -> Any: # type is Tuple[torch.Tensor, torch.Tensor]
+    ) -> Any:  # type is Tuple[torch.Tensor, torch.Tensor]
         lstm_states = torch.chunk(hidden_states.contiguous(), 2, 0)
         return (lstm_states[0], lstm_states[1])
 
@@ -150,7 +151,10 @@ def build_rnn_inputs(
     rnn_states: torch.Tensor,
     not_dones: torch.Tensor,
     rnn_build_seq_info: Dict[str, torch.Tensor],
-) -> Tuple[PackedSequence, torch.Tensor,]:
+) -> Tuple[
+    PackedSequence,
+    torch.Tensor,
+]:
     r"""Create a PackedSequence input for an RNN such that each
     set of steps that are part of the same episode are all part of
     a batch in the PackedSequence.
