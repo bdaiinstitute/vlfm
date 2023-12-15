@@ -36,7 +36,9 @@ class TrajectoryVisualizer:
         img = self._draw_agent(img, camera_positions[-1], camera_yaw)
         return img
 
-    def _draw_path(self, img: np.ndarray, camera_positions: np.ndarray) -> np.ndarray:
+    def _draw_path(
+        self, img: np.ndarray, camera_positions: Union[np.ndarray, List[np.ndarray]]
+    ) -> np.ndarray:
         """Draws the path on the image and returns it"""
         if len(camera_positions) < 2:
             return img

@@ -6,7 +6,7 @@
 # https://github.com/facebookresearch/habitat-lab/blob/main/habitat-baselines/habitat_baselines/rl/models/rnn_state_encoder.py
 # This is a filtered down version that only supports LSTM
 
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -20,6 +20,24 @@ class RNNStateEncoder(nn.Module):
     is that it takes an addition masks input that resets the hidden state between two adjacent
     timesteps to handle episodes ending in the middle of a rollout.
     """
+
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        num_layers: int = 1,
+    ):
+        super().__init__()
+
+        self.num_recurrent_layers = num_layers * 2
+
+        self.rnn = nn.LSTM(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+        )
+
+        self.layer_init()
 
     def layer_init(self) -> None:
         for name, param in self.rnn.named_parameters():
@@ -112,26 +130,18 @@ class LSTMStateEncoder(RNNStateEncoder):
         hidden_size: int,
         num_layers: int = 1,
     ):
-        super().__init__()
+        super().__init__(input_size, hidden_size, num_layers)
 
-        self.num_recurrent_layers = num_layers * 2
-
-        self.rnn = nn.LSTM(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-        )
-
-        self.layer_init()
-
+    # Note: Type handling mypy errors in pytorch libraries prevent
+    # directly setting hidden_states type
     def pack_hidden(
-        self, hidden_states: Tuple[torch.Tensor, torch.Tensor]
+        self, hidden_states: Any  # type is Tuple[torch.Tensor, torch.Tensor]
     ) -> torch.Tensor:
         return torch.cat(hidden_states, 0)
 
     def unpack_hidden(
         self, hidden_states: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Any:  # type is Tuple[torch.Tensor, torch.Tensor]
         lstm_states = torch.chunk(hidden_states.contiguous(), 2, 0)
         return (lstm_states[0], lstm_states[1])
 

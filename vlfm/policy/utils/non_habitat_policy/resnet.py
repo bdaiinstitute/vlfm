@@ -6,7 +6,7 @@
 # https://github.com/facebookresearch/habitat-lab/blob/main/habitat-baselines/habitat_baselines/rl/ddppo/policy/resnet.py
 # This is a filtered down version that only support ResNet-18
 
-from typing import List, Optional, Type, cast
+from typing import List, Optional, Type
 
 from torch import Tensor
 from torch import nn as nn
@@ -149,7 +149,6 @@ class ResNet(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         x = self.conv1(x)
         x = self.maxpool(x)
-        x = cast(Tensor, x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)

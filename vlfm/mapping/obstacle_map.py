@@ -1,5 +1,7 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
+from typing import Any, Union
+
 import cv2
 import numpy as np
 from frontier_exploration.frontier_detection import detect_frontier_waypoints
@@ -15,7 +17,7 @@ class ObstacleMap(BaseMap):
     and another representing the obstacles that the robot has seen so far.
     """
 
-    _map_dtype: np.dtype = bool
+    _map_dtype: np.dtype = np.dtype(bool)
     _frontiers_px: np.ndarray = np.array([])
     frontiers: np.ndarray = np.array([])
     radius_padding_color: tuple = (100, 100, 100)
@@ -52,7 +54,7 @@ class ObstacleMap(BaseMap):
 
     def update_map(
         self,
-        depth: np.ndarray,
+        depth: Union[np.ndarray, Any],
         tf_camera_to_episodic: np.ndarray,
         min_depth: float,
         max_depth: float,

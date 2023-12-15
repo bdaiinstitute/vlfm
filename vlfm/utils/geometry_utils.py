@@ -1,7 +1,7 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import math
-from typing import Tuple, Union
+from typing import Tuple
 
 import numpy as np
 
@@ -33,7 +33,7 @@ def rho_theta(
     rho = np.linalg.norm(local_goal)
     theta = np.arctan2(local_goal[1], local_goal[0])
 
-    return rho, theta
+    return float(rho), float(theta)
 
 
 def get_rotation_matrix(angle: float, ndims: int = 2) -> np.ndarray:
@@ -58,7 +58,7 @@ def get_rotation_matrix(angle: float, ndims: int = 2) -> np.ndarray:
         raise ValueError("ndims must be 2 or 3")
 
 
-def wrap_heading(theta: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+def wrap_heading(theta: float) -> float:
     """Wraps given angle to be between -pi and pi.
 
     Args:

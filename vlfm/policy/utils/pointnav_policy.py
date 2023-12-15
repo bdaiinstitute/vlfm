@@ -203,7 +203,7 @@ def load_pointnav_policy(file_path: str) -> PointNavResNetTensorOutputPolicy:
 
 
 def move_obs_to_device(
-    observations: Dict[str, Union[Tensor, np.ndarray]],
+    observations: Dict[str, Any],
     device: torch.device,
     unsqueeze: bool = False,
 ) -> Dict[str, Tensor]:

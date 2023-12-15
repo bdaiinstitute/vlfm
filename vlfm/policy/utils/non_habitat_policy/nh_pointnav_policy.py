@@ -49,9 +49,9 @@ class PointNavResNetNet(nn.Module):
     def __init__(self, discrete_actions: bool = False, no_fwd_dict: bool = False):
         super().__init__()
         if discrete_actions:
-            self.prev_action_embedding = nn.Embedding(4 + 1, 32)
+            self.prev_action_embedding_discrete = nn.Embedding(4 + 1, 32)
         else:
-            self.prev_action_embedding = nn.Linear(
+            self.prev_action_embedding_cont = nn.Linear(
                 in_features=2, out_features=32, bias=True
             )
         self.tgt_embeding = nn.Linear(in_features=3, out_features=32, bias=True)
@@ -95,11 +95,11 @@ class PointNavResNetNet(nn.Module):
             prev_actions = prev_actions.squeeze(-1)
             start_token = torch.zeros_like(prev_actions)
             # The mask means the previous action will be zero, an extra dummy action
-            prev_actions = self.prev_action_embedding(
+            prev_actions = self.prev_action_embedding_discrete(
                 torch.where(masks.view(-1), prev_actions + 1, start_token)
             )
         else:
-            prev_actions = self.prev_action_embedding(masks * prev_actions.float())
+            prev_actions = self.prev_action_embedding_cont(masks * prev_actions.float())
 
         x.append(prev_actions)
 

@@ -54,7 +54,7 @@ class PointNavEnv:
         self.goal = goal
         return self._get_obs()
 
-    def step(self, action: Dict[str, np.ndarray]) -> Tuple[Dict, float, bool, Dict]:
+    def step(self, action: Dict[str, Any]) -> Tuple[Dict, float, bool, Dict]:
         if self._cmd_id is not None:
             cmd_status = 0
             while cmd_status != 1:
@@ -100,15 +100,13 @@ class PointNavEnv:
         self._num_steps += 1
         return self._get_obs(), 0.0, done, {}  # not using info dict yet
 
-    def _compute_velocities(self, action: Dict[str, np.ndarray]) -> Tuple[float, float]:
+    def _compute_velocities(self, action: Dict[str, Any]) -> Tuple[float, float]:
         ang_dist, lin_dist = self._compute_displacements(action)
         ang_vel = ang_dist / self._time_step
         lin_vel = lin_dist / self._time_step
         return ang_vel, lin_vel
 
-    def _compute_displacements(
-        self, action: Dict[str, np.ndarray]
-    ) -> Tuple[float, float]:
+    def _compute_displacements(self, action: Dict[str, Any]) -> Tuple[float, float]:
         displacements = []
         for action_key, max_dist in (
             ("angular", self._max_ang_dist),
@@ -120,7 +118,7 @@ class PointNavEnv:
             act_val = action[action_key]
             dist = np.clip(act_val, -1.0, 1.0)  # clip to [-1, 1]
             dist *= max_dist  # scale to max distance
-            displacements.append(dist)  # convert to velocity
+            displacements.append(dist)  # convert to velocities
         ang_dist, lin_dist = displacements
         return ang_dist, lin_dist
 

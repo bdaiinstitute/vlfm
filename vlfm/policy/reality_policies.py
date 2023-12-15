@@ -56,7 +56,7 @@ class RealityMixin:
     def act(
         self: Union["RealityMixin", ITMPolicyV2],
         observations: Dict[str, Any],
-        rnn_hidden_states: Tensor,
+        rnn_hidden_states: Union[Tensor, Any],
         prev_actions: Any,
         masks: Tensor,
         deterministic: bool = False,
@@ -77,10 +77,10 @@ class RealityMixin:
         if self._done_initializing:
             angular = action[0][0].item()
             linear = action[0][1].item()
-            arm_yaw = -1
+            arm_yaw = -1.0
         else:
-            angular = 0
-            linear = 0
+            angular = 0.0
+            linear = 0.0
             arm_yaw = action[0][0].item()
 
         self._done_initializing = len(self._initial_yaws) == 0
