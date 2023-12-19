@@ -39,6 +39,7 @@ class ValueMap(BaseMap):
     _last_camera_yaw: float = 0.0
     _min_confidence: float = 0.25
     _decision_threshold: float = 0.35
+    _map: np.ndarray
 
     def __init__(
         self,
@@ -75,9 +76,7 @@ class ValueMap(BaseMap):
 
         if RECORDING:
             if osp.isdir(RECORDING_DIR):
-                warnings.warn(
-                    f"Recording directory {RECORDING_DIR} already exists. Deleting it."
-                )
+                warnings.warn(f"Recording directory {RECORDING_DIR} already exists. Deleting it.")
                 shutil.rmtree(RECORDING_DIR)
             os.mkdir(RECORDING_DIR)
             # Dump all args to a file
@@ -119,14 +118,11 @@ class ValueMap(BaseMap):
             max_depth: The maximum depth value in meters.
             fov: The field of view of the camera in RADIANS.
         """
-        assert len(values) == self._value_channels, (
-            "Incorrect number of values given "
-            f"({len(values)}). Expected {self._value_channels}."
-        )
+        assert (
+            len(values) == self._value_channels
+        ), f"Incorrect number of values given ({len(values)}). Expected {self._value_channels}."
 
-        curr_map = self._localize_new_data(
-            depth, tf_camera_to_episodic, min_depth, max_depth, fov
-        )
+        curr_map = self._localize_new_data(depth, tf_camera_to_episodic, min_depth, max_depth, fov)
 
         # Fuse the new data with the existing data
         self._fuse_new_data(curr_map, values)
@@ -180,9 +176,7 @@ class ValueMap(BaseMap):
         values = [get_value(point) for point in waypoints]
 
         if self._value_channels > 1:
-            assert (
-                reduce_fn is not None
-            ), "Must provide a reduction function when using multiple value channels."
+            assert reduce_fn is not None, "Must provide a reduction function when using multiple value channels."
             values = reduce_fn(values)
 
         # Use np.argsort to get the indices of the sorted values
@@ -224,9 +218,7 @@ class ValueMap(BaseMap):
 
         return map_img
 
-    def _process_local_data(
-        self, depth: np.ndarray, fov: float, min_depth: float, max_depth: float
-    ) -> np.ndarray:
+    def _process_local_data(self, depth: np.ndarray, fov: float, min_depth: float, max_depth: float) -> np.ndarray:
         """Using the FOV and depth, return the visible portion of the FOV.
 
         Args:
@@ -277,16 +269,10 @@ class ValueMap(BaseMap):
                 if not os.path.exists("visualizations"):
                     os.makedirs("visualizations")
                 # Expand the depth_row back into a full image
-                depth_row_full = np.repeat(
-                    depth_row.reshape(1, -1), depth.shape[0], axis=0
-                )
+                depth_row_full = np.repeat(depth_row.reshape(1, -1), depth.shape[0], axis=0)
                 # Stack the depth images with the visible mask
-                depth_rgb = cv2.cvtColor(
-                    (depth * 255).astype(np.uint8), cv2.COLOR_GRAY2RGB
-                )
-                depth_row_full = cv2.cvtColor(
-                    (depth_row_full * 255).astype(np.uint8), cv2.COLOR_GRAY2RGB
-                )
+                depth_rgb = cv2.cvtColor((depth * 255).astype(np.uint8), cv2.COLOR_GRAY2RGB)
+                depth_row_full = cv2.cvtColor((depth_row_full * 255).astype(np.uint8), cv2.COLOR_GRAY2RGB)
                 vis = np.flipud(vis)
                 new_width = int(vis.shape[1] * (depth_rgb.shape[0] / vis.shape[0]))
                 vis_resized = cv2.resize(vis, (new_width, depth_rgb.shape[0]))
@@ -376,10 +362,9 @@ class ValueMap(BaseMap):
                 0 and 1, with 1 being the most confident.
             values: The values attributed to the new portion of the map.
         """
-        assert len(values) == self._value_channels, (
-            "Incorrect number of values given "
-            f"({len(values)}). Expected {self._value_channels}."
-        )
+        assert (
+            len(values) == self._value_channels
+        ), f"Incorrect number of values given ({len(values)}). Expected {self._value_channels}."
 
         if self._obstacle_map is not None:
             # If an obstacle map is provided, we will use it to mask out the
@@ -405,16 +390,12 @@ class ValueMap(BaseMap):
             self._map[self._map > 0] = 1
             new_map[new_map > 0] = 1
         else:
-            assert (
-                self._fusion_type == "default"
-            ), f"Unknown fusion type {self._fusion_type}"
+            assert self._fusion_type == "default", f"Unknown fusion type {self._fusion_type}"
 
         # Any values in the given map that are less confident than
         # self._decision_threshold AND less than the new_map in the existing map
         # will be silenced into 0s
-        new_map_mask = np.logical_and(
-            new_map < self._decision_threshold, new_map < self._map
-        )
+        new_map_mask = np.logical_and(new_map < self._decision_threshold, new_map < self._map)
         new_map[new_map_mask] = 0
 
         if self._use_max_confidence:
@@ -436,16 +417,10 @@ class ValueMap(BaseMap):
                 weight_1 = self._map / confidence_denominator
                 weight_2 = new_map / confidence_denominator
 
-            weight_1_channeled = np.repeat(
-                np.expand_dims(weight_1, axis=2), self._value_channels, axis=2
-            )
-            weight_2_channeled = np.repeat(
-                np.expand_dims(weight_2, axis=2), self._value_channels, axis=2
-            )
+            weight_1_channeled = np.repeat(np.expand_dims(weight_1, axis=2), self._value_channels, axis=2)
+            weight_2_channeled = np.repeat(np.expand_dims(weight_2, axis=2), self._value_channels, axis=2)
 
-            self._value_map = (
-                self._value_map * weight_1_channeled + values * weight_2_channeled
-            )
+            self._value_map = self._value_map * weight_1_channeled + values * weight_2_channeled
             self._map = self._map * weight_1 + new_map * weight_2
 
             # Because confidence_denominator can have 0 values, any nans in either the
@@ -454,9 +429,7 @@ class ValueMap(BaseMap):
             self._map = np.nan_to_num(self._map)
 
 
-def remap(
-    value: float, from_low: float, from_high: float, to_low: float, to_high: float
-) -> float:
+def remap(value: float, from_low: float, from_high: float, to_low: float, to_high: float) -> float:
     """Maps a value from one range to another.
 
     Args:

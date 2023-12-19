@@ -28,13 +28,9 @@ sys.path.pop(0)
 
 
 class YOLOv7:
-    def __init__(
-        self, weights: str, image_size: int = 640, half_precision: bool = True
-    ):
+    def __init__(self, weights: str, image_size: int = 640, half_precision: bool = True):
         """Loads the model and saves it to a field."""
-        self.device = (
-            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        )
+        self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.half_precision = self.device.type != "cpu" and half_precision
         self.model = attempt_load(weights, map_location=self.device)  # load FP32 model
         stride = int(self.model.stride.max())  # model stride
@@ -45,9 +41,7 @@ class YOLOv7:
 
         # Warm-up
         if self.device.type != "cpu":
-            dummy_img = torch.rand(
-                1, 3, int(self.image_size * 0.7), self.image_size
-            ).to(self.device)
+            dummy_img = torch.rand(1, 3, int(self.image_size * 0.7), self.image_size).to(self.device)
             if self.half_precision:
                 dummy_img = dummy_img.half()
             for i in range(3):
@@ -111,9 +105,7 @@ class YOLOv7:
         logits = pred[:, 4]
         phrases = [COCO_CLASSES[int(i)] for i in pred[:, 5]]
 
-        detections = ObjectDetections(
-            boxes, logits, phrases, image_source=image, fmt="xyxy"
-        )
+        detections = ObjectDetections(boxes, logits, phrases, image_source=image, fmt="xyxy")
 
         return detections
 

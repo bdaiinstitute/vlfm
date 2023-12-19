@@ -33,9 +33,7 @@ class ActionReplayPolicy(BasePolicy):
         **kwargs: Any,
     ) -> None:
         super().__init__()
-        assert (
-            "VLFM_RECORD_ACTIONS_DIR" in os.environ
-        ), "Must set VLFM_RECORD_ACTIONS_DIR"
+        assert "VLFM_RECORD_ACTIONS_DIR" in os.environ, "Must set VLFM_RECORD_ACTIONS_DIR"
         self._dir = os.environ["VLFM_RECORD_ACTIONS_DIR"]
         filepath = os.path.join(self._dir, "actions.txt")
         with open(filepath, "r") as f:

@@ -13,9 +13,7 @@ from vlfm.reality.objectnav_env import ObjectNavEnv
 from vlfm.reality.robots.bdsw_robot import BDSWRobot
 
 
-@hydra.main(
-    version_base=None, config_path="../../config/", config_name="experiments/reality"
-)
+@hydra.main(version_base=None, config_path="../../config/", config_name="experiments/reality")
 def main(cfg: RealityConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     policy = RealityITMPolicyV2.from_config(cfg)
@@ -27,9 +25,7 @@ def main(cfg: RealityConfig) -> None:
         robot = BDSWRobot(spot)
         robot.open_gripper()
         # robot.set_arm_joints(NOMINAL_ARM_POSE, travel_time=0.75)
-        cmd_id = robot.spot.move_gripper_to_point(
-            np.array([0.35, 0.0, 0.6]), np.deg2rad([0.0, 20.0, 0.0])
-        )
+        cmd_id = robot.spot.move_gripper_to_point(np.array([0.35, 0.0, 0.6]), np.deg2rad([0.0, 20.0, 0.0]))
         spot.block_until_arm_arrives(cmd_id, timeout_sec=1.5)
         env = ObjectNavEnv(
             robot=robot,

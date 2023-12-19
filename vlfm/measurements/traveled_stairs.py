@@ -18,9 +18,7 @@ from omegaconf import DictConfig
 class TraveledStairs(Measure):
     cls_uuid: str = "traveled_stairs"
 
-    def __init__(
-        self, sim: Simulator, config: DictConfig, *args: Any, **kwargs: Any
-    ) -> None:
+    def __init__(self, sim: Simulator, config: DictConfig, *args: Any, **kwargs: Any) -> None:
         self._sim = sim
         self._config = config
         self._history: List[np.ndarray] = []

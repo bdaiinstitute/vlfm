@@ -99,9 +99,7 @@ class VLFMTrainer(PPOTrainer):
         self._init_envs(config, is_eval=True)
 
         self._agent = self._create_agent(None)
-        action_shape, discrete_actions = get_action_space_info(
-            self._agent.policy_action_space
-        )
+        action_shape, discrete_actions = get_action_space_info(self._agent.policy_action_space)
 
         if self._agent.actor_critic.should_load_agent_state:
             self._agent.load_state_dict(ckpt_dict)
@@ -131,14 +129,10 @@ class VLFMTrainer(PPOTrainer):
             device=self.device,
             dtype=torch.bool,
         )
-        stats_episodes: Dict[Any, Any] = (
-            {}
-        )  # dict of dicts that stores stats per episode
+        stats_episodes: Dict[Any, Any] = {}  # dict of dicts that stores stats per episode
         ep_eval_count: Dict[Any, int] = defaultdict(lambda: 0)
 
-        rgb_frames: List[List[np.ndarray]] = [
-            [] for _ in range(self.config.habitat_baselines.num_environments)
-        ]
+        rgb_frames: List[List[np.ndarray]] = [[] for _ in range(self.config.habitat_baselines.num_environments)]
         if len(self.config.habitat_baselines.eval.video_option) > 0:
             os.makedirs(self.config.habitat_baselines.video_dir, exist_ok=True)
 
@@ -151,16 +145,13 @@ class VLFMTrainer(PPOTrainer):
             # if total_num_eps is negative, it means the number of evaluation episodes is unknown
             if total_num_eps < number_of_eval_episodes and total_num_eps > 1:
                 logger.warn(
-                    f"Config specified {number_of_eval_episodes} eval episodes"
-                    ", dataset only has {total_num_eps}."
+                    f"Config specified {number_of_eval_episodes} eval episodes, dataset only has {{total_num_eps}}."
                 )
                 logger.warn(f"Evaluating with {total_num_eps} instead.")
                 number_of_eval_episodes = total_num_eps
             else:
                 assert evals_per_ep == 1
-        assert (
-            number_of_eval_episodes > 0
-        ), "You must specify a number of evaluation episodes with test_episode_count"
+        assert number_of_eval_episodes > 0, "You must specify a number of evaluation episodes with test_episode_count"
 
         pbar = tqdm.tqdm(total=number_of_eval_episodes * evals_per_ep)
         self._agent.eval()
@@ -170,10 +161,7 @@ class VLFMTrainer(PPOTrainer):
         num_successes = 0
         num_total = 0
         hab_vis = HabitatVis()
-        while (
-            len(stats_episodes) < (number_of_eval_episodes * evals_per_ep)
-            and self.envs.num_envs > 0
-        ):
+        while len(stats_episodes) < (number_of_eval_episodes * evals_per_ep) and self.envs.num_envs > 0:
             current_episodes_info = self.envs.current_episodes()
 
             with inference_mode():
@@ -202,9 +190,7 @@ class VLFMTrainer(PPOTrainer):
                 else:
                     for i, should_insert in enumerate(action_data.should_inserts):
                         if should_insert.item():
-                            test_recurrent_hidden_states[i] = (
-                                action_data.rnn_hidden_states[i]
-                            )
+                            test_recurrent_hidden_states[i] = action_data.rnn_hidden_states[i]
                             prev_actions[i].copy_(action_data.actions[i])  # type: ignore
             # NB: Move actions to CPU.  If CUDA tensors are
             # sent in to env.step(), that will create CUDA contexts
@@ -240,9 +226,7 @@ class VLFMTrainer(PPOTrainer):
                 device="cpu",
             )
 
-            rewards = torch.tensor(
-                rewards_l, dtype=torch.float, device="cpu"
-            ).unsqueeze(1)
+            rewards = torch.tensor(rewards_l, dtype=torch.float, device="cpu").unsqueeze(1)
             current_episode_reward += rewards
             next_episodes_info = self.envs.current_episodes()
             envs_to_pause = []
@@ -281,10 +265,7 @@ class VLFMTrainer(PPOTrainer):
                     if episode_stats["success"] == 1:
                         num_successes += 1
                     num_total += 1
-                    print(
-                        f"Success rate: {num_successes / num_total * 100:.2f}% "
-                        f"({num_successes} out of {num_total})"
-                    )
+                    print(f"Success rate: {num_successes / num_total * 100:.2f}% ({num_successes} out of {num_total})")
 
                     from vlfm.utils.episode_stats_logger import (
                         log_episode_stats,
@@ -358,9 +339,7 @@ class VLFMTrainer(PPOTrainer):
 
         aggregated_stats = {}
         for stat_key in next(iter(stats_episodes.values())).keys():
-            aggregated_stats[stat_key] = np.mean(
-                [v[stat_key] for v in stats_episodes.values()]
-            )
+            aggregated_stats[stat_key] = np.mean([v[stat_key] for v in stats_episodes.values()])
 
         for k, v in aggregated_stats.items():
             logger.info(f"Average episode {k}: {v:.4f}")
@@ -369,9 +348,7 @@ class VLFMTrainer(PPOTrainer):
         if "extra_state" in ckpt_dict and "step" in ckpt_dict["extra_state"]:
             step_id = ckpt_dict["extra_state"]["step"]
 
-        writer.add_scalar(
-            "eval_reward/average_reward", aggregated_stats["reward"], step_id
-        )
+        writer.add_scalar("eval_reward/average_reward", aggregated_stats["reward"], step_id)
 
         metrics = {k: v for k, v in aggregated_stats.items() if k != "reward"}
         for k, v in metrics.items():

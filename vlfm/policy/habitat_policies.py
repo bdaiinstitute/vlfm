@@ -92,13 +92,9 @@ class HabitatMixin:
         self._dataset_type = dataset_type
 
     @classmethod
-    def from_config(
-        cls, config: DictConfig, *args_unused: Any, **kwargs_unused: Any
-    ) -> "HabitatMixin":
+    def from_config(cls, config: DictConfig, *args_unused: Any, **kwargs_unused: Any) -> "HabitatMixin":
         policy_config: VLFMPolicyConfig = config.habitat_baselines.rl.policy
-        kwargs = {
-            k: policy_config[k] for k in VLFMPolicyConfig.kwaarg_names  # type: ignore
-        }
+        kwargs = {k: policy_config[k] for k in VLFMPolicyConfig.kwaarg_names}  # type: ignore
 
         # In habitat, we need the height of the camera to generate the camera transform
         sim_sensors_cfg = config.habitat.simulator.agents.main_agent.sim_sensors
@@ -137,16 +133,12 @@ class HabitatMixin:
             obs_dict[ObjectGoalSensor.cls_uuid] = HM3D_ID_TO_NAME[object_id]
         elif self._dataset_type == "mp3d":
             obs_dict[ObjectGoalSensor.cls_uuid] = MP3D_ID_TO_NAME[object_id]
-            self._non_coco_caption = (
-                " . ".join(MP3D_ID_TO_NAME).replace("|", " . ") + " ."
-            )
+            self._non_coco_caption = " . ".join(MP3D_ID_TO_NAME).replace("|", " . ") + " ."
         else:
             raise ValueError(f"Dataset type {self._dataset_type} not recognized")
         parent_cls: BaseObjectNavPolicy = super()  # type: ignore
         try:
-            action, rnn_hidden_states = parent_cls.act(
-                obs_dict, rnn_hidden_states, prev_actions, masks, deterministic
-            )
+            action, rnn_hidden_states = parent_cls.act(obs_dict, rnn_hidden_states, prev_actions, masks, deterministic)
         except StopIteration:
             action = self._stop_action
         return PolicyActionData(
@@ -178,9 +170,7 @@ class HabitatMixin:
         info["start_yaw"] = self._start_yaw
         return info
 
-    def _cache_observations(
-        self: Union["HabitatMixin", BaseObjectNavPolicy], observations: TensorDict
-    ) -> None:
+    def _cache_observations(self: Union["HabitatMixin", BaseObjectNavPolicy], observations: TensorDict) -> None:
         """Caches the rgb, depth, and camera transform from the observations.
 
         Args:

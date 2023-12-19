@@ -26,13 +26,11 @@ class BLIP2ITM:
         if device is None:
             device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
 
-        self.model, self.vis_processors, self.text_processors = (
-            load_model_and_preprocess(
-                name=name,
-                model_type=model_type,
-                is_eval=True,
-                device=device,
-            )
+        self.model, self.vis_processors, self.text_processors = load_model_and_preprocess(
+            name=name,
+            model_type=model_type,
+            is_eval=True,
+            device=device,
         )
         self.device = device
 
@@ -51,9 +49,7 @@ class BLIP2ITM:
         img = self.vis_processors["eval"](pil_img).unsqueeze(0).to(self.device)
         txt = self.text_processors["eval"](txt)
         with torch.inference_mode():
-            cosine = self.model(
-                {"image": img, "text_input": txt}, match_head="itc"
-            ).item()
+            cosine = self.model({"image": img, "text_input": txt}, match_head="itc").item()
 
         return cosine
 

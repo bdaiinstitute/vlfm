@@ -1,7 +1,7 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Union
 
 import numpy as np
 import torch
@@ -35,19 +35,15 @@ class RealityMixin:
     _policy_info: Dict[str, Any] = {}
     _done_initializing: bool = False
 
-    def __init__(
-        self: Union["RealityMixin", ITMPolicyV2], *args: Any, **kwargs: Any
-    ) -> None:
+    def __init__(self: Union["RealityMixin", ITMPolicyV2], *args: Any, **kwargs: Any) -> None:
         super().__init__(sync_explored_areas=True, *args, **kwargs)  # type: ignore
-        self._depth_model = torch.hub.load(
-            "isl-org/ZoeDepth", "ZoeD_NK", config_mode="eval", pretrained=True
-        ).to("cuda" if torch.cuda.is_available() else "cpu")
+        self._depth_model = torch.hub.load("isl-org/ZoeDepth", "ZoeD_NK", config_mode="eval", pretrained=True).to(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        )
         self._object_map.use_dbscan = False  # type: ignore
 
     @classmethod
-    def from_config(
-        cls, config: DictConfig, *args_unused: Any, **kwargs_unused: Any
-    ) -> Any:
+    def from_config(cls, config: DictConfig, *args_unused: Any, **kwargs_unused: Any) -> Any:
         policy_config: VLFMConfig = config.policy
         kwargs = {k: policy_config[k] for k in VLFMConfig.kwaarg_names}  # type: ignore
 
@@ -60,51 +56,40 @@ class RealityMixin:
         prev_actions: Any,
         masks: Tensor,
         deterministic: bool = False,
-    ) -> Tuple[Tensor, Tensor]:
+    ) -> Dict[str, Any]:
         if observations["objectgoal"] not in self._non_coco_caption:
-            self._non_coco_caption = (
-                observations["objectgoal"] + " . " + self._non_coco_caption
-            )
+            self._non_coco_caption = observations["objectgoal"] + " . " + self._non_coco_caption
         parent_cls: ITMPolicyV2 = super()  # type: ignore
-        action: Tensor = parent_cls.act(
-            observations, rnn_hidden_states, prev_actions, masks, deterministic
-        )[0]
+        action: Tensor = parent_cls.act(observations, rnn_hidden_states, prev_actions, masks, deterministic)[0]
 
         # The output of the policy is a (1, 2) tensor of floats, where the first element
         # is the linear velocity and the second element is the angular velocity. We
         # convert this numpy array to a dictionary with keys "angular" and "linear" so
         # that it can be passed to the Spot robot.
         if self._done_initializing:
-            angular = action[0][0].item()
-            linear = action[0][1].item()
-            arm_yaw = -1.0
+            action_dict = {
+                "angular": action[0][0].item(),
+                "linear": action[0][1].item(),
+                "arm_yaw": -1,
+                "info": self._policy_info,
+            }
         else:
-            angular = 0.0
-            linear = 0.0
-            arm_yaw = action[0][0].item()
+            action_dict = {
+                "angular": 0,
+                "linear": 0,
+                "arm_yaw": action[0][0].item(),
+                "info": self._policy_info,
+            }
 
-        self._done_initializing = len(self._initial_yaws) == 0
-
-        action = torch.tensor([[angular, linear, arm_yaw]], dtype=torch.float32)
-
-        return action, rnn_hidden_states
-
-    def get_action(
-        self, observations: Dict[str, Any], masks: Tensor, deterministic: bool = True
-    ) -> Dict[str, Any]:
-        actions, _ = self.act(
-            observations, None, None, masks, deterministic=deterministic
-        )
-        action_dict = {
-            "angular": actions[0],
-            "linear": actions[1],
-            "arm_yaw": actions[2],
-            "info": self._policy_info,
-        }
         if "rho_theta" in self._policy_info:
             action_dict["rho_theta"] = self._policy_info["rho_theta"]
 
+        self._done_initializing = len(self._initial_yaws) == 0
+
         return action_dict
+
+    def get_action(self, observations: Dict[str, Any], masks: Tensor, deterministic: bool = True) -> Dict[str, Any]:
+        return self.act(observations, None, None, masks, deterministic=deterministic)
 
     def _reset(self: Union["RealityMixin", ITMPolicyV2]) -> None:
         parent_cls: ITMPolicyV2 = super()  # type: ignore
@@ -116,9 +101,7 @@ class RealityMixin:
         yaw = self._initial_yaws.pop(0)
         return torch.tensor([[yaw]], dtype=torch.float32)
 
-    def _cache_observations(
-        self: Union["RealityMixin", ITMPolicyV2], observations: Dict[str, Any]
-    ) -> None:
+    def _cache_observations(self: Union["RealityMixin", ITMPolicyV2], observations: Dict[str, Any]) -> None:
         """Caches the rgb, depth, and camera transform from the observations.
 
         Args:
@@ -141,9 +124,7 @@ class RealityMixin:
                 explore=False,
             )
 
-        _, tf, min_depth, max_depth, fx, fy, topdown_fov = observations[
-            "obstacle_map_depths"
-        ][-1]
+        _, tf, min_depth, max_depth, fx, fy, topdown_fov = observations["obstacle_map_depths"][-1]
         self._obstacle_map.update_map(
             None,
             tf,
@@ -156,9 +137,7 @@ class RealityMixin:
             update_obstacles=False,
         )
 
-        self._obstacle_map.update_agent_traj(
-            observations["robot_xy"], observations["robot_heading"]
-        )
+        self._obstacle_map.update_agent_traj(observations["robot_xy"], observations["robot_heading"])
         frontiers = self._obstacle_map.frontiers
 
         height, width = observations["nav_depth"].shape
@@ -174,9 +153,7 @@ class RealityMixin:
             "value_map_rgbd": observations["value_map_rgbd"],
         }
 
-    def _infer_depth(
-        self, rgb: np.ndarray, min_depth: float, max_depth: float
-    ) -> np.ndarray:
+    def _infer_depth(self, rgb: np.ndarray, min_depth: float, max_depth: float) -> np.ndarray:
         """Infers the depth image from the rgb image.
 
         Args:

@@ -7,7 +7,7 @@ from habitat_baselines.common.baseline_registry import baseline_registry  # noqa
 from vlfm.utils.generate_dummy_policy import save_dummy_policy
 
 
-def test_load_and_save_config():
+def test_load_and_save_config() -> None:
     if not os.path.exists("data"):
         os.makedirs("data")
 

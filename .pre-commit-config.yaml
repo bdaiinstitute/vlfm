@@ -1,46 +1,81 @@
-# Copyright [2023] Boston Dynamics AI Institute, Inc.
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
 repos:
--   repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: 'v0.0.263'
-    hooks:
-    -   id: ruff
-        args: ['--fix', '--config', 'pyproject.toml']
+- repo: https://github.com/charliermarsh/ruff-pre-commit
+  # Ruff version.
+  rev: 'v0.1.0'
+  hooks:
+    - id: ruff
+      args: ['--fix', '--config', 'pyproject.toml'] # we want this to refer to `bdai/pyproject.toml`
 
+- repo: https://github.com/psf/black
+  rev: 23.10.0
+  hooks:
+    - id: black
+      language_version: python3.10
+      args: ['--config', 'pyproject.toml'] # we want this to refer to `bdai/pyproject.toml`
+      verbose: true
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v4.4.0
+  rev: v4.5.0
   hooks:
   -   id: check-yaml
-      args: ['--unsafe']
+      args: ['--unsafe'] # details about the unsafe flag:
+      # https://github.com/pre-commit/pre-commit-hooks#check-yaml
+      # This is the solution proposed to prevent `check-yaml` from failing on custom tags: 
+      # https://github.com/pre-commit/pre-commit-hooks/issues/701
   -   id: check-added-large-files
       args: ['--enforce-all', '--maxkb', '200']
+      # For the `exclude` argument, see https://pre-commit.com/#regular-expressions
+      # Make sure to escape strings correctly to ensure literal matches, for example, using Python
+      #
+      # >>> print(re.escape("path/to-some/file.ext"))
+      # path/to\-some/file\.ext
+      #
+      # `path/to\-some/file\.ext` is the correct regex pattern to match `path/to-some/file.ext` literally.
+      # The inverse operation is more cumbersome: https://stackoverflow.com/a/54840284
+      exclude: |
+        (?x)^(
+          docker/ros/web/static/novnc/vendor/browser\-es\-module\-loader/dist/babel\-worker\.js|
+          docker/ros/rootfs/usr/local/share/doro\-lxde\-wallpapers/bg.*\.jpg|
+          docker/ros/web/yarn\.lock|
+          src/modelzoo/detic/lvis_v1_train_cat_info\.json|
+          src/modelzoo/edge_grasp_serve/example_pc\.npy
+        )$
   -   id: check-toml
   -   id: end-of-file-fixer
   -   id: check-merge-conflict
   -   id: check-executables-have-shebangs
   -   id: check-shebang-scripts-are-executable
-
--   repo: https://github.com/psf/black
-    rev: 23.3.0
+-   repo: https://github.com/ssciwr/clang-format-hook.git
+    rev: v12.0.1  # Use the sha / tag you want to point at
     hooks:
-    -   id: black
-        language_version: python3.9
-        args: ['--config', 'pyproject.toml']
-        verbose: true
-
--   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.2.0
+    -   id: clang-format
+        types_or: [c++, c, cuda]
+-   repo: https://github.com/cpplint/cpplint.git
+    rev: 1.6.1
     hooks:
-    -   id: mypy
-        pass_filenames: false
-        additional_dependencies:
-        - types-protobuf
-        - types-requests
-        - types-simplejson
-        - types-ujson
-        - types-PyYAML
-        - types-toml
-        - types-six
+    -   id: cpplint
+        args: ['--quiet']
+        exclude_types: [cuda]
+#-   repo: https://github.com/leoll2/copyright_notice_precommit
+#    rev: 0.1.1
+#    hooks:
+#    -   id: copyright-notice
+#        args: [--notice=copyright.txt]
+
+- repo: https://github.com/pre-commit/mirrors-mypy
+  rev: v1.6.1
+  hooks:
+  -   id: mypy
+      pass_filenames: false
+      additional_dependencies:
+      - types-protobuf
+      - types-requests
+      - types-simplejson
+      - types-ujson
+      - types-PyYAML
+      - types-toml
+      - types-six
 
 - repo: https://github.com/jumanjihouse/pre-commit-hooks
   rev: 3.0.0

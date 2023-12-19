@@ -52,9 +52,7 @@ class MobileSAM:
         """
         with torch.inference_mode():
             self.predictor.set_image(image)
-            masks, _, _ = self.predictor.predict(
-                box=np.array(bbox), multimask_output=False
-            )
+            masks, _, _ = self.predictor.predict(box=np.array(bbox), multimask_output=False)
 
         return masks[0]
 
@@ -87,9 +85,7 @@ if __name__ == "__main__":
             cropped_mask_str = bool_arr_to_str(cropped_mask)
             return {"cropped_mask": cropped_mask_str}
 
-    mobile_sam = MobileSAMServer(
-        sam_checkpoint=os.environ.get("MOBILE_SAM_CHECKPOINT", "data/mobile_sam.pt")
-    )
+    mobile_sam = MobileSAMServer(sam_checkpoint=os.environ.get("MOBILE_SAM_CHECKPOINT", "data/mobile_sam.pt"))
     print("Model loaded!")
     print(f"Hosting on port {args.port}...")
     host_model(mobile_sam, name="mobile_sam", port=args.port)

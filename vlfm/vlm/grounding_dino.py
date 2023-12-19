@@ -13,9 +13,7 @@ from .server_wrapper import ServerMixin, host_model, send_request, str_to_image
 try:
     from groundingdino.util.inference import load_model, predict
 except ModuleNotFoundError:
-    print(
-        "Could not import groundingdino. This is OK if you are only using the client."
-    )
+    print("Could not import groundingdino. This is OK if you are only using the client.")
 
 GROUNDING_DINO_CONFIG = "GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py"
 GROUNDING_DINO_WEIGHTS = "data/groundingdino_swint_ogc.pth"
@@ -32,16 +30,12 @@ class GroundingDINO:
         text_threshold: float = 0.25,
         device: torch.device = torch.device("cuda"),
     ):
-        self.model = load_model(
-            model_config_path=config_path, model_checkpoint_path=weights_path
-        ).to(device)
+        self.model = load_model(model_config_path=config_path, model_checkpoint_path=weights_path).to(device)
         self.caption = caption
         self.box_threshold = box_threshold
         self.text_threshold = text_threshold
 
-    def predict(
-        self, image: np.ndarray, caption: Optional[str] = None
-    ) -> ObjectDetections:
+    def predict(self, image: np.ndarray, caption: Optional[str] = None) -> ObjectDetections:
         """
         This function makes predictions on an input image tensor or numpy array using a
         pretrained model.
@@ -57,9 +51,7 @@ class GroundingDINO:
         """
         # Convert image to tensor and normalize from 0-255 to 0-1
         image_tensor = F.to_tensor(image)
-        image_transformed = F.normalize(
-            image_tensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-        )
+        image_transformed = F.normalize(image_tensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         if caption is None:
             caption_to_use = self.caption
         else:
@@ -86,9 +78,7 @@ class GroundingDINOClient:
     def __init__(self, port: int = 12181):
         self.url = f"http://localhost:{port}/gdino"
 
-    def predict(
-        self, image_numpy: np.ndarray, caption: Optional[str] = ""
-    ) -> ObjectDetections:
+    def predict(self, image_numpy: np.ndarray, caption: Optional[str] = "") -> ObjectDetections:
         response = send_request(self.url, image=image_numpy, caption=caption)
         detections = ObjectDetections.from_json(response, image_source=image_numpy)
 

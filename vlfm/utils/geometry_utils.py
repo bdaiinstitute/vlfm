@@ -6,9 +6,7 @@ from typing import Tuple
 import numpy as np
 
 
-def rho_theta(
-    curr_pos: np.ndarray, curr_heading: float, curr_goal: np.ndarray
-) -> Tuple[float, float]:
+def rho_theta(curr_pos: np.ndarray, curr_heading: float, curr_goal: np.ndarray) -> Tuple[float, float]:
     """Calculates polar coordinates (rho, theta) relative to a given position and
     heading to a given goal position. 'rho' is the distance from the agent to the goal,
     and theta is how many radians the agent must turn (to the left, CCW from above) to
@@ -82,15 +80,10 @@ def calculate_vfov(hfov: float, width: int, height: int) -> float:
         A float representing the VFOV in radians.
     """
     # Calculate the diagonal field of view (DFOV)
-    dfov = 2 * math.atan(
-        math.tan(hfov / 2)
-        * math.sqrt((width**2 + height**2) / (width**2 + height**2))
-    )
+    dfov = 2 * math.atan(math.tan(hfov / 2) * math.sqrt((width**2 + height**2) / (width**2 + height**2)))
 
     # Calculate the vertical field of view (VFOV)
-    vfov = 2 * math.atan(
-        math.tan(dfov / 2) * (height / math.sqrt(width**2 + height**2))
-    )
+    vfov = 2 * math.atan(math.tan(dfov / 2) * (height / math.sqrt(width**2 + height**2)))
 
     return vfov
 
@@ -123,9 +116,7 @@ def within_fov_cone(
     return points[mask]
 
 
-def convert_to_global_frame(
-    agent_pos: np.ndarray, agent_yaw: float, local_pos: np.ndarray
-) -> np.ndarray:
+def convert_to_global_frame(agent_pos: np.ndarray, agent_yaw: float, local_pos: np.ndarray) -> np.ndarray:
     """Converts a given position from the agent's local frame to the global frame.
 
     Args:
@@ -189,9 +180,7 @@ def xyz_yaw_to_tf_matrix(xyz: np.ndarray, yaw: float) -> np.ndarray:
     return transformation_matrix
 
 
-def closest_point_within_threshold(
-    points_array: np.ndarray, target_point: np.ndarray, threshold: float
-) -> int:
+def closest_point_within_threshold(points_array: np.ndarray, target_point: np.ndarray, threshold: float) -> int:
     """Find the point within the threshold distance that is closest to the target_point.
 
     Args:
@@ -203,10 +192,7 @@ def closest_point_within_threshold(
     Returns:
         int: The index of the closest point within the threshold distance.
     """
-    distances = np.sqrt(
-        (points_array[:, 0] - target_point[0]) ** 2
-        + (points_array[:, 1] - target_point[1]) ** 2
-    )
+    distances = np.sqrt((points_array[:, 0] - target_point[0]) ** 2 + (points_array[:, 1] - target_point[1]) ** 2)
     within_threshold = distances <= threshold
 
     if np.any(within_threshold):
@@ -216,9 +202,7 @@ def closest_point_within_threshold(
     return -1
 
 
-def transform_points(
-    transformation_matrix: np.ndarray, points: np.ndarray
-) -> np.ndarray:
+def transform_points(transformation_matrix: np.ndarray, points: np.ndarray) -> np.ndarray:
     # Add a homogeneous coordinate of 1 to each point for matrix multiplication
     homogeneous_points = np.hstack((points, np.ones((points.shape[0], 1))))
 
@@ -229,9 +213,7 @@ def transform_points(
     return transformed_points[:, :3] / transformed_points[:, 3:]
 
 
-def get_point_cloud(
-    depth_image: np.ndarray, mask: np.ndarray, fx: float, fy: float
-) -> np.ndarray:
+def get_point_cloud(depth_image: np.ndarray, mask: np.ndarray, fx: float, fy: float) -> np.ndarray:
     """Calculates the 3D coordinates (x, y, z) of points in the depth image based on
     the horizontal field of view (HFOV), the image width and height, the depth values,
     and the pixel x and y coordinates.

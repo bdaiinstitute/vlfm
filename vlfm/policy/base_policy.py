@@ -54,9 +54,7 @@ if __name__ == "__main__":
     # Save a dummy state_dict using torch.save. This is useful for generating a pth file
     # that can be used to load other policies that don't even read from checkpoints,
     # even though habitat requires a checkpoint to be loaded.
-    config = get_config(
-        "habitat-lab/habitat-baselines/habitat_baselines/config/pointnav/ppo_pointnav_example.yaml"
-    )
+    config = get_config("habitat-lab/habitat-baselines/habitat_baselines/config/pointnav/ppo_pointnav_example.yaml")
     dummy_dict = {
         "config": config,
         "extra_state": {"step": 0},

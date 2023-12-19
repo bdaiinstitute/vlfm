@@ -41,9 +41,7 @@ class ObjectPointCloudMap:
         fy: float,
     ) -> None:
         """Updates the object map with the latest information from the agent."""
-        local_cloud = self._extract_object_cloud(
-            depth_img, object_mask, min_depth, max_depth, fx, fy
-        )
+        local_cloud = self._extract_object_cloud(depth_img, object_mask, min_depth, max_depth, fx, fy)
         if len(local_cloud) == 0:
             return
 
@@ -72,15 +70,11 @@ class ObjectPointCloudMap:
             return
 
         if object_name in self.clouds:
-            self.clouds[object_name] = np.concatenate(
-                (self.clouds[object_name], global_cloud), axis=0
-            )
+            self.clouds[object_name] = np.concatenate((self.clouds[object_name], global_cloud), axis=0)
         else:
             self.clouds[object_name] = global_cloud
 
-    def get_best_object(
-        self, target_class: str, curr_position: np.ndarray
-    ) -> np.ndarray:
+    def get_best_object(self, target_class: str, curr_position: np.ndarray) -> np.ndarray:
         target_cloud = self.get_target_cloud(target_class)
 
         closest_point_2d = self._get_closest_point(target_cloud, curr_position)[:2]
@@ -96,10 +90,7 @@ class ObjectPointCloudMap:
             if delta_dist < 0.1:
                 # closest point is only slightly different
                 return self.last_target_coord
-            elif (
-                delta_dist < 0.5
-                and np.linalg.norm(curr_position - closest_point_2d) > 2.0
-            ):
+            elif delta_dist < 0.5 and np.linalg.norm(curr_position - closest_point_2d) > 2.0:
                 # closest point is a little different, but the agent is too far for
                 # the difference to matter much
                 return self.last_target_coord
@@ -108,9 +99,7 @@ class ObjectPointCloudMap:
 
         return self.last_target_coord
 
-    def update_explored(
-        self, tf_camera_to_episodic: np.ndarray, max_depth: float, cone_fov: float
-    ) -> None:
+    def update_explored(self, tf_camera_to_episodic: np.ndarray, max_depth: float, cone_fov: float) -> None:
         """
         This method will remove all point clouds in self.clouds that were originally
         detected to be out-of-range, but are now within range. This is just a heuristic
@@ -140,9 +129,7 @@ class ObjectPointCloudMap:
                     # Detection was originally within range
                     continue
                 # Remove all points from self.clouds[obj] that have the same range_id
-                self.clouds[obj] = self.clouds[obj][
-                    self.clouds[obj][..., -1] != range_id
-                ]
+                self.clouds[obj] = self.clouds[obj][self.clouds[obj][..., -1] != range_id]
 
     def get_target_cloud(self, target_class: str) -> np.ndarray:
         target_cloud = self.clouds[target_class].copy()
@@ -163,9 +150,7 @@ class ObjectPointCloudMap:
         fy: float,
     ) -> np.ndarray:
         final_mask = object_mask * 255
-        final_mask = cv2.erode(  # type: ignore
-            final_mask, None, iterations=self._erosion_size
-        )
+        final_mask = cv2.erode(final_mask, None, iterations=self._erosion_size)  # type: ignore
 
         valid_depth = depth.copy()
         valid_depth[valid_depth == 0] = 1  # set all holes (0) to just be far (1)
@@ -177,15 +162,11 @@ class ObjectPointCloudMap:
 
         return cloud
 
-    def _get_closest_point(
-        self, cloud: np.ndarray, curr_position: np.ndarray
-    ) -> np.ndarray:
+    def _get_closest_point(self, cloud: np.ndarray, curr_position: np.ndarray) -> np.ndarray:
         ndim = curr_position.shape[0]
         if self.use_dbscan:
             # Return the point that is closest to curr_position, which is 2D
-            closest_point = cloud[
-                np.argmin(np.linalg.norm(cloud[:, :ndim] - curr_position, axis=1))
-            ]
+            closest_point = cloud[np.argmin(np.linalg.norm(cloud[:, :ndim] - curr_position, axis=1))]
         else:
             # Calculate the Euclidean distance from each point to the reference point
             if ndim == 2:
@@ -208,9 +189,7 @@ class ObjectPointCloudMap:
         return closest_point
 
 
-def open3d_dbscan_filtering(
-    points: np.ndarray, eps: float = 0.2, min_points: int = 100
-) -> np.ndarray:
+def open3d_dbscan_filtering(points: np.ndarray, eps: float = 0.2, min_points: int = 100) -> np.ndarray:
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
 

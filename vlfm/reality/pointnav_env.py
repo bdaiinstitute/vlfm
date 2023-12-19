@@ -41,9 +41,7 @@ class PointNavEnv:
         self._cmd_id: Union[None, Any] = None
         self._num_steps = 0
 
-    def reset(
-        self, goal: Any, relative: bool = True, *args: Any, **kwargs: Any
-    ) -> Dict[str, np.ndarray]:
+    def reset(self, goal: Any, relative: bool = True, *args: Any, **kwargs: Any) -> Dict[str, np.ndarray]:
         assert isinstance(goal, np.ndarray)
         if relative:
             # Transform (x,y) goal from robot frame to global frame
@@ -129,18 +127,12 @@ class PointNavEnv:
         }
 
     def _get_nav_depth(self) -> np.ndarray:
-        images = self.robot.get_camera_images(
-            [SpotCamIds.FRONTRIGHT_DEPTH, SpotCamIds.FRONTLEFT_DEPTH]
-        )
-        img = np.hstack(
-            [images[SpotCamIds.FRONTRIGHT_DEPTH], images[SpotCamIds.FRONTLEFT_DEPTH]]
-        )
+        images = self.robot.get_camera_images([SpotCamIds.FRONTRIGHT_DEPTH, SpotCamIds.FRONTLEFT_DEPTH])
+        img = np.hstack([images[SpotCamIds.FRONTRIGHT_DEPTH], images[SpotCamIds.FRONTLEFT_DEPTH]])
         img = self._norm_depth(img)
         return img
 
-    def _norm_depth(
-        self, depth: np.ndarray, max_depth: Optional[float] = None, scale: bool = True
-    ) -> np.ndarray:
+    def _norm_depth(self, depth: np.ndarray, max_depth: Optional[float] = None, scale: bool = True) -> np.ndarray:
         if max_depth is None:
             max_depth = self._max_body_cam_depth
 

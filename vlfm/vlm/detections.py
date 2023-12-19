@@ -76,9 +76,7 @@ class ObjectDetections:
         Args:
             classes (List[str]): List of classes to keep.
         """
-        keep: torch.Tensor = torch.tensor(
-            [p in classes for p in self.phrases], dtype=torch.bool
-        )
+        keep: torch.Tensor = torch.tensor([p in classes for p in self.phrases], dtype=torch.bool)
         self._filter(keep)
 
     def _filter(self, keep: torch.Tensor) -> None:
@@ -162,9 +160,7 @@ def annotate(
         # If the box appears to be in normalized coordinates, de-normalize using the
         # image dimensions
         if box.max() <= 1:
-            box = box * np.array(
-                [img.shape[1], img.shape[0], img.shape[1], img.shape[0]]
-            )
+            box = box * np.array([img.shape[1], img.shape[0], img.shape[1], img.shape[0]])
             box = box.astype(int)
 
         # Draw bounding box
@@ -220,15 +216,15 @@ def draw_bounding_box(
 
         # reshape to a single dimensional array
         rand_color = single_pixel.reshape(3)
-        color = [int(c) for c in rand_color]  # type: ignore
+        bgr_color = [int(c) for c in rand_color]  # type: ignore
     else:
         # Convert RGB to BGR
-        bgr_color = color[::-1]
-        color = [int(c) for c in bgr_color]  # type: ignore
+        color = color[::-1]
+        bgr_color = [int(c) for c in color]
 
     # Draw bounding box on image
     box_thickness = 2
-    cv2.rectangle(img, point1, point2, color, thickness=box_thickness)
+    cv2.rectangle(img, point1, point2, bgr_color, thickness=box_thickness)
 
     # Draw class name and score on image
     text_label = f"{class_name}: {int(score * 100)}%"
@@ -242,7 +238,7 @@ def draw_bounding_box(
         img,
         (text_x, text_y - 2 * text_size[1]),
         (text_x + text_size[0], text_y - text_size[1]),
-        color,
+        bgr_color,
         -1,
     )
     cv2.putText(

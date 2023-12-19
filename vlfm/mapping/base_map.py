@@ -12,9 +12,7 @@ class BaseMap:
     _last_camera_yaw: float = 0.0
     _map_dtype: np.dtype = np.dtype(np.float32)
 
-    def __init__(
-        self, size: int = 1000, pixels_per_meter: int = 20, *args: Any, **kwargs: Any
-    ):
+    def __init__(self, size: int = 1000, pixels_per_meter: int = 20, *args: Any, **kwargs: Any):
         """
         Args:
             size: The size of the map in pixels.
@@ -23,16 +21,12 @@ class BaseMap:
         self.size = size
         self._map = np.zeros((size, size), dtype=self._map_dtype)
         self._episode_pixel_origin = np.array([size // 2, size // 2])
-        self._traj_vis = TrajectoryVisualizer(
-            self._episode_pixel_origin, self.pixels_per_meter
-        )
+        self._traj_vis = TrajectoryVisualizer(self._episode_pixel_origin, self.pixels_per_meter)
 
     def reset(self) -> None:
         self._map.fill(0)
         self._camera_positions = []
-        self._traj_vis = TrajectoryVisualizer(
-            self._episode_pixel_origin, self.pixels_per_meter
-        )
+        self._traj_vis = TrajectoryVisualizer(self._episode_pixel_origin, self.pixels_per_meter)
 
     def update_agent_traj(self, robot_xy: np.ndarray, robot_heading: float) -> None:
         self._camera_positions.append(robot_xy)
@@ -47,10 +41,7 @@ class BaseMap:
         Returns:
             The array of (x, y) pixel coordinates.
         """
-        px = (
-            np.rint(points[:, ::-1] * self.pixels_per_meter)
-            + self._episode_pixel_origin
-        )
+        px = np.rint(points[:, ::-1] * self.pixels_per_meter) + self._episode_pixel_origin
         px[:, 0] = self._map.shape[0] - px[:, 0]
         return px.astype(int)
 

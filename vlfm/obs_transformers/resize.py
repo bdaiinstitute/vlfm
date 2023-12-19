@@ -41,30 +41,19 @@ class Resize(ObservationTransformer):
         self.trans_keys: Tuple[str, ...] = trans_keys
         self.semantic_key = semantic_key
 
-    def transform_observation_space(
-        self, observation_space: spaces.Dict
-    ) -> spaces.Dict:
+    def transform_observation_space(self, observation_space: spaces.Dict) -> spaces.Dict:
         observation_space = copy.deepcopy(observation_space)
         for key in observation_space.spaces:
             if key in self.trans_keys:
                 # In the observation space dict, the channels are always last
-                h, w = get_image_height_width(
-                    observation_space.spaces[key], channels_last=True
-                )
+                h, w = get_image_height_width(observation_space.spaces[key], channels_last=True)
                 if self._size == (h, w):
                     continue
-                logger.info(
-                    "Resizing observation of %s: from %s to %s"
-                    % (key, (h, w), self._size)
-                )
-                observation_space.spaces[key] = overwrite_gym_box_shape(
-                    observation_space.spaces[key], self._size
-                )
+                logger.info("Resizing observation of %s: from %s to %s" % (key, (h, w), self._size))
+                observation_space.spaces[key] = overwrite_gym_box_shape(observation_space.spaces[key], self._size)
         return observation_space
 
-    def _transform_obs(
-        self, obs: torch.Tensor, interpolation_mode: str
-    ) -> torch.Tensor:
+    def _transform_obs(self, obs: torch.Tensor, interpolation_mode: str) -> torch.Tensor:
         return image_resize(
             obs,
             self._size,
@@ -79,9 +68,7 @@ class Resize(ObservationTransformer):
                 interpolation_mode = "area"
                 if self.semantic_key in sensor:
                     interpolation_mode = "nearest"
-                observations[sensor] = self._transform_obs(
-                    observations[sensor], interpolation_mode
-                )
+                observations[sensor] = self._transform_obs(observations[sensor], interpolation_mode)
         return observations
 
     @classmethod

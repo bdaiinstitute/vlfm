@@ -22,9 +22,7 @@ try:
 
         class PointNavResNetTensorOutputPolicy(PointNavResNetPolicy):
             def act(self, *args: Any, **kwargs: Any) -> Tuple[Tensor, Tensor]:
-                value, action, action_log_probs, rnn_hidden_states = super().act(
-                    *args, **kwargs
-                )
+                value, action, action_log_probs, rnn_hidden_states = super().act(*args, **kwargs)
                 return action, rnn_hidden_states
 
     else:
@@ -126,9 +124,7 @@ class WrappedPointNavResNetPolicy:
         """
         Resets the hidden state and previous action for the policy.
         """
-        self.pointnav_test_recurrent_hidden_states = torch.zeros_like(
-            self.pointnav_test_recurrent_hidden_states
-        )
+        self.pointnav_test_recurrent_hidden_states = torch.zeros_like(self.pointnav_test_recurrent_hidden_states)
         self.pointnav_prev_actions = torch.zeros_like(self.pointnav_prev_actions)
 
 
@@ -143,9 +139,7 @@ def load_pointnav_policy(file_path: str) -> PointNavResNetTensorOutputPolicy:
     if HABITAT_BASELINES_AVAILABLE:
         obs_space = SpaceDict(
             {
-                "depth": spaces.Box(
-                    low=0.0, high=1.0, shape=(224, 224, 1), dtype=np.float32
-                ),
+                "depth": spaces.Box(low=0.0, high=1.0, shape=(224, 224, 1), dtype=np.float32),
                 "pointgoal_with_gps_compass": spaces.Box(
                     low=np.finfo(np.float32).min,
                     high=np.finfo(np.float32).max,
@@ -174,15 +168,11 @@ def load_pointnav_policy(file_path: str) -> PointNavResNetTensorOutputPolicy:
             )
 
             # print(pointnav_policy)
-            pointnav_policy.net = PointNavResNetNet(
-                discrete_actions=True, no_fwd_dict=True
-            )
+            pointnav_policy.net = PointNavResNetNet(discrete_actions=True, no_fwd_dict=True)
             state_dict = torch.load(file_path + ".state_dict", map_location="cpu")
         else:
             ckpt_dict = torch.load(file_path, map_location="cpu")
-            pointnav_policy = PointNavResNetTensorOutputPolicy.from_config(
-                ckpt_dict["config"], obs_space, action_space
-            )
+            pointnav_policy = PointNavResNetTensorOutputPolicy.from_config(ckpt_dict["config"], obs_space, action_space)
             state_dict = ckpt_dict["state_dict"]
         pointnav_policy.load_state_dict(state_dict)
         return pointnav_policy
@@ -191,14 +181,15 @@ def load_pointnav_policy(file_path: str) -> PointNavResNetTensorOutputPolicy:
         ckpt_dict = torch.load(file_path, map_location="cpu")
         pointnav_policy = PointNavResNetTensorOutputPolicy()
         current_state_dict = pointnav_policy.state_dict()
-        pointnav_policy.load_state_dict(
-            {k: v for k, v in ckpt_dict.items() if k in current_state_dict}
-        )
+        # Let old checkpoints work with new code
+        if "net.prev_action_embedding_cont.bias" not in ckpt_dict.keys():
+            ckpt_dict["net.prev_action_embedding_cont.bias"] = ckpt_dict["net.prev_action_embedding.bias"]
+        if "net.prev_action_embedding_cont.weights" not in ckpt_dict.keys():
+            ckpt_dict["net.prev_action_embedding_cont.weight"] = ckpt_dict["net.prev_action_embedding.weight"]
+
+        pointnav_policy.load_state_dict({k: v for k, v in ckpt_dict.items() if k in current_state_dict})
         unused_keys = [k for k in ckpt_dict.keys() if k not in current_state_dict]
-        print(
-            "The following unused keys were not loaded when loading the pointnav"
-            f" policy: {unused_keys}"
-        )
+        print(f"The following unused keys were not loaded when loading the pointnav policy: {unused_keys}")
         return pointnav_policy
 
 

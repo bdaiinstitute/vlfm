@@ -36,9 +36,7 @@ class TrajectoryVisualizer:
         img = self._draw_agent(img, camera_positions[-1], camera_yaw)
         return img
 
-    def _draw_path(
-        self, img: np.ndarray, camera_positions: Union[np.ndarray, List[np.ndarray]]
-    ) -> np.ndarray:
+    def _draw_path(self, img: np.ndarray, camera_positions: Union[np.ndarray, List[np.ndarray]]) -> np.ndarray:
         """Draws the path on the image and returns it"""
         if len(camera_positions) < 2:
             return img
@@ -48,9 +46,7 @@ class TrajectoryVisualizer:
             path_mask = np.zeros(img.shape[:2], dtype=np.uint8)
 
         for i in range(self._num_drawn_points - 1, len(camera_positions) - 1):
-            path_mask = self._draw_line(
-                path_mask, camera_positions[i], camera_positions[i + 1]
-            )
+            path_mask = self._draw_line(path_mask, camera_positions[i], camera_positions[i + 1])
 
         img[path_mask == 255] = self.path_color
 
@@ -59,9 +55,7 @@ class TrajectoryVisualizer:
 
         return img
 
-    def _draw_line(
-        self, img: np.ndarray, pt_a: np.ndarray, pt_b: np.ndarray
-    ) -> np.ndarray:
+    def _draw_line(self, img: np.ndarray, pt_a: np.ndarray, pt_b: np.ndarray) -> np.ndarray:
         """Draws a line between two points and returns it"""
         # Convert metric coordinates to pixel coordinates
         px_a = self._metric_to_pixel(pt_a)
@@ -80,9 +74,7 @@ class TrajectoryVisualizer:
 
         return img
 
-    def _draw_agent(
-        self, img: np.ndarray, camera_position: np.ndarray, camera_yaw: float
-    ) -> np.ndarray:
+    def _draw_agent(self, img: np.ndarray, camera_position: np.ndarray, camera_yaw: float) -> np.ndarray:
         """Draws the agent on the image and returns it"""
         px_position = self._metric_to_pixel(camera_position)
         cv2.circle(
@@ -93,14 +85,8 @@ class TrajectoryVisualizer:
             -1,
         )
         heading_end_pt = (
-            int(
-                px_position[0]
-                - self.agent_line_length * self.scale_factor * np.cos(camera_yaw)
-            ),
-            int(
-                px_position[1]
-                - self.agent_line_length * self.scale_factor * np.sin(camera_yaw)
-            ),
+            int(px_position[0] - self.agent_line_length * self.scale_factor * np.cos(camera_yaw)),
+            int(px_position[1] - self.agent_line_length * self.scale_factor * np.sin(camera_yaw)),
         )
         cv2.line(
             img,
@@ -112,9 +98,7 @@ class TrajectoryVisualizer:
 
         return img
 
-    def draw_circle(
-        self, img: np.ndarray, position: np.ndarray, **kwargs: Any
-    ) -> np.ndarray:
+    def draw_circle(self, img: np.ndarray, position: np.ndarray, **kwargs: Any) -> np.ndarray:
         """Draws the point as a circle on the image and returns it"""
         px_position = self._metric_to_pixel(position)
         cv2.circle(img, tuple(px_position[::-1]), **kwargs)

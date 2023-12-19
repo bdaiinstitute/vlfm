@@ -103,9 +103,7 @@ class FakeRobot(BaseRobot):
         """
         for source in camera_source:
             assert source in CAM_ID_TO_SHAPE, f"Invalid camera source: {source}"
-        images = {
-            source: np.random.rand(*CAM_ID_TO_SHAPE[source]) for source in camera_source
-        }
+        images = {source: np.random.rand(*CAM_ID_TO_SHAPE[source]) for source in camera_source}
         return self.reorient_images(images)
 
     def command_base_velocity(self, ang_vel: float, lin_vel: float) -> None:

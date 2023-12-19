@@ -57,9 +57,7 @@ class RNNStateEncoder(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         r"""Forward for a non-sequence input"""
 
-        hidden_states = torch.where(
-            masks.view(1, -1, 1), hidden_states, hidden_states.new_zeros(())
-        )
+        hidden_states = torch.where(masks.view(1, -1, 1), hidden_states, hidden_states.new_zeros(()))
 
         x, hidden_states = self.rnn(x.unsqueeze(0), self.unpack_hidden(hidden_states))
         hidden_states = self.pack_hidden(hidden_states)
@@ -114,9 +112,7 @@ class RNNStateEncoder(nn.Module):
             x, hidden_states = self.single_forward(x, hidden_states, masks)
         else:
             assert rnn_build_seq_info is not None
-            x, hidden_states = self.seq_forward(
-                x, hidden_states, masks, rnn_build_seq_info
-            )
+            x, hidden_states = self.seq_forward(x, hidden_states, masks, rnn_build_seq_info)
 
         hidden_states = hidden_states.permute(1, 0, 2)
 
@@ -134,14 +130,10 @@ class LSTMStateEncoder(RNNStateEncoder):
 
     # Note: Type handling mypy errors in pytorch libraries prevent
     # directly setting hidden_states type
-    def pack_hidden(
-        self, hidden_states: Any  # type is Tuple[torch.Tensor, torch.Tensor]
-    ) -> torch.Tensor:
+    def pack_hidden(self, hidden_states: Any) -> torch.Tensor:  # type is Tuple[torch.Tensor, torch.Tensor]
         return torch.cat(hidden_states, 0)
 
-    def unpack_hidden(
-        self, hidden_states: torch.Tensor
-    ) -> Any:  # type is Tuple[torch.Tensor, torch.Tensor]
+    def unpack_hidden(self, hidden_states: torch.Tensor) -> Any:  # type is Tuple[torch.Tensor, torch.Tensor]
         lstm_states = torch.chunk(hidden_states.contiguous(), 2, 0)
         return (lstm_states[0], lstm_states[1])
 
@@ -151,7 +143,10 @@ def build_rnn_inputs(
     rnn_states: torch.Tensor,
     not_dones: torch.Tensor,
     rnn_build_seq_info: Dict[str, torch.Tensor],
-) -> Tuple[PackedSequence, torch.Tensor,]:
+) -> Tuple[
+    PackedSequence,
+    torch.Tensor,
+]:
     r"""Create a PackedSequence input for an RNN such that each
     set of steps that are part of the same episode are all part of
     a batch in the PackedSequence.
@@ -223,9 +218,7 @@ def build_rnn_out_from_seq(
     rnn_state_batch_inds = rnn_build_seq_info["rnn_state_batch_inds"]
     output_hidden_states = hidden_states.index_select(
         1,
-        last_sequence_in_batch_inds[
-            _invert_permutation(rnn_state_batch_inds[last_sequence_in_batch_inds])
-        ],
+        last_sequence_in_batch_inds[_invert_permutation(rnn_state_batch_inds[last_sequence_in_batch_inds])],
     )
 
     return x, output_hidden_states
