@@ -19,7 +19,7 @@ dependencies = [
     "flask >= 2.3.2",
     "seaborn >= 0.12.2",  # required by yolov7
     "open3d >= 0.17.0",
-    "transformers >= 4.28.1",  # higher versions than 4.26.0 "break" BLIP-2 but need 4.28.1 for integration
+    "transformers == 4.26.0",  # higher versions than 4.26.0 "break" BLIP-2 in LAVIS
     "salesforce-lavis >= 1.0.2",  # for BLIP-2
     "frontier_exploration @ git+https://github.com/naokiyokoyama/frontier_exploration.git",
     "mobile_sam @ git+https://github.com/ChaoningZhang/MobileSAM.git",
