@@ -25,9 +25,7 @@ class BDSWRobot(BaseRobot):
     def arm_joints(self) -> np.ndarray:
         """Returns current angle for each of the 6 arm joints in radians"""
         arm_proprioception = self.spot.get_arm_proprioception()
-        current_positions = np.array(
-            [v.position.value for v in arm_proprioception.values()]
-        )
+        current_positions = np.array([v.position.value for v in arm_proprioception.values()])
         return current_positions
 
     def get_camera_images(self, camera_source: List[str]) -> Dict[str, np.ndarray]:
@@ -101,8 +99,7 @@ class BDSWRobot(BaseRobot):
         """
         image_responses = self.spot.get_image_responses(srcs)
         imgs = {
-            src: self._camera_response_to_data(image_response)
-            for src, image_response in zip(srcs, image_responses)
+            src: self._camera_response_to_data(image_response) for src, image_response in zip(srcs, image_responses)
         }
         return imgs
 
@@ -116,7 +113,5 @@ class BDSWRobot(BaseRobot):
             "image": image,
             "fx": fx,
             "fy": fy,
-            "tf_camera_to_global": self.spot.get_transform(
-                from_frame=camera_frame, tf_snapshot=tf_snapshot
-            ),
+            "tf_camera_to_global": self.spot.get_transform(from_frame=camera_frame, tf_snapshot=tf_snapshot),
         }

@@ -85,9 +85,7 @@ def was_false_positive(infos: Dict[str, Any]) -> bool:
     """Return whether the point goal target is within a bounding box."""
     target_bboxes_mask = infos["top_down_map"]["target_bboxes_mask"]
     nav_goal_episodic_xy = infos["nav_goal"]
-    nav_goal_episodic_xyz = np.array(
-        [nav_goal_episodic_xy[0], nav_goal_episodic_xy[1], 0]
-    ).reshape(1, 3)
+    nav_goal_episodic_xyz = np.array([nav_goal_episodic_xy[0], nav_goal_episodic_xy[1], 0]).reshape(1, 3)
 
     upper_bound = infos["top_down_map"]["upper_bound"]
     lower_bound = infos["top_down_map"]["lower_bound"]

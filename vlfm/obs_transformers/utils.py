@@ -35,9 +35,7 @@ def image_resize(
             # NDHWC -> NDCHW
             img = img.permute(0, 1, 4, 2, 3)
 
-    img = torch.nn.functional.interpolate(
-        img.float(), size=size, mode=interpolation_mode
-    ).to(dtype=img.dtype)
+    img = torch.nn.functional.interpolate(img.float(), size=size, mode=interpolation_mode).to(dtype=img.dtype)
     if channels_last:
         if len(img.shape) == 4:
             # NCHW -> NHWC

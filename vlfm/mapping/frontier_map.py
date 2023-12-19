@@ -22,9 +22,7 @@ class FrontierMap:
     def reset(self) -> None:
         self.frontiers = []
 
-    def update(
-        self, frontier_locations: List[np.ndarray], curr_image: np.ndarray, text: str
-    ) -> None:
+    def update(self, frontier_locations: List[np.ndarray], curr_image: np.ndarray, text: str) -> None:
         """
         Takes in a list of frontier coordinates and the current image observation from
         the robot. Any stored frontiers that are not present in the given list are
@@ -41,19 +39,14 @@ class FrontierMap:
         self.frontiers = [
             frontier
             for frontier in self.frontiers
-            if any(
-                np.array_equal(frontier.xyz, location)
-                for location in frontier_locations
-            )
+            if any(np.array_equal(frontier.xyz, location) for location in frontier_locations)
         ]
 
         # Add any frontiers that are not already stored. Set their image field to the
         # given image.
         cosine = None
         for location in frontier_locations:
-            if not any(
-                np.array_equal(frontier.xyz, location) for frontier in self.frontiers
-            ):
+            if not any(np.array_equal(frontier.xyz, location) for frontier in self.frontiers):
                 if cosine is None:
                     cosine = self._encode(curr_image, text)
                 self.frontiers.append(Frontier(location, cosine))

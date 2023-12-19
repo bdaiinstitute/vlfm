@@ -67,9 +67,7 @@ class HabitatVis:
         # Visualize target point cloud on the map
         color_point_cloud_on_map(infos, policy_info)
 
-        map = maps.colorize_draw_agent_and_fit_to_height(
-            infos[0]["top_down_map"], self.depth[0].shape[0]
-        )
+        map = maps.colorize_draw_agent_and_fit_to_height(infos[0]["top_down_map"], self.depth[0].shape[0])
         self.maps.append(map)
         vis_map_imgs = [
             self._reorient_rescale_habitat_map(infos, policy_info[0][vkey])
@@ -121,9 +119,7 @@ class HabitatVis:
         return frames
 
     @staticmethod
-    def _reorient_rescale_habitat_map(
-        infos: List[Dict[str, Any]], vis_map: np.ndarray
-    ) -> np.ndarray:
+    def _reorient_rescale_habitat_map(infos: List[Dict[str, Any]], vis_map: np.ndarray) -> np.ndarray:
         # Rotate the cost map to match the agent's orientation at the start
         # of the episode
         start_yaw = infos[0]["start_yaw"]
@@ -228,9 +224,7 @@ def sim_xy_to_grid_xy(
     return grid_xy
 
 
-def color_point_cloud_on_map(
-    infos: List[Dict[str, Any]], policy_info: List[Dict[str, Any]]
-) -> None:
+def color_point_cloud_on_map(infos: List[Dict[str, Any]], policy_info: List[Dict[str, Any]]) -> None:
     if len(policy_info[0]["target_point_cloud"]) == 0:
         return
 
@@ -240,9 +234,7 @@ def color_point_cloud_on_map(
     tf_episodic_to_global = infos[0]["top_down_map"]["tf_episodic_to_global"]
 
     cloud_episodic_frame = policy_info[0]["target_point_cloud"][:, :3]
-    cloud_global_frame_xyz = transform_points(
-        tf_episodic_to_global, cloud_episodic_frame
-    )
+    cloud_global_frame_xyz = transform_points(tf_episodic_to_global, cloud_episodic_frame)
     cloud_global_frame_habitat = xyz_to_habitat(cloud_global_frame_xyz)
     cloud_global_frame_habitat_xy = cloud_global_frame_habitat[:, [2, 0]]
 

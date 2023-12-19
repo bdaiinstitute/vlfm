@@ -92,12 +92,8 @@ class ObstacleMap(BaseMap):
             scaled_depth = filled_depth * (max_depth - min_depth) + min_depth
             mask = scaled_depth < max_depth
             point_cloud_camera_frame = get_point_cloud(scaled_depth, mask, fx, fy)
-            point_cloud_episodic_frame = transform_points(
-                tf_camera_to_episodic, point_cloud_camera_frame
-            )
-            obstacle_cloud = filter_points_by_height(
-                point_cloud_episodic_frame, self._min_height, self._max_height
-            )
+            point_cloud_episodic_frame = transform_points(tf_camera_to_episodic, point_cloud_camera_frame)
+            obstacle_cloud = filter_points_by_height(point_cloud_episodic_frame, self._min_height, self._max_height)
 
             # Populate topdown map with obstacle locations
             xy_points = obstacle_cloud[:, :2]
@@ -126,9 +122,7 @@ class ObstacleMap(BaseMap):
             fov=np.rad2deg(topdown_fov),
             max_line_len=max_depth * self.pixels_per_meter,
         )
-        new_explored_area = cv2.dilate(
-            new_explored_area, np.ones((3, 3), np.uint8), iterations=1
-        )
+        new_explored_area = cv2.dilate(new_explored_area, np.ones((3, 3), np.uint8), iterations=1)
         self.explored_area[new_explored_area > 0] = 1
         self.explored_area[self._navigable_map == 0] = 0
         contours, _ = cv2.findContours(
@@ -140,9 +134,7 @@ class ObstacleMap(BaseMap):
             min_dist = np.inf
             best_idx = 0
             for idx, cnt in enumerate(contours):
-                dist = cv2.pointPolygonTest(
-                    cnt, tuple([int(i) for i in agent_pixel_location]), True
-                )
+                dist = cv2.pointPolygonTest(cnt, tuple([int(i) for i in agent_pixel_location]), True)
                 if dist >= 0:
                     best_idx = idx
                     break
@@ -201,7 +193,5 @@ class ObstacleMap(BaseMap):
         return vis_img
 
 
-def filter_points_by_height(
-    points: np.ndarray, min_height: float, max_height: float
-) -> np.ndarray:
+def filter_points_by_height(points: np.ndarray, min_height: float, max_height: float) -> np.ndarray:
     return points[(points[:, 2] >= min_height) & (points[:, 2] <= max_height)]

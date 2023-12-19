@@ -76,9 +76,7 @@ class ObjectDetections:
         Args:
             classes (List[str]): List of classes to keep.
         """
-        keep: torch.Tensor = torch.tensor(
-            [p in classes for p in self.phrases], dtype=torch.bool
-        )
+        keep: torch.Tensor = torch.tensor([p in classes for p in self.phrases], dtype=torch.bool)
         self._filter(keep)
 
     def _filter(self, keep: torch.Tensor) -> None:
@@ -162,9 +160,7 @@ def annotate(
         # If the box appears to be in normalized coordinates, de-normalize using the
         # image dimensions
         if box.max() <= 1:
-            box = box * np.array(
-                [img.shape[1], img.shape[0], img.shape[1], img.shape[0]]
-            )
+            box = box * np.array([img.shape[1], img.shape[0], img.shape[1], img.shape[0]])
             box = box.astype(int)
 
         # Draw bounding box

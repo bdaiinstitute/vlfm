@@ -46,9 +46,7 @@ def calculate_frequencies(failure_causes: List[str]) -> None:
     for cause, count in counter.most_common():
         percentage = (count / total) * 100
         # Add each row to the table
-        table.add_row(
-            [cause.replace("did_not_fail", "succeeded!"), count, f"{percentage:.2f}%"]
-        )
+        table.add_row([cause.replace("did_not_fail", "succeeded!"), count, f"{percentage:.2f}%"])
 
     print(table)
 
@@ -60,10 +58,7 @@ def calculate_avg_performance(stats: List[Dict[str, Any]]) -> None:
     Args:
         stats (List[Dict[str, Any]]): A list of stats for each episode.
     """
-    success, spl, soft_spl = [
-        [episode.get(k, -1) for episode in stats]
-        for k in ["success", "spl", "soft_spl"]
-    ]
+    success, spl, soft_spl = [[episode.get(k, -1) for episode in stats] for k in ["success", "spl", "soft_spl"]]
 
     # Create a table with headers
     table = PrettyTable(["Metric", "Average"])
@@ -101,28 +96,23 @@ def calculate_avg_fail_per_category(stats: List[Dict[str, Any]]) -> None:
     table = PrettyTable(["Category", "Average Failure Rate"])
 
     # Add each row to the table
-    for category, stats in sorted(
+    for category, c_stats in sorted(
         category_stats.items(),
         key=lambda x: x[1]["fail_count"],
         reverse=True,
     ):
-        avg_failure_rate = (stats["fail_count"] / stats["total_count"]) * 100
+        avg_failure_rate = (c_stats["fail_count"] / c_stats["total_count"]) * 100
         table.add_row(
             [
                 category,
-                (
-                    f"{avg_failure_rate:.2f}% ({stats['fail_count']}/"
-                    f"{stats['total_count']})"
-                ),
+                f"{avg_failure_rate:.2f}% ({c_stats['fail_count']}/{c_stats['total_count']})",
             ]
         )
 
     print(table)
 
 
-def calculate_avg_fail_rate_per_category(
-    stats: List[Dict[str, Any]], failure_cause: str
-) -> None:
+def calculate_avg_fail_rate_per_category(stats: List[Dict[str, Any]], failure_cause: str) -> None:
     """
     For each possible "target_object", count the number of times the agent failed due to
     the given failure cause. Then, sum the counts across all categories and use it to
@@ -147,9 +137,7 @@ def calculate_avg_fail_rate_per_category(
     table = PrettyTable(["Category", f"% Occurrence for {failure_cause}"])
 
     # Sort the categories by their failure count in descending order
-    sorted_categories = sorted(
-        category_to_fail_count.items(), key=lambda x: x[1], reverse=True
-    )
+    sorted_categories = sorted(category_to_fail_count.items(), key=lambda x: x[1], reverse=True)
 
     # Add each row to the table
     for category, count in sorted_categories:

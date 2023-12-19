@@ -19,16 +19,12 @@ class ResNetEncoder(nn.Module):
         self.running_mean_and_var = nn.Sequential()
         self.backbone = resnet18(1, 32, 16)
         self.compression = nn.Sequential(
-            nn.Conv2d(
-                256, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
-            ),
+            nn.Conv2d(256, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False),
             nn.GroupNorm(1, 128, eps=1e-05, affine=True),
             nn.ReLU(inplace=True),
         )
 
-    def forward(
-        self, observations: Dict[str, torch.Tensor]
-    ) -> torch.Tensor:  # type: ignore
+    def forward(self, observations: Dict[str, torch.Tensor]) -> torch.Tensor:  # type: ignore
         cnn_input = []
         for k in self.visual_keys:
             obs_k = observations[k]
@@ -51,9 +47,7 @@ class PointNavResNetNet(nn.Module):
         if discrete_actions:
             self.prev_action_embedding_discrete = nn.Embedding(4 + 1, 32)
         else:
-            self.prev_action_embedding_cont = nn.Linear(
-                in_features=2, out_features=32, bias=True
-            )
+            self.prev_action_embedding_cont = nn.Linear(in_features=2, out_features=32, bias=True)
         self.tgt_embeding = nn.Linear(in_features=3, out_features=32, bias=True)
         self.visual_encoder = ResNetEncoder()
         self.visual_fc = nn.Sequential(
@@ -104,9 +98,7 @@ class PointNavResNetNet(nn.Module):
         x.append(prev_actions)
 
         out = torch.cat(x, dim=1)
-        out, rnn_hidden_states = self.state_encoder(
-            out, rnn_hidden_states, masks, rnn_build_seq_info
-        )
+        out, rnn_hidden_states = self.state_encoder(out, rnn_hidden_states, masks, rnn_build_seq_info)
 
         if self.no_fwd_dict:
             return out, rnn_hidden_states  # type: ignore
@@ -159,9 +151,7 @@ class PointNavResNetPolicy(nn.Module):
         masks: torch.Tensor,
         deterministic: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        features, rnn_hidden_states, _ = self.net(
-            observations, rnn_hidden_states, prev_actions, masks
-        )
+        features, rnn_hidden_states, _ = self.net(observations, rnn_hidden_states, prev_actions, masks)
         distribution = self.action_distribution(features)
 
         if deterministic:

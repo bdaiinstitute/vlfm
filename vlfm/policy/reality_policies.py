@@ -35,19 +35,15 @@ class RealityMixin:
     _policy_info: Dict[str, Any] = {}
     _done_initializing: bool = False
 
-    def __init__(
-        self: Union["RealityMixin", ITMPolicyV2], *args: Any, **kwargs: Any
-    ) -> None:
+    def __init__(self: Union["RealityMixin", ITMPolicyV2], *args: Any, **kwargs: Any) -> None:
         super().__init__(sync_explored_areas=True, *args, **kwargs)  # type: ignore
-        self._depth_model = torch.hub.load(
-            "isl-org/ZoeDepth", "ZoeD_NK", config_mode="eval", pretrained=True
-        ).to("cuda" if torch.cuda.is_available() else "cpu")
+        self._depth_model = torch.hub.load("isl-org/ZoeDepth", "ZoeD_NK", config_mode="eval", pretrained=True).to(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        )
         self._object_map.use_dbscan = False  # type: ignore
 
     @classmethod
-    def from_config(
-        cls, config: DictConfig, *args_unused: Any, **kwargs_unused: Any
-    ) -> Any:
+    def from_config(cls, config: DictConfig, *args_unused: Any, **kwargs_unused: Any) -> Any:
         policy_config: VLFMConfig = config.policy
         kwargs = {k: policy_config[k] for k in VLFMConfig.kwaarg_names}  # type: ignore
 
@@ -62,13 +58,9 @@ class RealityMixin:
         deterministic: bool = False,
     ) -> Dict[str, Any]:
         if observations["objectgoal"] not in self._non_coco_caption:
-            self._non_coco_caption = (
-                observations["objectgoal"] + " . " + self._non_coco_caption
-            )
+            self._non_coco_caption = observations["objectgoal"] + " . " + self._non_coco_caption
         parent_cls: ITMPolicyV2 = super()  # type: ignore
-        action: Tensor = parent_cls.act(
-            observations, rnn_hidden_states, prev_actions, masks, deterministic
-        )[0]
+        action: Tensor = parent_cls.act(observations, rnn_hidden_states, prev_actions, masks, deterministic)[0]
 
         # The output of the policy is a (1, 2) tensor of floats, where the first element
         # is the linear velocity and the second element is the angular velocity. We
@@ -96,9 +88,7 @@ class RealityMixin:
 
         return action_dict
 
-    def get_action(
-        self, observations: Dict[str, Any], masks: Tensor, deterministic: bool = True
-    ) -> Dict[str, Any]:
+    def get_action(self, observations: Dict[str, Any], masks: Tensor, deterministic: bool = True) -> Dict[str, Any]:
         return self.act(observations, None, None, masks, deterministic=deterministic)
 
     def _reset(self: Union["RealityMixin", ITMPolicyV2]) -> None:
@@ -111,9 +101,7 @@ class RealityMixin:
         yaw = self._initial_yaws.pop(0)
         return torch.tensor([[yaw]], dtype=torch.float32)
 
-    def _cache_observations(
-        self: Union["RealityMixin", ITMPolicyV2], observations: Dict[str, Any]
-    ) -> None:
+    def _cache_observations(self: Union["RealityMixin", ITMPolicyV2], observations: Dict[str, Any]) -> None:
         """Caches the rgb, depth, and camera transform from the observations.
 
         Args:
@@ -136,9 +124,7 @@ class RealityMixin:
                 explore=False,
             )
 
-        _, tf, min_depth, max_depth, fx, fy, topdown_fov = observations[
-            "obstacle_map_depths"
-        ][-1]
+        _, tf, min_depth, max_depth, fx, fy, topdown_fov = observations["obstacle_map_depths"][-1]
         self._obstacle_map.update_map(
             None,
             tf,
@@ -151,9 +137,7 @@ class RealityMixin:
             update_obstacles=False,
         )
 
-        self._obstacle_map.update_agent_traj(
-            observations["robot_xy"], observations["robot_heading"]
-        )
+        self._obstacle_map.update_agent_traj(observations["robot_xy"], observations["robot_heading"])
         frontiers = self._obstacle_map.frontiers
 
         height, width = observations["nav_depth"].shape
@@ -169,9 +153,7 @@ class RealityMixin:
             "value_map_rgbd": observations["value_map_rgbd"],
         }
 
-    def _infer_depth(
-        self, rgb: np.ndarray, min_depth: float, max_depth: float
-    ) -> np.ndarray:
+    def _infer_depth(self, rgb: np.ndarray, min_depth: float, max_depth: float) -> np.ndarray:
         """Infers the depth image from the rgb image.
 
         Args:

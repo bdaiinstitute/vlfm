@@ -23,16 +23,12 @@ def rotate_image(
     height, width = image.shape[0], image.shape[1]
     center = (width // 2, height // 2)
     rotation_matrix = cv2.getRotationMatrix2D(center, np.degrees(radians), 1.0)
-    rotated_image = cv2.warpAffine(
-        image, rotation_matrix, (width, height), borderValue=border_value
-    )
+    rotated_image = cv2.warpAffine(image, rotation_matrix, (width, height), borderValue=border_value)
 
     return rotated_image
 
 
-def place_img_in_img(
-    img1: np.ndarray, img2: np.ndarray, row: int, col: int
-) -> np.ndarray:
+def place_img_in_img(img1: np.ndarray, img2: np.ndarray, row: int, col: int) -> np.ndarray:
     """Place img2 in img1 such that img2's center is at the specified coordinates (xy)
     in img1.
 
@@ -44,9 +40,7 @@ def place_img_in_img(
     Returns:
         numpy.ndarray: The updated base image with img2 placed.
     """
-    assert (
-        0 <= row < img1.shape[0] and 0 <= col < img1.shape[1]
-    ), "Pixel location is outside the image."
+    assert 0 <= row < img1.shape[0] and 0 <= col < img1.shape[1], "Pixel location is outside the image."
     top = row - img2.shape[0] // 2
     left = col - img2.shape[1] // 2
     bottom = top + img2.shape[0]
@@ -62,9 +56,7 @@ def place_img_in_img(
     img2_bottom = img2_top + (img1_bottom - img1_top)
     img2_right = img2_left + (img1_right - img1_left)
 
-    img1[img1_top:img1_bottom, img1_left:img1_right] = img2[
-        img2_top:img2_bottom, img2_left:img2_right
-    ]
+    img1[img1_top:img1_bottom, img1_left:img1_right] = img2[img2_top:img2_bottom, img2_left:img2_right]
 
     return img1
 
@@ -88,16 +80,12 @@ def monochannel_to_inferno_rgb(image: np.ndarray) -> np.ndarray:
         normalized_image = (image - min_val) / peak_to_peak
 
     # Apply the Inferno colormap
-    inferno_colormap = cv2.applyColorMap(
-        (normalized_image * 255).astype(np.uint8), cv2.COLORMAP_INFERNO
-    )
+    inferno_colormap = cv2.applyColorMap((normalized_image * 255).astype(np.uint8), cv2.COLORMAP_INFERNO)
 
     return inferno_colormap
 
 
-def resize_images(
-    images: List[np.ndarray], match_dimension: str = "height", use_max: bool = True
-) -> List[np.ndarray]:
+def resize_images(images: List[np.ndarray], match_dimension: str = "height", use_max: bool = True) -> List[np.ndarray]:
     """
     Resize images to match either their heights or their widths.
 
@@ -118,18 +106,14 @@ def resize_images(
         else:
             new_height = min(img.shape[0] for img in images)
         resized_images = [
-            cv2.resize(img, (int(img.shape[1] * new_height / img.shape[0]), new_height))
-            for img in images
+            cv2.resize(img, (int(img.shape[1] * new_height / img.shape[0]), new_height)) for img in images
         ]
     elif match_dimension == "width":
         if use_max:
             new_width = max(img.shape[1] for img in images)
         else:
             new_width = min(img.shape[1] for img in images)
-        resized_images = [
-            cv2.resize(img, (new_width, int(img.shape[0] * new_width / img.shape[1])))
-            for img in images
-        ]
+        resized_images = [cv2.resize(img, (new_width, int(img.shape[0] * new_width / img.shape[1]))) for img in images]
     else:
         raise ValueError("Invalid 'match_dimension' argument. Use 'height' or 'width'.")
 
@@ -185,9 +169,7 @@ def pad_to_square(
     height, width, _ = img.shape
     larger_side = max(height, width)
     square_size = larger_side + extra_pad
-    padded_img = np.ones((square_size, square_size, 3), dtype=np.uint8) * np.array(
-        padding_color, dtype=np.uint8
-    )
+    padded_img = np.ones((square_size, square_size, 3), dtype=np.uint8) * np.array(padding_color, dtype=np.uint8)
     padded_img = place_img_in_img(padded_img, img, square_size // 2, square_size // 2)
 
     return padded_img
@@ -251,8 +233,7 @@ def pixel_value_within_radius(
     """
     # Ensure that the pixel location is within the image
     assert (
-        0 <= pixel_location[0] < image.shape[0]
-        and 0 <= pixel_location[1] < image.shape[1]
+        0 <= pixel_location[0] < image.shape[0] and 0 <= pixel_location[1] < image.shape[1]
     ), "Pixel location is outside the image."
 
     top_left_x = max(0, pixel_location[0] - radius)
@@ -285,9 +266,7 @@ def pixel_value_within_radius(
         raise ValueError(f"Invalid reduction method: {reduction}")
 
 
-def median_blur_normalized_depth_image(
-    depth_image: np.ndarray, ksize: int
-) -> np.ndarray:
+def median_blur_normalized_depth_image(depth_image: np.ndarray, ksize: int) -> np.ndarray:
     """Applies a median blur to a normalized depth image.
 
     This function first converts the normalized depth image to a uint8 image,
@@ -337,9 +316,7 @@ def reorient_rescale_map(vis_map_img: np.ndarray) -> np.ndarray:
     # Pad the shorter dimension to be the same size as the longer
     vis_map_img = pad_to_square(vis_map_img, extra_pad=50)
     # Pad the image border with some white space
-    vis_map_img = cv2.copyMakeBorder(
-        vis_map_img, 50, 50, 50, 50, cv2.BORDER_CONSTANT, value=(255, 255, 255)
-    )
+    vis_map_img = cv2.copyMakeBorder(vis_map_img, 50, 50, 50, 50, cv2.BORDER_CONSTANT, value=(255, 255, 255))
     return vis_map_img
 
 

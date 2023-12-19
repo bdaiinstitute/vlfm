@@ -19,9 +19,7 @@ def log_episode(episode_id: Union[str, int], scene_id: str, data: Dict) -> None:
     if not (os.path.exists(filename) and os.path.getsize(filename) > 0):
         print(f"Logging episode {int(episode_id):04d} to {filename}")
         with open(filename, "w") as f:
-            json.dump(
-                {"episode_id": episode_id, "scene_id": scene_id, **data}, f, indent=4
-            )
+            json.dump({"episode_id": episode_id, "scene_id": scene_id, **data}, f, indent=4)
 
 
 def is_evaluated(episode_id: Union[str, int], scene_id: str) -> bool:

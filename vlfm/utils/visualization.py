@@ -95,9 +95,7 @@ def generate_text_image(width: int, text: str) -> np.ndarray:
     return image
 
 
-def pad_images(
-    images: List[np.ndarray], pad_from_top: bool = False
-) -> List[np.ndarray]:
+def pad_images(images: List[np.ndarray], pad_from_top: bool = False) -> List[np.ndarray]:
     """
     Pads a list of images with white pixels to make them have the same dimensions.
 

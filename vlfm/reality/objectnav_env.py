@@ -103,9 +103,7 @@ class ObjectNavEnv(PointNavEnv):
             return super().step(action)
 
         if action["arm_yaw"] == 0:
-            cmd_id = self.robot.spot.move_gripper_to_point(
-                np.array([0.35, 0.0, 0.3]), np.deg2rad([0.0, 0.0, 0.0])
-            )
+            cmd_id = self.robot.spot.move_gripper_to_point(np.array([0.35, 0.0, 0.3]), np.deg2rad([0.0, 0.0, 0.0]))
             self.robot.spot.block_until_arm_arrives(cmd_id, timeout_sec=1.5)
         else:
             new_pose = np.array(NOMINAL_ARM_POSE)
@@ -119,9 +117,7 @@ class ObjectNavEnv(PointNavEnv):
 
     def _get_obs(self) -> Dict[str, Any]:
         robot_xy, robot_heading = self._get_gps(), self._get_compass()
-        nav_depth, obstacle_map_depths, value_map_rgbd, object_map_rgbd = (
-            self._get_camera_obs()
-        )
+        nav_depth, obstacle_map_depths, value_map_rgbd, object_map_rgbd = self._get_camera_obs()
         return {
             "nav_depth": nav_depth,
             "robot_xy": robot_xy,
@@ -142,9 +138,7 @@ class ObjectNavEnv(PointNavEnv):
         for src in ALL_CAMS:
             tf = self.tf_global_to_episodic @ cam_data[src]["tf_camera_to_global"]
             # a tf that remaps from camera conventions to xyz conventions
-            rotation_matrix = np.array(
-                [[0, -1, 0, 0], [0, 0, -1, 0], [1, 0, 0, 0], [0, 0, 0, 1]]
-            )
+            rotation_matrix = np.array([[0, -1, 0, 0], [0, 0, -1, 0], [1, 0, 0, 0], [0, 0, 0, 1]])
             cam_data[src]["tf_camera_to_global"] = np.dot(tf, rotation_matrix)
 
             img = cam_data[src]["image"]
@@ -183,9 +177,7 @@ class ObjectNavEnv(PointNavEnv):
         # to be upright
         f_left = SpotCamIds.FRONTLEFT_DEPTH
         f_right = SpotCamIds.FRONTRIGHT_DEPTH
-        nav_cam_data = self.robot.reorient_images(
-            {k: cam_data[k]["image"] for k in [f_left, f_right]}
-        )
+        nav_cam_data = self.robot.reorient_images({k: cam_data[k]["image"] for k in [f_left, f_right]})
         nav_depth = np.hstack([nav_cam_data[f_right], nav_cam_data[f_left]])
         nav_depth = filter_depth(nav_depth, blur_type=None, set_black_value=1.0)
 

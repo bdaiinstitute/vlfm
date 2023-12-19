@@ -65,8 +65,7 @@ def main() -> None:
         policy_cls = SemExpITMPolicyV3
         policy_kwargs["exploration_thresh"] = exp_thresh
         policy_kwargs["text_prompt"] = (
-            "Seems like there is a target_object ahead.|There is a lot of area to"
-            " explore ahead."
+            "Seems like there is a target_object ahead.|There is a lot of area to explore ahead."
         )
     else:
         policy_cls = SemExpITMPolicyV2
@@ -126,17 +125,13 @@ def main() -> None:
     print("Test successfully completed")
 
 
-def merge_obs_infos(
-    obs: torch.Tensor, infos: Tuple[Dict, ...]
-) -> Dict[str, torch.Tensor]:
+def merge_obs_infos(obs: torch.Tensor, infos: Tuple[Dict, ...]) -> Dict[str, torch.Tensor]:
     """Merge the observations and infos into a single dictionary."""
     rgb = obs[:, :3, ...].permute(0, 2, 3, 1)
     depth = obs[:, 3:4, ...].permute(0, 2, 3, 1)
     info_dict = infos[0]
 
-    def tensor_from_numpy(
-        tensor: torch.Tensor, numpy_array: np.ndarray
-    ) -> torch.Tensor:
+    def tensor_from_numpy(tensor: torch.Tensor, numpy_array: np.ndarray) -> torch.Tensor:
         device = tensor.device
         new_tensor = torch.from_numpy(numpy_array).to(device)
         return new_tensor
@@ -177,9 +172,7 @@ def create_frame(policy_infos: Dict[str, Any]) -> np.ndarray:
     return vis_img
 
 
-def generate_video(
-    frames: List[np.ndarray], ep_id: str, scene_id: str, infos: Dict[str, Any]
-) -> None:
+def generate_video(frames: List[np.ndarray], ep_id: str, scene_id: str, infos: Dict[str, Any]) -> None:
     """
     Saves the given list of rgb frames as a video at 10 FPS. Uses the infos to get the
     files name, which should contain the following:
@@ -200,8 +193,7 @@ def generate_video(
     dtg = infos["distance_to_goal"]
     goal_name = infos["target_object"]
     filename = (
-        f"epid={episode_id:03d}-scid={scene_id}-succ={success}-spl={spl:.2f}"
-        f"-dtg={dtg:.2f}-target={goal_name}.mp4"
+        f"epid={episode_id:03d}-scid={scene_id}-succ={success}-spl={spl:.2f}-dtg={dtg:.2f}-target={goal_name}.mp4"
     )
 
     filename = os.path.join(video_dir, filename)

@@ -14,9 +14,7 @@ DEFAULT_WEIGHTS = "FIBER/fine_grained/models/fiber_refcocog.pth"
 
 
 class FIBER:
-    def __init__(
-        self, config_file: str = DEFAULT_CONFIG, weights: str = DEFAULT_WEIGHTS
-    ):
+    def __init__(self, config_file: str = DEFAULT_CONFIG, weights: str = DEFAULT_WEIGHTS):
         cfg.merge_from_file(config_file)
         cfg.num_gpus = 1
         cfg.SOLVER.IMS_PER_BATCH = 1
@@ -32,9 +30,7 @@ class FIBER:
 
         self.fiber = GLIPDemo(cfg, confidence_threshold=0.2)
 
-    def detect(
-        self, image: np.ndarray, phrase: str, visualize: bool = False
-    ) -> ObjectDetections:
+    def detect(self, image: np.ndarray, phrase: str, visualize: bool = False) -> ObjectDetections:
         """
         Given an image and a phrase, this function detects the presence of the most
         suitable object described by the phrase in the image. The output object's
@@ -57,9 +53,7 @@ class FIBER:
         """
         result = self.fiber.inference(image, phrase)
         # Normalize result.bbox to be between 0 and 1
-        normalized_bbox = result.bbox / torch.tensor(
-            [image.shape[1], image.shape[0], image.shape[1], image.shape[0]]
-        )
+        normalized_bbox = result.bbox / torch.tensor([image.shape[1], image.shape[0], image.shape[1], image.shape[0]])
 
         dets = ObjectDetections(
             image_source=image,
@@ -76,9 +70,7 @@ class FIBERClient:
     def __init__(self, url: str = "http://localhost:9080/fiber"):
         self.url = url
 
-    def detect(
-        self, image: np.ndarray, phrase: str, visualize: bool = False
-    ) -> ObjectDetections:
+    def detect(self, image: np.ndarray, phrase: str, visualize: bool = False) -> ObjectDetections:
         response = send_request(self.url, image=image, phrase=phrase)["response"]
         detections = ObjectDetections.from_json(response, image_source=image)
 

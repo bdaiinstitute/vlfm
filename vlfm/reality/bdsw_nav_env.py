@@ -9,9 +9,7 @@ from vlfm.reality.pointnav_env import PointNavEnv
 from vlfm.reality.robots.bdsw_robot import BDSWRobot
 
 
-def run_env(
-    env: PointNavEnv, policy: WrappedPointNavResNetPolicy, goal: np.ndarray
-) -> None:
+def run_env(env: PointNavEnv, policy: WrappedPointNavResNetPolicy, goal: np.ndarray) -> None:
     observations = env.reset(goal)
     done = False
     mask = torch.zeros(1, 1, device=policy.device, dtype=torch.bool)

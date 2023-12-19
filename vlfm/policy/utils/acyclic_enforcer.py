@@ -19,15 +19,11 @@ class StateAction:
 class AcyclicEnforcer:
     history: Set[StateAction] = set()
 
-    def check_cyclic(
-        self, position: np.ndarray, action: Any, other: Any = None
-    ) -> bool:
+    def check_cyclic(self, position: np.ndarray, action: Any, other: Any = None) -> bool:
         state_action = StateAction(position, action, other)
         cyclic = state_action in self.history
         return cyclic
 
-    def add_state_action(
-        self, position: np.ndarray, action: Any, other: Any = None
-    ) -> None:
+    def add_state_action(self, position: np.ndarray, action: Any, other: Any = None) -> None:
         state_action = StateAction(position, action, other)
         self.history.add(state_action)

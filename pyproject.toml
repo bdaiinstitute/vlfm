@@ -12,14 +12,14 @@ authors = [
     {name = "Naoki Yokoyama", email = "nyokoyama@theaiinstitute.com"},
 ]
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "torch >= 1.10.1",
     "numpy >= 1.22.4",
     "flask >= 2.3.2",
     "seaborn >= 0.12.2",  # required by yolov7
     "open3d >= 0.17.0",
-    "transformers == 4.26.0",  # higher versions break BLIP-2
+    "transformers >= 4.28.1",  # higher versions than 4.26.0 "break" BLIP-2 but need 4.28.1 for integration
     "salesforce-lavis >= 1.0.2",  # for BLIP-2
     "frontier_exploration @ git+https://github.com/naokiyokoyama/frontier_exploration.git",
     "mobile_sam @ git+https://github.com/ChaoningZhang/MobileSAM.git",
@@ -49,8 +49,8 @@ reality = [
 "Homepage" = "theaiinstitute.com"
 "GitHub" = "https://github.com/bdaiinstitute/vlfm"
 
-[tool.setuptools]
-packages = ["vlfm", "config"]
+[tool.setuptools.packages.find]
+where = ["vlfm"]
 
 [tool.ruff]
 # Enable pycodestyle (`E`), Pyflakes (`F`), and import sorting (`I`)
@@ -92,8 +92,8 @@ line-length = 120
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
-# Assume Python 3.9.
-target-version = "py39"
+# Assume Python 3.10
+target-version = "py310"
 
 [tool.ruff.per-file-ignores]
 "__init__.py" = ["F401"]
@@ -103,8 +103,8 @@ target-version = "py39"
 max-complexity = 10
 
 [tool.black]
-line-length = 88
-target-version = ['py39']
+line-length = 120
+target-version = ['py310']
 include = '\.pyi?$'
 # `extend-exclude` is not honored when `black` is passed a file path explicitly,
 # as is typical when `black` is invoked via `pre-commit`.
@@ -116,9 +116,13 @@ force-exclude = '''
 
 preview = true
 
+[tool.coverage.run]
+relative_files = true
+
+
 # mypy configuration
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 disallow_untyped_defs = true
 ignore_missing_imports = true
 explicit_package_bases = true
@@ -127,5 +131,5 @@ strict_equality = true
 warn_unreachable = true
 warn_redundant_casts = true
 no_implicit_optional = true
-files = ['vlfm']
-exclude = '^(docker|.*external|.*thirdparty|.*install|.*build|.*_experimental)/'
+files = ['vlfm','test','scripts']
+exclude = "^(docker|.*external|.*thirdparty|.*install|.*build|.*_experimental|.*_pb2.py|.*_pb2_grpc.py)"

@@ -48,9 +48,7 @@ class BasicBlock(nn.Module):
         return self.relu(out + residual)
 
 
-def conv3x3(
-    in_planes: int, out_planes: int, stride: int = 1, groups: int = 1
-) -> Conv2d:
+def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1) -> Conv2d:
     """3x3 convolution with padding"""
     return nn.Conv2d(
         in_planes,
@@ -98,18 +96,10 @@ class ResNet(nn.Module):
         if block.resneXt:
             base_planes *= 2
 
-        self.layer1 = self._make_layer(
-            block, ngroups, base_planes, layers[0]  # type: ignore
-        )
-        self.layer2 = self._make_layer(
-            block, ngroups, base_planes * 2, layers[1], stride=2  # type: ignore
-        )
-        self.layer3 = self._make_layer(
-            block, ngroups, base_planes * 2 * 2, layers[2], stride=2  # type: ignore
-        )
-        self.layer4 = self._make_layer(
-            block, ngroups, base_planes * 2 * 2 * 2, layers[3], stride=2  # type: ignore
-        )
+        self.layer1 = self._make_layer(block, ngroups, base_planes, layers[0])  # type: ignore
+        self.layer2 = self._make_layer(block, ngroups, base_planes * 2, layers[1], stride=2)  # type: ignore
+        self.layer3 = self._make_layer(block, ngroups, base_planes * 2 * 2, layers[2], stride=2)  # type: ignore
+        self.layer4 = self._make_layer(block, ngroups, base_planes * 2 * 2 * 2, layers[3], stride=2)  # type: ignore
 
         self.final_channels = self.inplanes
         self.final_spatial_compress = 1.0 / (2**5)
