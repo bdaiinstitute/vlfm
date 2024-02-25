@@ -35,11 +35,7 @@ repos:
       # The inverse operation is more cumbersome: https://stackoverflow.com/a/54840284
       exclude: |
         (?x)^(
-          docker/ros/web/static/novnc/vendor/browser\-es\-module\-loader/dist/babel\-worker\.js|
-          docker/ros/rootfs/usr/local/share/doro\-lxde\-wallpapers/bg.*\.jpg|
-          docker/ros/web/yarn\.lock|
-          src/modelzoo/detic/lvis_v1_train_cat_info\.json|
-          src/modelzoo/edge_grasp_serve/example_pc\.npy
+          docs/teaser_v1\.jpg
         )$
   -   id: check-toml
   -   id: end-of-file-fixer
@@ -81,3 +77,7 @@ repos:
   rev: 3.0.0
   hooks:
   -  id: forbid-binary
+     exclude: |
+        (?x)^(
+          docs/teaser_v1\.jpg
+        )$
