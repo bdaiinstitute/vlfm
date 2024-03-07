@@ -35,7 +35,9 @@ repos:
       # The inverse operation is more cumbersome: https://stackoverflow.com/a/54840284
       exclude: |
         (?x)^(
-          docs/teaser_v1\.jpg
+          docs/teaser_v1\.jpg|
+          data/pointnav_weights\.pth|
+          data/spot_pointnav_weights\.pth
         )$
   -   id: check-toml
   -   id: end-of-file-fixer
@@ -79,5 +81,7 @@ repos:
   -  id: forbid-binary
      exclude: |
         (?x)^(
-          docs/teaser_v1\.jpg
+          docs/teaser_v1\.jpg|
+          data/pointnav_weights\.pth|
+          data/spot_pointnav_weights\.pth
         )$
