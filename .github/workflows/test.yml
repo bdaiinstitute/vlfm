@@ -14,8 +14,7 @@ concurrency:
 
 jobs:
   vlfm_main_build:
-    runs-on:
-      group: bdai-gh-large-runners
+    runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash

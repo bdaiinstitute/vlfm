@@ -123,7 +123,7 @@ The weights for MobileSAM, GroundingDINO, and PointNav must be saved to the `dat
 - `mobile_sam.pt`:  https://github.com/ChaoningZhang/MobileSAM
 - `groundingdino_swint_ogc.pth`: https://github.com/IDEA-Research/GroundingDINO
 - `yolov7-e6e.pt`: https://github.com/WongKinYiu/yolov7
-- `pointnav_weights.pth`:
+- `pointnav_weights.pth`: included inside the [data](data) subdirectory
 
 ## :arrow_forward: Evaluation within Habitat
 Run the following to evaluate on the HM3D dataset:
