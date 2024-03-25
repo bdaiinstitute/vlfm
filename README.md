@@ -94,7 +94,7 @@ DATA_DIR=</path/to/vlfm/data>
 # https://github.com/facebookresearch/habitat-lab/blob/main/DATASETS.md#task-datasets
 # From the above page, locate the link to the HM3D ObjectNav dataset.
 # Verify that it is the same as the next two lines.
-HM3D_OBJECTNAV=https://dl.fbaipublicfiles.com/habitat/data/datasets/objectnav/hm3d/v2/objectnav_hm3d_v2.zip
+HM3D_OBJECTNAV=https://dl.fbaipublicfiles.com/habitat/data/datasets/objectnav/hm3d/v1/objectnav_hm3d_v1.zip
 ```
 
 ### Clone and install habitat-lab, then download datasets
@@ -126,6 +126,13 @@ The weights for MobileSAM, GroundingDINO, and PointNav must be saved to the `dat
 - `pointnav_weights.pth`: included inside the [data](data) subdirectory
 
 ## :arrow_forward: Evaluation within Habitat
+To run evaluation, various models must be loaded in the background first. This only needs to be done once by running the following command:
+```bash
+./scripts/launch_vlm_servers.sh
+```
+(You may need to run `chmod +x` on this file first.)
+This command will create a tmux session that will start loading the various models used for VLFM and serving them through `flask`. When you are done, be sure to kill the tmux session to free up your GPU.
+
 Run the following to evaluate on the HM3D dataset:
 ```bash
 python -m vlfm.run
