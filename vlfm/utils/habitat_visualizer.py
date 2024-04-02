@@ -5,9 +5,10 @@ from typing import Any, Dict, List, Tuple
 import cv2
 import numpy as np
 from frontier_exploration.utils.general_utils import xyz_to_habitat
+from habitat.utils.common import flatten_dict
 from habitat.utils.visualizations import maps
 from habitat.utils.visualizations.maps import MAP_TARGET_POINT_INDICATOR
-from habitat.utils.visualizations.utils import overlay_frame
+from habitat.utils.visualizations.utils import overlay_text_to_image
 from habitat_baselines.common.tensor_dict import TensorDict
 
 from vlfm.utils.geometry_utils import transform_points
@@ -250,3 +251,26 @@ def color_point_cloud_on_map(infos: List[Dict[str, Any]], policy_info: List[Dict
     new_map[grid_xy[:, 0], grid_xy[:, 1]] = MAP_TARGET_POINT_INDICATOR
 
     infos[0]["top_down_map"]["map"] = new_map
+
+
+def overlay_frame(frame, info, additional=None):
+    """
+    Renders text from the `info` dictionary to the `frame` image.
+    """
+
+    lines = []
+    flattened_info = flatten_dict(info)
+    for k, v in flattened_info.items():
+        if isinstance(v, str):
+            lines.append(f"{k}: {v}")
+        else:
+            try:
+                lines.append(f"{k}: {v:.2f}")
+            except:
+                pass
+    if additional is not None:
+        lines.extend(additional)
+
+    frame = overlay_text_to_image(frame, lines, font_size=0.25)
+
+    return frame
