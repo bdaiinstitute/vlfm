@@ -266,7 +266,7 @@ def overlay_frame(frame: np.ndarray, info: Dict[str, Any], additional: Optional[
         else:
             try:
                 lines.append(f"{k}: {v:.2f}")
-            except:
+            except TypeError:
                 pass
     if additional is not None:
         lines.extend(additional)
