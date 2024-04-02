@@ -253,9 +253,7 @@ def color_point_cloud_on_map(infos: List[Dict[str, Any]], policy_info: List[Dict
     infos[0]["top_down_map"]["map"] = new_map
 
 
-def overlay_frame(
-    frame: np.ndarray, info: Dict[str, Any], additional: Optional[List[str]] = None
-) -> np.ndarray:
+def overlay_frame(frame: np.ndarray, info: Dict[str, Any], additional: Optional[List[str]] = None) -> np.ndarray:
     """
     Renders text from the `info` dictionary to the `frame` image.
     """
