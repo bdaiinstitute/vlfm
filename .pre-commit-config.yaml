@@ -12,7 +12,7 @@ repos:
   rev: 23.10.0
   hooks:
     - id: black
-      language_version: python3.10
+      language_version: python3.9
       args: ['--config', 'pyproject.toml'] # we want this to refer to `bdai/pyproject.toml`
       verbose: true
 - repo: https://github.com/pre-commit/pre-commit-hooks
