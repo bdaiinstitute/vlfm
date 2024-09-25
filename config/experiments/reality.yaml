@@ -8,7 +8,7 @@ defaults:
 
 policy:
     name: "RealityITMPolicyV2"
-    pointnav_policy_path: "data/pointnav_weights.pth"
+    pointnav_policy_path: "data/spot_pointnav_weights.pth"
     depth_image_shape: [212, 240]  # height, width
     pointnav_stop_radius: 0.9
     use_max_confidence: False
