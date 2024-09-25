@@ -35,7 +35,7 @@ Understanding how humans leverage semantic knowledge to navigate unfamiliar envi
 
 ## :hammer_and_wrench: Installation
 
-### Getting Started
+### Getting Started: Environment
 
 Create the conda environment:
 ```bash
@@ -50,7 +50,6 @@ If you are using habitat and are doing simulation experiments, install this repo
 ```bash
 pip install -e .[habitat]
 ```
-Also clone and install [habitat-lab](https://github.com/facebookresearch/habitat-lab) on the same environment
 
 If you are using the Spot robot, install this repo into your env with the following:
 ```bash
@@ -59,23 +58,27 @@ pip install -e .[reality]
 
 Clone the below dependencies into the root directory of this repo:
 ```bash
-git clone git@github.com:IDEA-Research/GroundingDINO.git
-git clone git@github.com:WongKinYiu/yolov7.git  # if using YOLOv7
+git clone https://github.com/IDEA-Research/GroundingDINO.git
+git clone https://github.com/WongKinYiu/yolov7.git  # if using YOLOv7
+git clone https://github.com/facebookresearch/habitat-lab
 ```
 Follow the original install directions for GroundingDINO, which can be found here: https://github.com/IDEA-Research/GroundingDINO.
 
 Nothing needs to be done for YOLOv7, but it needs to be cloned into the repo.
 
+Follow the original install directions for Habitat-lab, which can be found here: https://github.com/facebookresearch/habitat-lab.
+
+
 The following pip install's will also be required:
 
-```
+```bash
 pip install hydra-core --upgrade
-pip install numba # Try not to downgrade numpy during this instalation if possible
+pip install numba # Try not to downgrade numpy during this instalation if possible. Go to https://numba.readthedocs.io/en/stable/user/installing.html for more installation instructions.
 pip install gym
-pip install timm==0.6.12 # Ignore any issues abotu incompatibility
+pip install timm==0.6.12 # Ignore any issues about incompatibility. Need version >=0.6.12 for depth model.
 ```
 
-### Installing GroundingDINO (Only if using conda-installed CUDA)
+#### Troubleshooting: Installing GroundingDINO (Only if using conda-installed CUDA)
 Only attempt if the installation instructions in the GroundingDINO repo do not work.
 
 To install GroundingDINO, you will need `CUDA_HOME` set as an environment variable. If you would like to install a certain version of CUDA that is compatible with the one used to compile your version of pytorch, and you are using conda, you can run the following commands to install CUDA and set `CUDA_HOME`:
@@ -96,7 +99,23 @@ ln -s ${CONDA_PREFIX}/lib/python3.9/site-packages/nvidia/cusolver/include/*  ${C
 export CUDA_HOME=${CONDA_PREFIX}
 ```
 
-## :dart: Downloading the HM3D dataset
+
+### :weight_lifting: Downloading weights for various models
+The weights for MobileSAM, GroundingDINO, and PointNav must be saved to the `data/` directory. The weights can be downloaded from the following links:
+- `mobile_sam.pt`:  https://github.com/ChaoningZhang/MobileSAM
+- `groundingdino_swint_ogc.pth`: https://github.com/IDEA-Research/GroundingDINO
+- `yolov7-e6e.pt`: https://github.com/WongKinYiu/yolov7
+- `pointnav_weights.pth`: included inside the [data](data) subdirectory
+
+```bash
+cd data/
+wget -q https://github.com/ChaoningZhang/MobileSAM/blob/master/weights/mobile_sam.pt
+wget -q https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha/groundingdino_swint_ogc.pth
+wget -q https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-e6e.pt
+```
+
+
+### :dart: Dataset: Downloading the HM3D dataset
 
 ### Matterport
 First, set the following variables during installation (don't need to put in .bashrc):
@@ -112,7 +131,7 @@ DATA_DIR=</path/to/vlfm/data>
 HM3D_OBJECTNAV=https://dl.fbaipublicfiles.com/habitat/data/datasets/objectnav/hm3d/v1/objectnav_hm3d_v1.zip
 ```
 
-### Clone and install habitat-lab, then download datasets
+### Make sure that you have cloned and installed *habitat-lab*, then download datasets
 *Ensure that the correct conda environment is activated!!*
 ```bash
 # Download HM3D 3D scans (scenes_dataset)
@@ -133,13 +152,6 @@ mv objectnav_hm3d_v1 $DATA_DIR/datasets/objectnav/hm3d/v1 &&
 rm objectnav_hm3d_v1.zip
 ```
 
-## :weight_lifting: Downloading weights for various models
-The weights for MobileSAM, GroundingDINO, and PointNav must be saved to the `data/` directory. The weights can be downloaded from the following links:
-- `mobile_sam.pt`:  https://github.com/ChaoningZhang/MobileSAM
-- `groundingdino_swint_ogc.pth`: https://github.com/IDEA-Research/GroundingDINO
-- `yolov7-e6e.pt`: https://github.com/WongKinYiu/yolov7
-- `pointnav_weights.pth`: included inside the [data](data) subdirectory
-
 ## :arrow_forward: Evaluation within Habitat
 To run evaluation, various models must be loaded in the background first. This only needs to be done once by running the following command:
 ```bash
@@ -156,6 +168,19 @@ To evaluate on MP3D, run the following:
 ```bash
 python -m vlfm.run habitat.dataset.data_path=data/datasets/objectnav/mp3d/val/val.json.gz
 ```
+
+## :arrow_forward: Run on Spot
+To run program on spot:
+
+To edit goal object edit env.goal in `config\experiments\reality.yaml`
+
+```bash
+export SPOT_ADMIN_PW=<YOUR_SPOT_ADMIN_PW>
+export SPOT_IP=<SPOT_IP>
+
+python -m vlfm.reality.run_bdsw_objnav_env
+```
+
 
 ## :newspaper: License
 
