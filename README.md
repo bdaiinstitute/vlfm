@@ -164,6 +164,10 @@ Run the following to evaluate on the HM3D dataset:
 ```bash
 python -m vlfm.run
 ```
+To run the evaluation and save the video of the simulator:
+```
+python -m vlfm.run habitat_baselines.eval.video_option='["disk"]'
+```
 To evaluate on MP3D, run the following:
 ```bash
 python -m vlfm.run habitat.dataset.data_path=data/datasets/objectnav/mp3d/val/val.json.gz
