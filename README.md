@@ -61,6 +61,7 @@ Clone the below dependencies into the root directory of this repo:
 git clone https://github.com/IDEA-Research/GroundingDINO.git
 git clone https://github.com/WongKinYiu/yolov7.git  # if using YOLOv7
 git clone https://github.com/facebookresearch/habitat-lab
+git clone https://github.com/naokiyokoyama/bd_spot_wrapper.git
 ```
 Follow the original install directions for GroundingDINO, which can be found here: https://github.com/IDEA-Research/GroundingDINO.
 
@@ -68,6 +69,7 @@ Nothing needs to be done for YOLOv7, but it needs to be cloned into the repo.
 
 Follow the original install directions for Habitat-lab, which can be found here: https://github.com/facebookresearch/habitat-lab.
 
+Follow the original install directions for bd spot wrapper, which can be found here: https://github.com/naokiyokoyama/bd_spot_wrapper.git.
 
 The following pip install's will also be required:
 
