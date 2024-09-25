@@ -32,7 +32,8 @@ def host_model(model: Any, name: str, port: int = 5000) -> None:
         payload = request.json
         return jsonify(model.process_payload(payload))
 
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port) # app.run(host="localhost", port=port)
+
 
 
 def bool_arr_to_str(arr: np.ndarray) -> str:
