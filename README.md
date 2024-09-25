@@ -43,15 +43,21 @@ conda_env_name=vlfm
 conda create -n $conda_env_name python=3.9 -y &&
 conda activate $conda_env_name
 ```
+
+Check compiled cuda version/available cuda version and install the closest available corresponding torch. *This will be important for successful GroundingDINO installation*
+
 If you are using habitat and are doing simulation experiments, install this repo into your env with the following:
 ```bash
 pip install -e .[habitat]
 ```
+Also clone and install [habitat-lab](https://github.com/facebookresearch/habitat-lab) on the same environment
+
 If you are using the Spot robot, install this repo into your env with the following:
 ```bash
 pip install -e .[reality]
 ```
-Install all the dependencies:
+
+Clone the below dependencies into the root directory of this repo:
 ```bash
 git clone git@github.com:IDEA-Research/GroundingDINO.git
 git clone git@github.com:WongKinYiu/yolov7.git  # if using YOLOv7
@@ -59,6 +65,15 @@ git clone git@github.com:WongKinYiu/yolov7.git  # if using YOLOv7
 Follow the original install directions for GroundingDINO, which can be found here: https://github.com/IDEA-Research/GroundingDINO.
 
 Nothing needs to be done for YOLOv7, but it needs to be cloned into the repo.
+
+The following pip install's will also be required:
+
+```
+pip install hydra-core --upgrade
+pip install numba # Try not to downgrade numpy during this instalation if possible
+pip install gym
+pip install timm==0.6.12 # Ignore any issues abotu incompatibility
+```
 
 ### Installing GroundingDINO (Only if using conda-installed CUDA)
 Only attempt if the installation instructions in the GroundingDINO repo do not work.
