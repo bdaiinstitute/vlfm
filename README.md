@@ -36,12 +36,13 @@ Understanding how humans leverage semantic knowledge to navigate unfamiliar envi
 ## :hammer_and_wrench: Installation
 
 ### Getting Started
-
 Create the conda environment:
 ```bash
 conda_env_name=vlfm
-conda create -n $conda_env_name python=3.9 -y &&
-conda activate $conda_env_name
+conda create -n conda_env_name python=3.9 -y
+conda activate conda_env_name
+pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 -f https://download.pytorch.org/whl/torch_stable.html
+pip install git+https://github.com/IDEA-Research/GroundingDINO.git@eeba084341aaa454ce13cb32fa7fd9282fc73a67 salesforce-lavis==1.0.2
 ```
 If you are using habitat and are doing simulation experiments, install this repo into your env with the following:
 ```bash
@@ -51,34 +52,10 @@ If you are using the Spot robot, install this repo into your env with the follow
 ```bash
 pip install -e .[reality]
 ```
-Install all the dependencies:
+#### [Whether you're using conda or not]
+Clone the following repo within this one (simply cloning will suffice):
 ```bash
-git clone git@github.com:IDEA-Research/GroundingDINO.git
-git clone git@github.com:WongKinYiu/yolov7.git  # if using YOLOv7
-```
-Follow the original install directions for GroundingDINO, which can be found here: https://github.com/IDEA-Research/GroundingDINO.
-
-Nothing needs to be done for YOLOv7, but it needs to be cloned into the repo.
-
-### Installing GroundingDINO (Only if using conda-installed CUDA)
-Only attempt if the installation instructions in the GroundingDINO repo do not work.
-
-To install GroundingDINO, you will need `CUDA_HOME` set as an environment variable. If you would like to install a certain version of CUDA that is compatible with the one used to compile your version of pytorch, and you are using conda, you can run the following commands to install CUDA and set `CUDA_HOME`:
-```bash
-# This example is specifically for CUDA 11.8
-mamba install \
-    cub \
-    thrust \
-    cuda-runtime \
-    cudatoolkit=11.8 \
-    cuda-nvcc==11.8.89 \
-    -c "nvidia/label/cuda-11.8.0" \
-    -c nvidia &&
-ln -s ${CONDA_PREFIX}/lib/python3.9/site-packages/nvidia/cuda_runtime/include/*  ${CONDA_PREFIX}/include/ &&
-ln -s ${CONDA_PREFIX}/lib/python3.9/site-packages/nvidia/cusparse/include/*  ${CONDA_PREFIX}/include/ &&
-ln -s ${CONDA_PREFIX}/lib/python3.9/site-packages/nvidia/cublas/include/*  ${CONDA_PREFIX}/include/ &&
-ln -s ${CONDA_PREFIX}/lib/python3.9/site-packages/nvidia/cusolver/include/*  ${CONDA_PREFIX}/include/ &&
-export CUDA_HOME=${CONDA_PREFIX}
+git clone git@github.com:WongKinYiu/yolov7.git
 ```
 
 ## :dart: Downloading the HM3D dataset
