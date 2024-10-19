@@ -21,10 +21,10 @@ dependencies = [
     "seaborn >= 0.12.2",  # required by yolov7
     "open3d >= 0.17.0",
     "transformers == 4.26.0",  # higher versions than 4.26.0 "break" BLIP-2 in LAVIS
+    "timm == 0.4.12",
     "frontier_exploration @ git+https://github.com/naokiyokoyama/frontier_exploration.git",
     "mobile_sam @ git+https://github.com/ChaoningZhang/MobileSAM.git",
     "depth_camera_filtering @ git+https://github.com/naokiyokoyama/depth_camera_filtering",
-    "timm == 0.4.12",
 ]
 
 [project.optional-dependencies]
@@ -133,4 +133,3 @@ warn_redundant_casts = true
 no_implicit_optional = true
 files = ['vlfm','test','scripts']
 exclude = "^(docker|.*external|.*thirdparty|.*install|.*build|.*_experimental|.*_pb2.py|.*_pb2_grpc.py)"
-
