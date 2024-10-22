@@ -39,8 +39,8 @@ Understanding how humans leverage semantic knowledge to navigate unfamiliar envi
 Create the conda environment:
 ```bash
 conda_env_name=vlfm
-conda create -n conda_env_name python=3.9 -y
-conda activate conda_env_name
+conda create -n $conda_env_name python=3.9 -y
+conda activate $conda_env_name
 pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 -f https://download.pytorch.org/whl/torch_stable.html
 pip install git+https://github.com/IDEA-Research/GroundingDINO.git@eeba084341aaa454ce13cb32fa7fd9282fc73a67 salesforce-lavis==1.0.2
 ```
