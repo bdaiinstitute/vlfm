@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   vlfm_main_build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     defaults:
       run:
         shell: bash
