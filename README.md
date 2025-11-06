@@ -1,3 +1,5 @@
+<!-- Copyright (c) 2025 Robotics and AI Institute LLC dba RAI Institute. All rights reserved. -->
+
 <p align="center">
   <img src="docs/teaser_v1.jpg" width="700">
   <h1 align="center">VLFM: Vision-Language Frontier Maps for Zero-Shot Semantic Navigation</h1>

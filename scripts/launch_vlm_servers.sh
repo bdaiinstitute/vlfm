@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+# Copyright (c) 2025 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
+
 # Copyright [2023] Boston Dynamics AI Institute, Inc.
 
 # Ensure you have 'export VLFM_PYTHON=<PATH_TO_PYTHON>' in your .bashrc, where
