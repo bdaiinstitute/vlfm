@@ -1,0 +1,87 @@
+# GEFM Configuration for HM3D ObjectNav
+# Extends VLFM's base configuration with GEFM-specific settings
+
+defaults:
+  - /habitat: habitat_config_base
+  - /habitat/task: objectnav
+  - /habitat/simulator/agents@habitat.simulator.agents.main_agent: rgbd_agent
+  - _self_
+
+# Inherit VLFM base settings
+habitat:
+  dataset:
+    type: ObjectNav-v1
+    data_path: data/datasets/objectnav/hm3d/v1/val/val.json.gz
+    scenes_dir: data/scene_datasets/
+
+  environment:
+    max_episode_steps: 500
+
+  task:
+    measurements:
+      - success
+      - spl
+      - distance_to_goal
+      - num_steps
+
+  simulator:
+    turn_angle: 30
+    forward_step_size: 0.25
+    habitat_sim_v0:
+      allow_sliding: True
+
+# GEFM-specific configuration
+gefm:
+  # ===== Scoring Weights =====
+  # Must sum to 1.0
+  alpha: 0.5   # BLIP2-ITM (fast visual matching)
+  beta: 0.3    # Scene graph matching
+  gamma: 0.2   # LLM spatial reasoning
+
+  # ===== Dual-Layer Settings =====
+  reasoning_interval: 5          # Invoke LLM every N steps
+  confidence_threshold: 0.8      # Trigger LLM if fast layer confidence < threshold
+
+  # ===== Scene Graph Settings =====
+  sg_max_nodes: 100              # Maximum nodes in scene graph
+  sg_spatial_radius: 2.0         # Radius for spatial relations (meters)
+  sg_confidence_decay: 0.95      # Confidence decay per step for unobserved nodes
+  sg_min_confidence: 0.3         # Minimum confidence to keep a node
+
+  # ===== LLM Settings =====
+  llm_model: "gpt-4o-mini"       # LLM model name
+  llm_backend: "openai"          # Backend: "openai", "ollama", "anthropic"
+  llm_api_key: null              # API key (or set via environment variable)
+  llm_temperature: 0.3           # Sampling temperature
+  llm_max_tokens: 200            # Max tokens per query
+
+  # ===== Visualization =====
+  visualize_scene_graph: True    # Save scene graph visualizations
+  visualize_frontier_scores: True  # Save frontier score breakdowns
+  save_llm_reasoning: True       # Log LLM reasoning to file
+
+  # ===== Ablation Modes =====
+  # Set to True to disable specific components (for ablation studies)
+  disable_graph_matching: False  # Set β=0
+  disable_llm_reasoning: False   # Set γ=0
+  use_oracle_reasoning: False    # Use ground-truth room labels (if available)
+
+# Policy configuration
+policy:
+  name: "GEFMPolicy"
+
+# Training/Evaluation
+num_environments: 1
+num_episodes: 100
+
+# Logging
+tensorboard_dir: "tb_logs/gefm"
+checkpoint_folder: "checkpoints/gefm"
+video_dir: "videos/gefm"
+log_interval: 10
+
+# Device
+device: "cuda:0"
+
+# Reproducibility
+seed: 42
